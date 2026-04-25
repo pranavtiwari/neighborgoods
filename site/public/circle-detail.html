@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Main Street Gardeners - Circle Detail</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "inverse-surface": "#30312f",
+                    "on-primary-fixed": "#002204",
+                    "on-background": "#1b1c1a",
+                    "surface-container-low": "#f5f3f0",
+                    "surface-bright": "#fbf9f6",
+                    "primary": "#0d631b",
+                    "secondary-container": "#ff9800",
+                    "outline": "#707a6c",
+                    "on-error": "#ffffff",
+                    "primary-fixed-dim": "#88d982",
+                    "error": "#ba1a1a",
+                    "surface-container-high": "#eae8e5",
+                    "primary-fixed": "#a3f69c",
+                    "on-secondary": "#ffffff",
+                    "on-primary-fixed-variant": "#005312",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "surface-container-lowest": "#ffffff",
+                    "on-primary-container": "#cbffc2",
+                    "background": "#fbf9f6",
+                    "surface-tint": "#1b6d24",
+                    "primary-container": "#2e7d32",
+                    "on-secondary-fixed": "#2c1600",
+                    "surface": "#fbf9f6",
+                    "inverse-on-surface": "#f2f0ed",
+                    "on-primary": "#ffffff",
+                    "surface-container-highest": "#e4e2df",
+                    "secondary-fixed-dim": "#ffb870",
+                    "surface-variant": "#e4e2df",
+                    "on-secondary-fixed-variant": "#693c00",
+                    "on-surface-variant": "#40493d",
+                    "on-surface": "#1b1c1a",
+                    "on-tertiary": "#ffffff",
+                    "surface-dim": "#dbdad7",
+                    "secondary-fixed": "#ffdcbe",
+                    "on-tertiary-fixed": "#3f001c",
+                    "on-tertiary-container": "#ffedf0",
+                    "on-error-container": "#93000a",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "surface-container": "#efeeeb",
+                    "inverse-primary": "#88d982",
+                    "on-secondary-container": "#653900",
+                    "error-container": "#ffdad6",
+                    "secondary": "#8b5000",
+                    "tertiary-container": "#b14b6f",
+                    "tertiary-fixed": "#ffd9e2",
+                    "tertiary": "#923357",
+                    "outline-variant": "#bfcaba"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.5rem",
+                    "lg": "1rem",
+                    "xl": "1.5rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Lexend", "sans-serif"],
+                    "display": ["Lexend", "sans-serif"],
+                    "body": ["Lexend", "sans-serif"],
+                    "label": ["Lexend", "sans-serif"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-forest-gradient {
+            background: linear-gradient(135deg, #0d631b 0%, #2e7d32 100%);
+        }
+        body {
+            font-family: 'Lexend', sans-serif;
+            background-color: #fbf9f6;
+            color: #1b1c1a;
+        }
+        .glass-nav {
+            background: rgba(251, 249, 246, 0.8);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-zinc-900/80 backdrop-blur-xl flex items-center justify-between px-6 py-4 w-full">
+<button onclick="window.location.href='circles.html'" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-50/50 transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined text-green-800" data-icon="arrow_back">arrow_back</span>
+</button>
+<div class="font-lexend font-medium tracking-tight text-xl font-bold text-green-900">Main Street Gardeners</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-50/50 transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined text-green-800" data-icon="info">info</span>
+</button>
+</header>
+<main class="pt-24 px-6 max-w-5xl mx-auto">
+<!-- Hero Section -->
+<section class="mb-12">
+<h1 class="text-[3.5rem] leading-[1.1] font-bold tracking-tight text-on-surface mb-4">
+                Main Street Gardeners
+            </h1>
+<p class="text-on-surface-variant text-lg max-w-md leading-relaxed mb-8">
+                A space for Green Thumbs between 4th and 12th St.
+            </p>
+<div class="flex items-center gap-2">
+<div class="flex -space-x-3 overflow-hidden">
+<img class="inline-block h-10 w-10 rounded-full ring-4 ring-surface" data-alt="portrait of a woman in her 30s with a warm smile and natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuACJF8ygZLjaUKZRxRm4XCA6sDJHKRg4G9RU0C_3asxeuOyQDGshEB2cJqTYL8vv2_6FLeUoxHfct1cUtgr3msMJqy8SoztNsvEh3Z3wDctA4vWWuPM9OP5_Zlp1zmL9FShyuAt4-wD-ruawoIPSLt3XfNqbi578petP15Aos427M81P7CzukDYWPYTkXGRRbbSf9YhdoC0Uj7Q6qj56fMgswSsSvxNhPHw--PinTHI9Tz_yuCqUEn4UxU1BVS-5ytt0pUPKwXcAOg8"/>
+<img class="inline-block h-10 w-10 rounded-full ring-4 ring-surface" data-alt="close up of a smiling man in an outdoor garden setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuALKoQDfsYpS0z-jTcq3cZs2tT_6LuOWsiM_dgd5_W3me9wogR5NhjeigDsJcC6T1qa6XMSo73JS_lFIEzphJ9j48hAB_Pqb7haydwfheyPPCUSr5iicUTnYxsWoUe1U76Nzpx1LrYxyNxGFHsVW5YYa8RkIOA_Rp86usyG2xA4VL0115lndW9hboSGfXAYIEGwH-o7kYcJl2O-_8MaZr9hoaPycPvlwIZUOCe8mcE05Jag2v0oj84ZJZrrmo19g79PIgFsqXxKCNY6"/>
+<img class="inline-block h-10 w-10 rounded-full ring-4 ring-surface" data-alt="candid portrait of a young woman with curly hair in a sunny park" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrx_5lqbFs3sPaCjPsxuX4SPCbqrxDpyg_e72UR-39y2FLm8zU0xDvQm_0EzosDL-3omiTfJ3uacNOEUB99xwpPmARc3yEuZI1w1tQdB-dFyAfB1nQofKCMssIQoN1Coe33ZTn5RdLkrRjyvOnIxG_a-pGFzeBcnuq8XAkCZCWz0-4J5WUSTWBX9DN5X3dUR-Gox5en_c-ueuyUY3EuzguAVc8ePr5Cb1ulmcXy0ZsX4xAB12QtLl0omWKs1oRUC6HKgt1IAoNnGwk"/>
+<div class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high ring-4 ring-surface text-label-md font-bold text-on-surface-variant">
+                        +42
+                    </div>
+</div>
+<span class="ml-2 text-sm font-medium text-on-surface-variant uppercase tracking-widest">Active Neighbors</span>
+</div>
+</section>
+<!-- Action Row -->
+<div class="flex flex-wrap gap-4 mb-16">
+<button class="flex-1 min-w-[160px] py-4 px-6 rounded-lg border-2 border-primary text-primary font-bold hover:bg-primary/5 transition-colors active:scale-95 duration-200">
+                Post Update
+            </button>
+<button class="flex-1 min-w-[160px] py-4 px-6 rounded-lg bg-forest-gradient text-on-primary font-bold shadow-lg shadow-primary/20 active:scale-95 duration-200">
+                Share Item
+            </button>
+</div>
+<!-- Resources Grid (Asymmetric) -->
+<section class="mb-16">
+<div class="flex items-end justify-between mb-8">
+<h2 class="text-2xl font-bold tracking-tight">Circle Inventory</h2>
+<button class="text-primary font-bold label-md tracking-wider uppercase">View All</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Large Feature Card -->
+<div onclick="window.location.href='item-details.html'" class="md:col-span-7 bg-surface-container-lowest cursor-pointer p-8 rounded-xl shadow-[0_12px_40px_rgba(51,51,51,0.06)] flex flex-col justify-between min-h-[320px]">
+<div>
+<div class="flex items-center gap-2 mb-4">
+<span class="w-3 h-3 rounded-full bg-primary"></span>
+<span class="text-xs font-bold uppercase tracking-widest text-primary">Available</span>
+</div>
+<h3 class="text-2xl font-bold mb-2">Heavy-Duty Wheelbarrow</h3>
+<p class="text-on-surface-variant leading-relaxed">Perfect for large mulch hauls or shifting garden stones. Re-greased last month.</p>
+</div>
+<div class="mt-8">
+<img class="w-full h-40 object-cover rounded-lg" data-alt="a sturdy metal green wheelbarrow parked on a gravel path in a lush green garden" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkIXLxXddVuyfL0QvqMaUahwBBbaJHtGiVdJ7weqAdRqRjmx-l6DBJGQI-wrAfNm5c2bm2p9B8guB27fwmKZ4xIKNSOfCxOJCNznDwrhcnvy2JIz_ygPNuEfEs9FMq2zlW_EYNwNxcwVjhc6dBXJa0-ffDpac9QWehfFodATQQ5ocPTvCrOIy3wHp8tbfbIHRb5GQ8PAfTTyp-UgAvueJJ7jT-6gSNRGe7I758pUV-XaOZ5CzRWb7urza-IAwYd5t5VjcVWzfr9zJH"/>
+</div>
+</div>
+<!-- Stacked Side Cards -->
+<div class="md:col-span-5 flex flex-col gap-6">
+<div class="bg-surface-container p-6 rounded-xl flex-1">
+<div class="flex items-center gap-2 mb-4">
+<span class="w-3 h-3 rounded-full bg-secondary-container"></span>
+<span class="text-xs font-bold uppercase tracking-widest text-on-secondary-container">With Elena</span>
+</div>
+<h3 class="text-xl font-bold mb-1">Soil PH Tester</h3>
+<p class="text-sm text-on-surface-variant">Digital probe for accurate readings. Due back Sunday.</p>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl flex-1 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
+<div class="flex items-center gap-2 mb-4">
+<span class="w-3 h-3 rounded-full bg-primary"></span>
+<span class="text-xs font-bold uppercase tracking-widest text-primary">Available</span>
+</div>
+<h3 class="text-xl font-bold mb-1">Garden Pruners</h3>
+<p class="text-sm text-on-surface-variant">Bypass style, razor sharp. Please wipe clean after use.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Community Feed -->
+<section class="mb-20">
+<h2 class="text-2xl font-bold tracking-tight mb-8">Recent Activity</h2>
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
+<div class="relative h-72">
+<img class="w-full h-full object-cover" data-alt="a bountiful basket of freshly harvested heirloom tomatoes in shades of red, yellow, and orange" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3cHaKHPDs2ok5AFUQUsEE8vTqtPLwis0F_YJdvhnsK3lx8a0PwjOXr8UvUAaL9aC0nAA_wc-Zeu02qFJcql1MhybvZR7KSv8Bxa3FuDZOPBgGXWTAsaAJcPziGGDnGJ74MiGFIRqBVK9wXMdSC_vB4ehHhUOoaYUpr5kDpeBrpJ9EuWyfdtNx87GZHR7RN58YYiv7qPc-QizSk544mIAMC4qcAIAee14iiSs-gxjz2Vf23YUNQAfLE7qjm-Ji-CAJmWjOzZ7MHUox"/>
+<div class="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-sm" data-icon="sync" style="font-variation-settings: 'FILL' 1;">sync</span>
+<span class="text-xs font-bold uppercase tracking-widest text-on-secondary-container">Item Swap</span>
+</div>
+</div>
+<div class="p-8">
+<div class="flex items-center gap-3 mb-4">
+<img class="h-10 w-10 rounded-full" data-alt="profile photo of Elena, a smiling woman in an outdoor setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBK6jrNwFzK0I6L8c7KfQkX6m5e2s9rAeSlEOd8W_uJ6lGZlRD7nqLIVvkPCqy47aUEAPVBqk68bx1U3UCuT_GSVy3ZACFlkrb6yiM7MOceUUe3V4LHaKkAIJVmmvKBYkGxT1k9iT76nU-5Nu1exvJhDgBmMVL6OPWZ6tfKVsSsjQXtx3NRaXT_rod74x70kNbHBr8aeUKbyK3XxLKuUVo0s_iKNiiM5gkMo_Fp8g77AmQEk9-7mXUm_LXrS2LjzXy8dpFluvI90jCZ"/>
+<div>
+<p class="font-bold text-on-surface">Elena Rodriguez</p>
+<p class="text-xs text-on-surface-variant uppercase tracking-wider">2 hours ago</p>
+</div>
+</div>
+<p class="text-lg leading-relaxed text-on-surface mb-6">
+                        "My first harvest this season! Happy to swap for some fresh backyard eggs if anyone has a surplus this week."
+                    </p>
+<div class="flex items-center gap-6 pt-6 border-t border-surface-container">
+<button class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+<span class="font-bold">12</span>
+</button>
+<button class="flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+<span class="font-bold">4</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/80 backdrop-blur-xl shadow-[0_-12px_40px_rgba(51,51,51,0.06)]">
+<div class="flex justify-around items-center w-full px-4 h-20">
+<div onclick="window.location.href='index.html'" class="flex flex-col items-center justify-center text-zinc-500 px-5 py-2.5 transition-all hover:text-green-700 active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-lexend text-[10px] font-semibold uppercase tracking-wider">Home</span>
+</div>
+<!-- Active Tab: Circles -->
+<div onclick="window.location.href='circles.html'" class="flex flex-col items-center justify-center bg-green-100 text-green-900 rounded-2xl px-5 py-2.5 active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined mb-1" data-icon="group_work" style="font-variation-settings: 'FILL' 1;">group_work</span>
+<span class="font-lexend text-[10px] font-semibold uppercase tracking-wider">Circles</span>
+</div>
+<div onclick="window.location.href='explore.html'" class="flex flex-col items-center justify-center text-zinc-500 px-5 py-2.5 transition-all hover:text-green-700 active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined mb-1" data-icon="handyman">handyman</span>
+<span class="font-lexend text-[10px] font-semibold uppercase tracking-wider">Borrow</span>
+</div>
+<div class="flex flex-col items-center justify-center text-zinc-500 px-5 py-2.5 transition-all hover:text-green-700 active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined mb-1" data-icon="newspaper">newspaper</span>
+<span class="font-lexend text-[10px] font-semibold uppercase tracking-wider">Feed</span>
+</div>
+<div onclick="window.location.href='profile.html'" class="flex flex-col items-center justify-center text-zinc-500 px-5 py-2.5 transition-all hover:text-green-700 active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span class="font-lexend text-[10px] font-semibold uppercase tracking-wider">Profile</span>
+</div>
+</div>
+</nav>
+</body></html>

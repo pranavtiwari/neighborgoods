@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NeighborGoods | The Modern Commons</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-container": "#653900",
+                    "on-secondary-fixed": "#2c1600",
+                    "outline": "#707a6c",
+                    "on-primary-fixed": "#002204",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-secondary-fixed-variant": "#693c00",
+                    "on-surface": "#1b1c1a",
+                    "secondary-container": "#ff9800",
+                    "surface-container-lowest": "#ffffff",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "primary-fixed-dim": "#88d982",
+                    "background": "#fbf9f6",
+                    "error-container": "#ffdad6",
+                    "surface-bright": "#fbf9f6",
+                    "tertiary-fixed": "#ffd9e2",
+                    "secondary-fixed": "#ffdcbe",
+                    "on-primary-fixed-variant": "#005312",
+                    "on-error-container": "#93000a",
+                    "tertiary": "#923357",
+                    "tertiary-container": "#b14b6f",
+                    "surface-container-low": "#f5f3f0",
+                    "surface": "#fbf9f6",
+                    "on-surface-variant": "#40493d",
+                    "surface-container-high": "#eae8e5",
+                    "on-secondary": "#ffffff",
+                    "primary": "#0d631b",
+                    "inverse-on-surface": "#f2f0ed",
+                    "on-primary-container": "#cbffc2",
+                    "on-tertiary-container": "#ffedf0",
+                    "surface-container-highest": "#e4e2df",
+                    "inverse-surface": "#30312f",
+                    "on-error": "#ffffff",
+                    "on-tertiary-fixed": "#3f001c",
+                    "secondary-fixed-dim": "#ffb870",
+                    "surface-tint": "#1b6d24",
+                    "secondary": "#8b5000",
+                    "error": "#ba1a1a",
+                    "primary-container": "#2e7d32",
+                    "surface-container": "#efeeeb",
+                    "surface-dim": "#dbdad7",
+                    "on-tertiary": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "surface-variant": "#e4e2df",
+                    "outline-variant": "#bfcaba",
+                    "inverse-primary": "#88d982",
+                    "primary-fixed": "#a3f69c",
+                    "on-background": "#1b1c1a"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Lexend"],
+                    "display": ["Lexend"],
+                    "body": ["Lexend"],
+                    "label": ["Lexend"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface font-body text-on-surface">
+<!-- TopAppBar -->
+<header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
+<div class="flex justify-between items-center w-full px-6 py-4 max-w-screen-2xl mx-auto">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[#0d631b] dark:text-[#2e7d32] text-2xl">menu_book</span>
+<span class="text-2xl font-bold text-[#0d631b] dark:text-[#2e7d32] tracking-tighter font-headline">NeighborGoods</span>
+</div>
+<div class="hidden md:flex gap-8 items-center">
+<a class="text-[#0d631b] font-semibold border-b-2 border-[#0d631b] pb-1 font-['Lexend'] tracking-tight" href="explore.html">Explore</a>
+<a class="text-stone-600 dark:text-stone-400 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="explore.html">Borrow</a>
+<a class="text-stone-600 dark:text-stone-400 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="activity.html">My Items</a>
+</div>
+<div class="flex items-center gap-4">
+<button class="md:hidden p-2 rounded-full hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<button class="hidden md:block bg-primary px-6 py-2.5 rounded-full text-on-primary font-semibold text-sm transition-all active:opacity-80">
+                    Join Community
+                </button>
+</div>
+</div>
+</header>
+<!-- Global Search (Mobile Focus) -->
+<div class="px-6 mt-4 md:hidden">
+<div class="relative group">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline">search</span>
+</div>
+<input class="w-full bg-surface-container-low border-none rounded-xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-primary text-on-surface placeholder:text-on-surface-variant/60 font-medium transition-all shadow-sm" placeholder="Find tools, skills, or surplus nearby..." type="text"/>
+</div>
+</div>
+<!-- Hero Section -->
+<section class="relative px-6 pt-12 pb-20 md:py-32 overflow-hidden">
+<div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+<div class="z-10">
+<h1 class="text-display-lg text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1] mb-6 text-on-surface">
+                    Share More,<br/><span class="text-primary-container">Spend Less.</span>
+</h1>
+<p class="text-body-lg text-lg md:text-xl text-on-surface-variant leading-relaxed max-w-xl mb-10">
+                    Discover the hidden wealth in your neighborhood. Borrow tools, share harvests, and connect with local circles in a space that feels like a modern commons.
+                </p>
+<div class="flex flex-col sm:flex-row gap-4">
+<button onclick="window.location.href='circles.html'" class="bg-secondary-container text-on-secondary-container px-8 py-4 rounded-lg font-bold text-lg shadow-[0_8px_30px_rgb(255,152,0,0.2)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2">
+                        Join Your Circle
+                        <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+</div>
+</div>
+<div class="relative aspect-[4/5] md:aspect-square rounded-3xl overflow-hidden shadow-2xl">
+<img class="w-full h-full object-cover" data-alt="warm neighborhood community gathering in a sunny park with people sharing food and gardening tools in golden hour lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLnXCHB4qzXj1XM6fuhRUipFfAodYSNUD8LfcAsN8OZlvt9N15Oqz7MJ9yDE5AhPWkVSesqLJ7zhHknczIiFh0vz0U1QCVLYSVkpmkqbBklETcX38hbeaYmwVgTihIEAZcE-teU3RjQ9zMAuf1hTDY3mWgwMUa57cDE4_VEwj9poyfoCpkI0njQl7PerLqap3EnrX3fk4ZuAl4z9GtoR539CxR3aQaDZhuD6S3xi6vrTTIhPjBf5dq2j_cVb5Z6EXomlZlx9q4gzgz"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+</div>
+</div>
+<!-- Decorative Background Tones -->
+<div class="absolute -top-24 -right-24 w-96 h-96 bg-primary/5 rounded-full blur-3xl"></div>
+<div class="absolute bottom-0 -left-24 w-80 h-80 bg-secondary-fixed/10 rounded-full blur-3xl"></div>
+</section>
+<!-- Feature Grid: Bento Style -->
+<section class="px-6 py-20 bg-surface-container-low">
+<div class="max-w-7xl mx-auto">
+<div class="mb-12">
+<span class="label-md tracking-widest text-primary font-bold uppercase block mb-2">Capabilities</span>
+<h2 class="text-headline-md text-3xl font-bold">Built for Neighbors</h2>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
+<!-- Feature 1 -->
+<div class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 hover:shadow-lg transition-shadow border-none">
+<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">construction</span>
+</div>
+<div>
+<h3 class="font-bold text-lg mb-1">Borrow Tools</h3>
+<p class="text-on-surface-variant text-sm leading-relaxed">Everything from power drills to high-reach ladders.</p>
+</div>
+</div>
+<!-- Feature 2 -->
+<div class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 hover:shadow-lg transition-shadow border-none">
+<div class="w-12 h-12 rounded-full bg-secondary-fixed flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-fixed" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<div>
+<h3 class="font-bold text-lg mb-1">Share Surplus</h3>
+<p class="text-on-surface-variant text-sm leading-relaxed">Exchange backyard harvests and pantry staples.</p>
+</div>
+</div>
+<!-- Feature 3 -->
+<div class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 hover:shadow-lg transition-shadow border-none">
+<div class="w-12 h-12 rounded-full bg-tertiary-fixed flex items-center justify-center">
+<span class="material-symbols-outlined text-on-tertiary-fixed" style="font-variation-settings: 'FILL' 1;">volunteer_activism</span>
+</div>
+<div>
+<h3 class="font-bold text-lg mb-1">Local Services</h3>
+<p class="text-on-surface-variant text-sm leading-relaxed">Find neighbors who fix bikes or teach knitting.</p>
+</div>
+</div>
+<!-- Feature 4 -->
+<div class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 hover:shadow-lg transition-shadow border-none">
+<div class="w-12 h-12 rounded-full bg-primary-fixed flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-fixed" style="font-variation-settings: 'FILL' 1;">groups_2</span>
+</div>
+<div>
+<h3 class="font-bold text-lg mb-1">Circles</h3>
+<p class="text-on-surface-variant text-sm leading-relaxed">Join micro-communities based on your street.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Gems Near You: Carousel -->
+<section class="py-20 overflow-hidden">
+<div class="max-w-7xl mx-auto px-6 mb-10 flex justify-between items-end">
+<div>
+<span class="label-md tracking-widest text-secondary font-bold uppercase block mb-2">Available Now</span>
+<h2 class="text-headline-md text-3xl font-bold">Gems Near You</h2>
+</div>
+<a class="text-primary font-bold flex items-center gap-1 hover:underline underline-offset-4" href="#">
+                View map
+                <span class="material-symbols-outlined text-sm">map</span>
+</a>
+</div>
+<div class="flex overflow-x-auto gap-6 px-6 pb-8 hide-scrollbar snap-x snap-mandatory">
+<!-- Item Card 1 -->
+<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group">
+<div class="h-48 overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="heavy-duty orange cordless drill on a clean wooden workbench with soft morning light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLE3QSPZP9hej65Gbadqcane15wn56uDw3u5voov45EiJfNyrJHT3a5KVjtrO2VKiDL52GExhQW2KqG-zB5AUhmht9GYPj5He1SbKnP4LmSY0wshDTexCS94HMySOwhOD3MHRXLePwNl8xBc3aUBfXhTAGaHSttddA2YNhF8d_KyCAIUrEJ6WR3KoTjTZyDmo9xOOH5E0AXvuIjqiyCc00h3aZms_yq3lGdgAy-rU-fBICB1FCYXaJF0VOwIwH9PjX21ZZabDeTm4y"/>
+</div>
+<div class="p-5">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-bold text-lg leading-tight">Cordless Drill</h4>
+<span class="bg-secondary-fixed text-on-secondary-fixed px-2 py-1 rounded text-[10px] font-bold uppercase">Tools</span>
+</div>
+<p class="text-on-surface-variant text-sm mb-4 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">location_on</span>
+                        0.3 mi away
+                    </p>
+<button class="w-full bg-primary-container text-on-primary py-3 rounded-lg font-bold transition-all hover:bg-primary active:scale-95">
+                        Borrow
+                    </button>
+</div>
+</div>
+<!-- Item Card 2 -->
+<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group">
+<div class="h-48 overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="freshly baked artisan sourdough bread loaf with beautiful crust on a rustic linen cloth" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBIFIAnQ428MmRJ849BZIZQ8Z67TdgorzAIGR_vcZu8u__I8X5yd6MG_KyQaxx0hzcIMCc74aYx3Gadtqvhpnb_FnmweMiFK64cAs2UUn83NO4yKk-ZNoO-JEYqB9YQ0598BXxmkFImRsz3QeY02LJ_HDKM3a7nOip2Pr9xdY6Y_BQ1sgXVnZd-TNhXb6tlhMl2vji13fkgVJLCCbFAU8MRqAS4c8fBCMumV1yXT7lW9kobx0k2nH_oCVjsn529cwFO96Bd0M3HvwGh"/>
+</div>
+<div class="p-5">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-bold text-lg leading-tight">Fresh Sourdough</h4>
+<span class="bg-secondary-fixed text-on-secondary-fixed px-2 py-1 rounded text-[10px] font-bold uppercase">Food</span>
+</div>
+<p class="text-on-surface-variant text-sm mb-4 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">location_on</span>
+                        0.5 mi away
+                    </p>
+<button class="w-full bg-primary-container text-on-primary py-3 rounded-lg font-bold transition-all hover:bg-primary active:scale-95">
+                        Request
+                    </button>
+</div>
+</div>
+<!-- Item Card 3 -->
+<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group">
+<div class="h-48 overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="tall wooden garden ladder leaning against a flowering apple tree in a green lush garden" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnmPSUOQ3woke0nfdHoKQwdVxekfs6iFwOLgo9dAQJg4y8Q1NjlHICivkXFLHzZNpkub7keI3iN973FGb5XAkV2fOXevwLmJnoZcxIqgMquZkXW14_GDpyFVrKtViCrIo3vgMXGlueFGwj6M6DbHTcu_a9wOtCUlvC9U929lSHhbe6W5D_YbkX0W_fVTFCzICG3EIXxTiYcIDtvyTkS5kfXENKVpxBd7k2QW81USHwlmd_KvW_GZnL85O_hPZBXUoNmVlNjqQRKAG1"/>
+</div>
+<div class="p-5">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-bold text-lg leading-tight">Garden Ladder</h4>
+<span class="bg-secondary-fixed text-on-secondary-fixed px-2 py-1 rounded text-[10px] font-bold uppercase">Garden</span>
+</div>
+<p class="text-on-surface-variant text-sm mb-4 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">location_on</span>
+                        1.2 mi away
+                    </p>
+<button class="w-full bg-primary-container text-on-primary py-3 rounded-lg font-bold transition-all hover:bg-primary active:scale-95">
+                        Borrow
+                    </button>
+</div>
+</div>
+<!-- Item Card 4 -->
+<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group">
+<div class="h-48 overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="professional telescoping camera lens on a tripod in a bright modern studio setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3e6h98-v7cLRoiqJ0QTSJx7sSkycehkJWpjV7eQe1Vd3i15JuhsVzjUQt5AVGhfRniwxaN7y7r4HGKkdVJB8A7pjjWk2ebCDx0HGraLKFAL_bP3LEhaL1PAqwg2ssZNip_SfxMdofFMNEREGn6e-h1gsaMvUrCzH6AJm6fCh3if8OeyLf6nmbxpmSg7yRk_3FkzwkdBU_szpvLR6FIrAs3qCPFcdc3zZJjNyAN2hZ8KwSpKO0JvNN-_s_sJu_3Oh1FkM4VgwpftQX"/>
+</div>
+<div class="p-5">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-bold text-lg leading-tight">DSLR Zoom Lens</h4>
+<span class="bg-secondary-fixed text-on-secondary-fixed px-2 py-1 rounded text-[10px] font-bold uppercase">Media</span>
+</div>
+<p class="text-on-surface-variant text-sm mb-4 flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">location_on</span>
+                        0.8 mi away
+                    </p>
+<button class="w-full bg-primary-container text-on-primary py-3 rounded-lg font-bold transition-all hover:bg-primary active:scale-95">
+                        Borrow
+                    </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Trust/CTA Section -->
+<section class="px-6 py-20">
+<div class="max-w-5xl mx-auto bg-primary rounded-[2rem] p-10 md:p-20 text-center relative overflow-hidden">
+<div class="z-10 relative">
+<h2 class="text-on-primary text-3xl md:text-5xl font-bold mb-8 max-w-2xl mx-auto">Better neighborhoods are built by sharing.</h2>
+<p class="text-on-primary-container/80 text-lg md:text-xl mb-10 max-w-xl mx-auto">Join 12,000+ neighbors already saving money and reducing waste by sharing what they own.</p>
+<button onclick="window.location.href='circles.html'" class="bg-surface text-primary px-10 py-5 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all">
+                    Find My Neighborhood
+                </button>
+</div>
+<!-- Background Decoration -->
+<div class="absolute -top-10 -left-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+<div class="absolute -bottom-10 -right-10 w-60 h-60 bg-white/5 rounded-full blur-3xl"></div>
+</div>
+</section>
+<!-- Footer -->
+<footer class="w-full mt-24 tonal-nesting bg-[#efeeeb] dark:bg-stone-950">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 px-8 py-16 max-w-7xl mx-auto font-['Lexend'] text-body-lg leading-relaxed">
+<div class="flex flex-col gap-4">
+<span class="text-xl font-bold text-[#0d631b]">NeighborGoods</span>
+<p class="text-stone-500 max-w-xs">Built for your neighborhood. A modern commons project dedicated to local sustainability and connection.</p>
+<div class="flex gap-4 mt-2">
+<a class="text-stone-500 hover:text-[#0d631b]" href="#"><span class="material-symbols-outlined">public</span></a>
+<a class="text-stone-500 hover:text-[#0d631b]" href="#"><span class="material-symbols-outlined">chat</span></a>
+<a class="text-stone-500 hover:text-[#0d631b]" href="#"><span class="material-symbols-outlined">link</span></a>
+</div>
+</div>
+<div class="flex flex-col gap-4">
+<h4 class="font-bold text-on-surface">Discover</h4>
+<nav class="flex flex-col gap-2">
+<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">The Library</a>
+<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">Journal</a>
+<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">Borrowing Rules</a>
+</nav>
+</div>
+<div class="flex flex-col gap-4">
+<h4 class="font-bold text-on-surface">Community</h4>
+<nav class="flex flex-col gap-2">
+<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">About</a>
+<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">Neighborhood Safety</a>
+<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">Privacy</a>
+</nav>
+</div>
+<div class="flex flex-col gap-4">
+<h4 class="font-bold text-on-surface">Stay Connected</h4>
+<p class="text-stone-500 text-sm">Join our newsletter for neighborhood highlights and sharing tips.</p>
+<div class="flex flex-col gap-2 mt-2">
+<input class="bg-surface border-none rounded-lg p-3 text-sm focus:ring-primary" placeholder="Email address" type="email"/>
+<button class="bg-primary text-on-primary py-3 rounded-lg font-bold text-sm">Subscribe</button>
+</div>
+</div>
+</div>
+<div class="border-t border-stone-200/50 py-8 px-8 text-center text-stone-400 text-sm">
+            © 2024 The Hearthside Digital. A Modern Commons Project.
+        </div>
+</footer>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-3 bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl z-50 rounded-t-3xl shadow-[0_-8px_30px_rgba(51,51,51,0.04)] md:hidden">
+<a class="flex flex-col items-center justify-center text-green-800 dark:text-green-400 bg-green-50/50 dark:bg-green-900/20 rounded-xl px-5 py-2 transition-all active:scale-90 duration-200" href="index.html">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-green-700 transition-all active:scale-90 duration-200" href="explore.html">
+<span class="material-symbols-outlined mb-1">explore</span>
+<span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-green-700 transition-all active:scale-90 duration-200" href="circles.html">
+<span class="material-symbols-outlined mb-1">groups</span>
+<span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Circles</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-green-700 transition-all active:scale-90 duration-200" href="activity.html">
+<span class="material-symbols-outlined mb-1">notifications</span>
+<span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Activity</span>
+</a>
+</nav>
+</body></html>

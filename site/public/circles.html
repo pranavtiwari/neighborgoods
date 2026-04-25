@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Circles | NeighborGoods</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#ffffff",
+                        "surface-dim": "#dbdad7",
+                        "background": "#fbf9f6",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed": "#ffd9e2",
+                        "on-tertiary-fixed-variant": "#7f2448",
+                        "on-primary-container": "#cbffc2",
+                        "error-container": "#ffdad6",
+                        "on-error-container": "#93000a",
+                        "surface-container": "#efeeeb",
+                        "on-surface": "#1b1c1a",
+                        "surface-container-low": "#f5f3f0",
+                        "inverse-surface": "#30312f",
+                        "on-secondary-fixed": "#2c1600",
+                        "outline-variant": "#bfcaba",
+                        "tertiary": "#923357",
+                        "surface-container-lowest": "#ffffff",
+                        "outline": "#707a6c",
+                        "secondary-fixed": "#ffdcbe",
+                        "on-background": "#1b1c1a",
+                        "error": "#ba1a1a",
+                        "on-tertiary-fixed": "#3f001c",
+                        "on-primary": "#ffffff",
+                        "inverse-primary": "#88d982",
+                        "surface-tint": "#1b6d24",
+                        "on-primary-fixed": "#002204",
+                        "primary-container": "#2e7d32",
+                        "on-secondary-fixed-variant": "#693c00",
+                        "on-primary-fixed-variant": "#005312",
+                        "surface-container-highest": "#e4e2df",
+                        "secondary-container": "#ff9800",
+                        "surface-bright": "#fbf9f6",
+                        "primary-fixed-dim": "#88d982",
+                        "on-tertiary-container": "#ffedf0",
+                        "surface": "#fbf9f6",
+                        "secondary-fixed-dim": "#ffb870",
+                        "primary": "#0d631b",
+                        "tertiary-fixed-dim": "#ffb1c7",
+                        "primary-fixed": "#a3f69c",
+                        "on-surface-variant": "#40493d",
+                        "secondary": "#8b5000",
+                        "on-secondary-container": "#653900",
+                        "on-secondary": "#ffffff",
+                        "inverse-on-surface": "#f2f0ed",
+                        "tertiary-container": "#b14b6f",
+                        "surface-variant": "#e4e2df",
+                        "surface-container-high": "#eae8e5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Lexend"],
+                        "display": ["Lexend"],
+                        "body": ["Lexend"],
+                        "label": ["Lexend"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Lexend', sans-serif;
+            background-color: #fbf9f6;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-effect {
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .custom-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-surface min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-[#fbf9f6]/80 backdrop-blur-xl shadow-[0_12px_40px_rgba(51,51,51,0.06)] flex items-center justify-between px-6 h-16 w-full">
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-stone-800 hover:bg-stone-200/50 transition-colors p-2 rounded-full active:scale-95 duration-200">menu</button>
+<h1 class="text-xl font-bold text-green-800 tracking-tight">Circles</h1>
+</div>
+<div class="flex items-center">
+<button class="material-symbols-outlined text-stone-800 hover:bg-stone-200/50 transition-colors p-2 rounded-full active:scale-95 duration-200">add</button>
+</div>
+</header>
+<main class="pt-24 px-6 max-w-4xl mx-auto">
+<!-- Search Bar -->
+<section class="mb-10">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-stone-400">search</span>
+<input class="w-full h-14 pl-12 pr-6 bg-surface-container-low rounded-xl border-none focus:ring-0 focus:bg-surface-container-lowest transition-all duration-300 placeholder:text-stone-400 text-on-surface body-lg shadow-sm" placeholder="Find a local circle..." type="text"/>
+<div class="absolute bottom-0 left-4 right-4 h-0.5 bg-primary scale-x-0 group-focus-within:scale-x-100 transition-transform duration-300 origin-left"></div>
+</div>
+</section>
+<!-- My Circles Section -->
+<section class="mb-12">
+<div class="flex items-end justify-between mb-6">
+<h2 class="text-2xl font-bold tracking-tight text-on-surface">My Circles</h2>
+<button class="text-primary font-medium text-sm hover:underline">See all activity</button>
+</div>
+<div class="space-y-6">
+<!-- Card 1 -->
+<div onclick="window.location.href='circle-detail.html'" class="group relative bg-surface-container-lowest cursor-pointer rounded-xl p-6 transition-all duration-300 hover:shadow-[0_20px_50px_rgba(51,51,51,0.08)] flex flex-col md:flex-row gap-6 items-start">
+<div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="lush urban community garden with vibrant vegetables and flowers under soft afternoon sunlight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCDVtGmVUdCP8kCpO8OzCo47cNC6GQfY4bp8uwuRUEExA8jMjVRzh2UEmBgSdKp7A27yFD4k67Jcg4BHwA2Pop2duM0XNEQ2cF29ckkaiNm8i4gLXhYQrz4PGlPXfGk4m9PHrGpcJtS2Tii0PQjJmcuCmg7ZKJZyXJYY8C9cAnoXaMSDYjp7h022s8YtCLgnn3nABuZgedy5ve8JPs4PZ4CsqsbR9XuqpJ5XFqTrsAi-EExLX3OfD52h6GoiKJI-_MyuCJGzsLdq7_G"/>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<div>
+<h3 class="text-xl font-semibold text-on-surface mb-1">Main Street Gardeners</h3>
+<p class="text-stone-500 text-sm font-medium">42 members</p>
+</div>
+<span class="bg-primary-container text-on-primary-container px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">New Tool</span>
+</div>
+<div class="mt-4 p-4 bg-surface-container rounded-lg border-l-4 border-primary">
+<p class="text-stone-700 text-sm leading-relaxed">
+<span class="font-bold text-on-surface">Marcus</span> just shared: <span class="italic">Wheelbarrow</span>
+</p>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="group relative bg-surface-container-lowest rounded-xl p-6 transition-all duration-300 hover:shadow-[0_20px_50px_rgba(51,51,51,0.08)] flex flex-col md:flex-row gap-6 items-start">
+<div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="organized workshop wall with various woodworking tools hanging neatly on pegboards" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAO707UpAPZFgxtzy-tfAWYbqRARJCSFmRGhbZXLz61043c30TnhleLxUry8lSAGHWfVsNAviLU2RF8yBrOh7EfQ_8dXsN2_yqz1sT5w-KwvgM3JQt3o8dje90y_OrMxOnJl7fC9o-v-gQpknOfthApThjxRUWtafcWkTJrA-DGdEeVw2mAnuEvefCnA-z9mYb9Em6YHjEuieWZhtEGiZqPf0DghFVWv_Inu2ZojmovoAHRaXg58OPdByq3EY1Zd0BdmwY_Ebu-Ug3R"/>
+</div>
+<div class="flex-grow">
+<h3 class="text-xl font-semibold text-on-surface mb-1">Oak Wood Tool Library</h3>
+<p class="text-stone-500 text-sm font-medium">18 members</p>
+<div class="mt-4 flex items-center gap-3 text-primary">
+<span class="material-symbols-outlined text-[20px]">calendar_today</span>
+<p class="text-sm font-medium">Meeting this Friday @ 6 PM</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Suggested for You Section -->
+<section class="mb-12 overflow-hidden">
+<h2 class="text-2xl font-bold tracking-tight text-on-surface mb-6">Suggested for You</h2>
+<div class="flex gap-6 overflow-x-auto pb-8 custom-scrollbar snap-x">
+<!-- Card 1 -->
+<div class="snap-start min-w-[280px] bg-surface-container-low rounded-2xl p-6 flex flex-col items-center text-center border border-transparent hover:border-outline-variant transition-colors">
+<div class="w-16 h-16 bg-secondary-fixed rounded-full flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-on-secondary-fixed text-3xl" style="font-variation-settings: 'FILL' 1;">shopping_basket</span>
+</div>
+<h3 class="text-lg font-bold text-on-surface mb-1">Sunset Surplus Swap</h3>
+<p class="text-stone-500 text-sm mb-6">0.8 mi away</p>
+<button class="w-full py-3 bg-primary text-on-primary rounded-xl font-semibold text-sm active:scale-95 duration-200">Join Circle</button>
+</div>
+<!-- Card 2 -->
+<div class="snap-start min-w-[280px] bg-surface-container-low rounded-2xl p-6 flex flex-col items-center text-center border border-transparent hover:border-outline-variant transition-colors">
+<div class="w-16 h-16 bg-tertiary-fixed rounded-full flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-on-tertiary-fixed-variant text-3xl" style="font-variation-settings: 'FILL' 1;">landscape</span>
+</div>
+<h3 class="text-lg font-bold text-on-surface mb-1">Hillside Hiking Club</h3>
+<p class="text-stone-500 text-sm mb-6">1.5 mi away</p>
+<button class="w-full py-3 bg-primary text-on-primary rounded-xl font-semibold text-sm active:scale-95 duration-200">Join Circle</button>
+</div>
+<!-- Card 3 (Placeholder for scroll visual) -->
+<div class="snap-start min-w-[280px] bg-surface-container-low rounded-2xl p-6 flex flex-col items-center text-center border border-transparent hover:border-outline-variant transition-colors">
+<div class="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-on-primary-fixed-variant text-3xl" style="font-variation-settings: 'FILL' 1;">menu_book</span>
+</div>
+<h3 class="text-lg font-bold text-on-surface mb-1">Local Book Exchange</h3>
+<p class="text-stone-500 text-sm mb-6">2.1 mi away</p>
+<button class="w-full py-3 bg-primary text-on-primary rounded-xl font-semibold text-sm active:scale-95 duration-200">Join Circle</button>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-3 bg-[#fbf9f6]/80 backdrop-blur-xl z-50 rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
+<a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-green-700 transition-all active:scale-90 duration-200" href="index.html">
+<span class="material-symbols-outlined mb-1">home</span>
+<span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-green-700 transition-all active:scale-90 duration-200" href="explore.html">
+<span class="material-symbols-outlined mb-1">explore</span>
+<span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Explore</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-green-100/50 text-green-800 rounded-2xl px-5 py-2 transition-all active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">groups</span>
+<span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Circles</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-green-700 transition-all active:scale-90 duration-200" href="profile.html">
+<span class="material-symbols-outlined mb-1">person</span>
+<span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Me</span>
+</a>
+</nav>
+<!-- Floating Action Button - Supressed on this view as per shell guidelines if prioritized context is needed, 
+         but keeping the TopAppBar trailing 'add' for primary creation intent -->
+</body></html>

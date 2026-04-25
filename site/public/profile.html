@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "inverse-on-surface": "#f2f0ed",
+                    "background": "#fbf9f6",
+                    "on-primary-fixed": "#002204",
+                    "surface-container": "#efeeeb",
+                    "surface-container-highest": "#e4e2df",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "secondary-fixed-dim": "#ffb870",
+                    "on-secondary": "#ffffff",
+                    "secondary": "#8b5000",
+                    "primary-fixed": "#a3f69c",
+                    "secondary-fixed": "#ffdcbe",
+                    "on-tertiary-container": "#ffedf0",
+                    "outline": "#707a6c",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "on-primary-container": "#cbffc2",
+                    "tertiary": "#923357",
+                    "primary-fixed-dim": "#88d982",
+                    "on-primary-fixed-variant": "#005312",
+                    "surface": "#fbf9f6",
+                    "on-tertiary-fixed": "#3f001c",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "on-background": "#1b1c1a",
+                    "on-error-container": "#93000a",
+                    "on-secondary-fixed": "#2c1600",
+                    "on-secondary-fixed-variant": "#693c00",
+                    "inverse-primary": "#88d982",
+                    "primary": "#0d631b",
+                    "surface-dim": "#dbdad7",
+                    "surface-tint": "#1b6d24",
+                    "surface-container-high": "#eae8e5",
+                    "on-surface": "#1b1c1a",
+                    "on-primary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "surface-container-low": "#f5f3f0",
+                    "outline-variant": "#bfcaba",
+                    "primary-container": "#2e7d32",
+                    "tertiary-container": "#b14b6f",
+                    "surface-variant": "#e4e2df",
+                    "on-error": "#ffffff",
+                    "on-secondary-container": "#653900",
+                    "on-surface-variant": "#40493d",
+                    "error": "#ba1a1a",
+                    "surface-bright": "#fbf9f6",
+                    "inverse-surface": "#30312f",
+                    "secondary-container": "#ff9800",
+                    "tertiary-fixed": "#ffd9e2"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.5rem",
+                    "lg": "1rem",
+                    "xl": "1.5rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Lexend"],
+                    "display": ["Lexend"],
+                    "body": ["Lexend"],
+                    "label": ["Lexend"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      body {
+        font-family: 'Lexend', sans-serif;
+        background-color: #fbf9f6;
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-surface">
+<!-- TopAppBar -->
+<nav class="fixed top-0 w-full z-50 bg-stone-50/80 dark:bg-stone-900/80 backdrop-blur-xl shadow-sm shadow-stone-200/50 dark:shadow-none">
+<div class="flex justify-between items-center px-6 py-4 w-full">
+<button class="material-symbols-outlined text-green-800 dark:text-green-400 hover:bg-stone-200/50 dark:hover:bg-stone-700/50 transition-colors active:scale-95 duration-200 p-2 rounded-full" data-icon="menu">menu</button>
+<h1 class="font-lexend font-bold text-2xl tracking-tight text-green-800 dark:text-green-400">Me</h1>
+<button class="material-symbols-outlined text-green-800 dark:text-green-400 hover:bg-stone-200/50 dark:hover:bg-stone-700/50 transition-colors active:scale-95 duration-200 p-2 rounded-full" data-icon="settings">settings</button>
+</div>
+</nav>
+<main class="pt-24 pb-32 px-6 max-w-2xl mx-auto space-y-8">
+<!-- Profile Hero -->
+<section class="flex flex-col items-center text-center space-y-4">
+<div class="relative">
+<img alt="Pranav T." class="w-32 h-32 rounded-full object-cover border-4 border-surface-container-lowest shadow-lg" data-alt="portrait of a friendly young man with short dark hair and a warm smile, soft natural outdoor lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAE710-z3ggR1AMDvmoR6i4U0Z6ofou-r9OSP6f320auc9YvVTpGQQ516t91o4uaT5ljqRMKM_azozN4BfsTCQXlVk2AiNFWnKMcXQ94olpTL23bi5Tw-EQ34vwleYkIlrg7CzEK2VlEkYXKJuv1GXu3WU4jjg_RANHmuPoAp0d54BHIGkgnfgSlC5wiIeXli2TSYeAiA4zkkJjfmXJl_jmUvOFmE9SYfwhd_ikJsPbd0mRKQR_bqPqSlRSLR3eYsKZX6YPHkNbKwIu"/>
+<div class="absolute -bottom-2 -right-2 bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full flex items-center gap-1.5 shadow-md">
+<span class="material-symbols-outlined text-[18px]" data-icon="workspace_premium" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+<span class="text-[10px] font-bold uppercase tracking-wider">Top Contributor</span>
+</div>
+</div>
+<div>
+<h2 class="text-3xl font-bold tracking-tight text-on-surface">Pranav T.</h2>
+<p class="text-on-surface-variant/70 body-lg">Oakwood Community Member since 2022</p>
+</div>
+</section>
+<!-- Impact Dashboard -->
+<section class="grid grid-cols-3 gap-4">
+<div class="bg-surface-container-low p-4 rounded-xl text-center flex flex-col items-center justify-center space-y-1">
+<span class="text-2xl font-bold text-primary">14</span>
+<span class="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">Items Shared</span>
+</div>
+<div class="bg-surface-container-low p-4 rounded-xl text-center flex flex-col items-center justify-center space-y-1">
+<div class="flex items-center gap-1">
+<span class="text-2xl font-bold text-primary">4.9</span>
+<span class="material-symbols-outlined text-secondary text-[20px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+</div>
+<span class="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">Rating</span>
+</div>
+<div class="bg-surface-container-low p-4 rounded-xl text-center flex flex-col items-center justify-center space-y-1">
+<span class="text-2xl font-bold text-primary">215</span>
+<span class="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">Neighbors Helped</span>
+</div>
+</section>
+<!-- Sustainability Highlight Card -->
+<section class="bg-primary-fixed/30 p-6 rounded-xl relative overflow-hidden flex items-center gap-4">
+<div class="z-10">
+<p class="text-on-primary-fixed-variant text-lg font-medium leading-snug">
+                    You've helped the community save <span class="font-black text-primary">85kg of carbon</span> by sharing! 🌿
+                </p>
+</div>
+<div class="absolute -right-4 -bottom-4 opacity-10">
+<span class="material-symbols-outlined text-[120px]" data-icon="eco">eco</span>
+</div>
+</section>
+<!-- My Active Inventory -->
+<section class="space-y-4">
+<div class="flex justify-between items-end px-2">
+<h3 class="text-xl font-bold tracking-tight">My Active Inventory</h3>
+<button class="text-primary font-bold text-sm">View All</button>
+</div>
+<div class="space-y-4">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group">
+<img alt="Pizza Oven" class="w-20 h-20 rounded-lg object-cover" data-alt="a stainless steel outdoor pizza oven on a wooden table with fire visible inside, warm evening light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTz6rGf4hXrm7HAc7--eUKm4m8ZsVmT_shy-BuzJl6jLhPd34-yoKw8zOdQwA9_SSdp1QGOroYp1hbvO_qPGOEjsB7XOBxwYv2DBfX4W1Ai_gJcMyyXsftLYZ4sMGv8xJEbqPbzfCifkwjhuZNwoPGMC-zgkQey5oN0WDPOPGkES69anjOillGvuv5oVTbcSB1P5uNiU7ljoX9F_dD68KSh5AjgbiwvTwoHKKMeGwpQJx0Dun9aaIxwR9vA-o_UBdRBl0y0epupjyE"/>
+<div class="flex-1">
+<h4 class="font-bold text-on-surface">Classic Pizza Oven</h4>
+<div class="flex items-center gap-1.5 mt-1">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<p class="text-primary font-bold text-sm">Currently out with Kelsey J.</p>
+</div>
+</div>
+<button class="material-symbols-outlined text-outline-variant" data-icon="more_vert">more_vert</button>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group">
+<img alt="Camping Gear" class="w-20 h-20 rounded-lg object-cover" data-alt="a green waterproof tent and outdoor camping backpacks neatly arranged in a sunlit pine forest" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcOhP-9Gx72NSizDLlUrCbqCNyvdOhbw6NVwB1lWI1sJJPmmYuX0Wq7uXALxJOU9dnOs4N8rRa-yFr7goqn3X6LV5hTdpNLTlu_jghYYx3H21UUwj3KxSAtYFDm1X3YPlnN3Zh3cHURBlc9XMMAPRx6xjmMgB-rGv55bSp42iMaJ6xpAW23ZFlQlHaEzfVy5mQvsvxOo3souIlN_Yzw6ljSsmKjmMPETdKdMotcfjfCCqo7zpEn-Ek3YJdWM5YXbVLiCAYHKHrfJx1"/>
+<div class="flex-1">
+<h4 class="font-bold text-on-surface">Camping Gear Set</h4>
+<p class="text-on-surface-variant font-medium text-sm mt-1">Ready to share</p>
+</div>
+<button class="material-symbols-outlined text-outline-variant" data-icon="more_vert">more_vert</button>
+</div>
+</div>
+</section>
+<!-- Actions -->
+<section class="flex flex-col gap-3">
+<button class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                Add New Item
+            </button>
+<button class="w-full bg-surface-container text-on-surface-variant py-4 rounded-xl font-bold active:scale-95 transition-transform">
+                Edit Profile
+            </button>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-3 bg-stone-50/80 dark:bg-stone-900/80 backdrop-blur-xl shadow-[0_-8px_30px_rgb(0,0,0,0.04)] z-50 rounded-t-2xl">
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 px-3 py-1.5 hover:text-green-700 active:scale-90 transition-transform duration-150" href="explore.html">
+<span class="material-symbols-outlined" data-icon="explore">explore</span>
+<span class="font-lexend text-[10px] font-medium tracking-wide uppercase mt-1">Discover</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 px-3 py-1.5 hover:text-green-700 active:scale-90 transition-transform duration-150" href="activity.html">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="font-lexend text-[10px] font-medium tracking-wide uppercase mt-1">Activity</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 px-3 py-1.5 hover:text-green-700 active:scale-90 transition-transform duration-150" href="explore.html">
+<span class="material-symbols-outlined" data-icon="handyman">handyman</span>
+<span class="font-lexend text-[10px] font-medium tracking-wide uppercase mt-1">Borrow</span>
+</a>
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 px-3 py-1.5 hover:text-green-700 active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+<span class="font-lexend text-[10px] font-medium tracking-wide uppercase mt-1">Chat</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-green-100/50 dark:bg-green-900/30 text-green-900 dark:text-green-100 rounded-xl px-3 py-1.5 active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="person" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-lexend text-[10px] font-medium tracking-wide uppercase mt-1">Me</span>
+</a>
+</nav>
+</body></html>

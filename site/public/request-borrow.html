@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>NeighborGoods - Request to Borrow</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error-container": "#ffdad6",
+                        "primary-container": "#2e7d32",
+                        "tertiary-fixed": "#ffd9e2",
+                        "secondary-container": "#ff9800",
+                        "on-error-container": "#93000a",
+                        "on-surface-variant": "#40493d",
+                        "on-surface": "#1b1c1a",
+                        "surface-container": "#efeeeb",
+                        "primary": "#0d631b",
+                        "secondary-fixed": "#ffdcbe",
+                        "on-tertiary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "on-secondary": "#ffffff",
+                        "inverse-surface": "#30312f",
+                        "primary-fixed-dim": "#88d982",
+                        "on-tertiary-fixed": "#3f001c",
+                        "on-primary-container": "#cbffc2",
+                        "inverse-on-surface": "#f2f0ed",
+                        "on-primary": "#ffffff",
+                        "background": "#fbf9f6",
+                        "outline": "#707a6c",
+                        "on-secondary-fixed": "#2c1600",
+                        "on-secondary-container": "#653900",
+                        "on-tertiary-container": "#ffedf0",
+                        "primary-fixed": "#a3f69c",
+                        "on-primary-fixed": "#002204",
+                        "tertiary": "#923357",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed-variant": "#693c00",
+                        "on-primary-fixed-variant": "#005312",
+                        "surface": "#fbf9f6",
+                        "tertiary-fixed-dim": "#ffb1c7",
+                        "surface-variant": "#e4e2df",
+                        "on-error": "#ffffff",
+                        "surface-tint": "#1b6d24",
+                        "secondary": "#8b5000",
+                        "on-tertiary-fixed-variant": "#7f2448",
+                        "surface-container-highest": "#e4e2df",
+                        "surface-container-high": "#eae8e5",
+                        "secondary-fixed-dim": "#ffb870",
+                        "surface-dim": "#dbdad7",
+                        "on-background": "#1b1c1a",
+                        "tertiary-container": "#b14b6f",
+                        "surface-container-low": "#f5f3f0",
+                        "outline-variant": "#bfcaba",
+                        "surface-bright": "#fbf9f6",
+                        "inverse-primary": "#88d982"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Lexend"],
+                        "display": ["Lexend"],
+                        "body": ["Lexend"],
+                        "label": ["Lexend"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Lexend', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-forest-gradient {
+            background: linear-gradient(135deg, #0d631b 0%, #2e7d32 100%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen pb-24">
+<!-- TopAppBar -->
+<header class="bg-[#fbf9f6]/80 backdrop-blur-[20px] fixed top-0 w-full z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
+<div class="flex items-center justify-between px-6 h-16 w-full">
+<button onclick="window.location.href='item-details.html'" class="text-on-surface hover:bg-surface-container transition-all p-2 rounded-full active:scale-95 duration-200">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+<h1 class="text-[1.125rem] font-bold tracking-tight text-[#333333]">Check Availability</h1>
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container">
+<img alt="Marcus G. Profile" class="w-full h-full object-cover" data-alt="Professional headshot of Marcus, a friendly middle-aged man with a kind smile, outdoor garden setting with soft morning light." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_yIsqWjALvCwYZ8myifjv7Fs9FJbSt1r-nkxKS0F4iQKXEq57f0vM-gN44bPTs3qQLySRWX5e0tDtBj15KBQ8xL-zhDJ9dOAL_gnalXktGBOmmVKqXzOigTK2c_NMHhkf63um2Yvko_XUjXmOnNNmVUI2bbs69rsWDd3-BG80AjoU6fayxuCnqHRauiDrZJR1QaeNtPRFs74FS0kGY0lo2QicR2_4tGi2a-Qky25LwMh-f5t6nr2S0ST88rWc-lnNCkmACC41Fnp3"/>
+</div>
+</div>
+</header>
+<main class="pt-24 px-6 max-w-md mx-auto space-y-8">
+<!-- Item Summary Card -->
+<section>
+<div class="bg-surface-container-lowest rounded-xl p-4 flex gap-4 shadow-[0_4px_20px_rgba(51,51,51,0.04)] items-center">
+<div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
+<img alt="High-Reach Garden Ladder" class="w-full h-full object-cover" data-alt="Sturdy aluminum high-reach garden ladder leaning against a leafy green tree in a sun-drenched suburban backyard." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDkBiFO309bKVtgCcklIpB1TT8ykJmDgEUN3-om27dbVLRd_F14cH5dsYLgPql5Hxm8b898H3Z7d0_inKGt3S0TqhPlW0qWyfD_Vk47B3QaV40oChKEWhmyatXZfBqmlH4vU2EKzlMmzf3uRWvel25L4sczoln1HOBmOx7sc8kMHZBoAOSNw8R4ckwfHHrMUbQheF7ksVPtJHjCQiVwQMKgnRF-R9Qqvsl_bQit3eYw5G9T-eQzEVPDmbFRJyXlVNOgmbtGbr85Dkfe"/>
+</div>
+<div class="flex flex-col">
+<span class="text-label text-[0.65rem] uppercase tracking-[0.05em] text-primary font-bold">Lending Item</span>
+<h2 class="text-body-lg font-semibold text-on-surface leading-tight">High-Reach Garden Ladder</h2>
+<p class="text-body-sm text-on-surface-variant text-sm mt-1">Lent by Marcus G.</p>
+</div>
+</div>
+</section>
+<!-- Date Selection (Custom Minimal Calendar) -->
+<section class="space-y-4">
+<h3 class="text-headline-md text-lg font-bold text-on-surface">Select Dates</h3>
+<div class="bg-surface-container-low rounded-xl p-6">
+<div class="flex justify-between items-center mb-6">
+<button class="material-symbols-outlined text-outline">chevron_left</button>
+<span class="font-medium">October 2023</span>
+<button class="material-symbols-outlined text-outline">chevron_right</button>
+</div>
+<div class="grid grid-cols-7 gap-2 text-center text-[0.75rem] font-bold text-outline mb-2">
+<span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+</div>
+<div class="grid grid-cols-7 gap-y-3">
+<div class="py-2 text-surface-dim">25</div>
+<div class="py-2 text-surface-dim">26</div>
+<div class="py-2 text-surface-dim">27</div>
+<div class="py-2 text-surface-dim">28</div>
+<div class="py-2 text-surface-dim">29</div>
+<div class="py-2 text-on-surface">1</div>
+<div class="py-2 text-on-surface">2</div>
+<div class="py-2 text-on-surface">3</div>
+<div class="py-2 text-on-surface">4</div>
+<div class="py-2 text-on-surface">5</div>
+<div class="py-2 text-on-surface">6</div>
+<div class="py-2 bg-primary text-on-primary rounded-lg font-bold">7</div>
+<div class="py-2 bg-primary-fixed text-on-primary-fixed-variant font-bold">8</div>
+<div class="py-2 bg-primary text-on-primary rounded-lg font-bold">9</div>
+<div class="py-2 text-on-surface">10</div>
+<div class="py-2 text-on-surface">11</div>
+<div class="py-2 text-on-surface">12</div>
+<div class="py-2 text-on-surface">13</div>
+<div class="py-2 text-on-surface">14</div>
+<div class="py-2 text-on-surface">15</div>
+<div class="py-2 text-on-surface">16</div>
+</div>
+<div class="mt-6 flex justify-between border-t border-outline-variant/15 pt-4">
+<div class="flex flex-col">
+<span class="text-[0.65rem] uppercase text-outline font-bold">Start</span>
+<span class="text-sm font-medium">Sat, Oct 7</span>
+</div>
+<div class="flex flex-col text-right">
+<span class="text-[0.65rem] uppercase text-outline font-bold">End</span>
+<span class="text-sm font-medium">Mon, Oct 9</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Message Field -->
+<section class="space-y-4">
+<div class="flex flex-col gap-2">
+<label class="text-[0.75rem] font-bold uppercase tracking-[0.05em] text-on-surface-variant px-1">Message Marcus (Optional)</label>
+<textarea class="w-full bg-surface-container-low border-none rounded-xl p-4 focus:ring-0 focus:border-b-2 focus:border-primary text-body-lg placeholder:text-on-surface-variant/40 transition-all resize-none" placeholder="Hi Marcus, I'd love to use the ladder for some tree trimming this weekend..." rows="4"></textarea>
+</div>
+</section>
+<!-- Agreement -->
+<section>
+<label class="flex items-start gap-4 cursor-pointer group">
+<div class="relative flex items-center mt-1">
+<input class="peer h-5 w-5 rounded border-2 border-outline-variant bg-surface text-primary focus:ring-offset-0 focus:ring-0 appearance-none checked:bg-primary checked:border-primary transition-all" type="checkbox"/>
+<span class="material-symbols-outlined absolute text-on-primary text-sm opacity-0 peer-checked:opacity-100 left-0.5 pointer-events-none" style="font-variation-settings: 'wght' 700;">check</span>
+</div>
+<span class="text-sm text-on-surface-variant leading-relaxed">
+                    I agree to the <span class="text-primary font-semibold underline decoration-primary/30">Community Safety Guidelines</span>.
+                </span>
+</label>
+</section>
+<!-- Main Action & Note -->
+<section class="pt-4 space-y-6">
+<button onclick="window.location.href='request-sent.html'" class="w-full bg-forest-gradient text-on-primary py-5 rounded-lg font-bold text-lg shadow-[0_12px_40px_rgba(13,99,27,0.15)] active:scale-95 duration-200 transition-all">
+                Send Request
+            </button>
+<div class="bg-secondary-fixed/30 p-4 rounded-xl flex items-center gap-4">
+<div class="bg-secondary-container text-on-secondary rounded-full p-2 flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]" data-icon="volunteer_activism" style="font-variation-settings: 'FILL' 1;">volunteer_activism</span>
+</div>
+<p class="text-xs font-medium text-on-secondary-fixed-variant leading-normal">
+                    You won't be charged. <span class="text-secondary font-bold">This is a neighborly share!</span>
+</p>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation Shell (Suppressed as per task context: Task-Focused screens hide global nav) -->
+<!-- The FAB is suppressed as per the "Contextual FAB Suppression" rule for transactional/details pages -->
+</body></html>

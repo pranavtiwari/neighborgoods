@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Item Details - The Hearthside</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-surface-variant": "#40493d",
+                    "on-primary-fixed-variant": "#005312",
+                    "inverse-on-surface": "#f2f0ed",
+                    "tertiary-container": "#b14b6f",
+                    "secondary-container": "#ff9800",
+                    "on-surface": "#1b1c1a",
+                    "surface-tint": "#1b6d24",
+                    "outline": "#707a6c",
+                    "on-tertiary-fixed-variant": "#7f2448",
+                    "surface-container": "#efeeeb",
+                    "surface-dim": "#dbdad7",
+                    "on-tertiary-container": "#ffedf0",
+                    "secondary-fixed": "#ffdcbe",
+                    "on-primary-container": "#cbffc2",
+                    "surface-variant": "#e4e2df",
+                    "tertiary-fixed": "#ffd9e2",
+                    "surface-container-low": "#f5f3f0",
+                    "background": "#fbf9f6",
+                    "on-secondary-fixed-variant": "#693c00",
+                    "surface": "#fbf9f6",
+                    "on-primary": "#ffffff",
+                    "secondary": "#8b5000",
+                    "tertiary": "#923357",
+                    "on-secondary-fixed": "#2c1600",
+                    "on-primary-fixed": "#002204",
+                    "primary-fixed-dim": "#88d982",
+                    "on-tertiary-fixed": "#3f001c",
+                    "on-error": "#ffffff",
+                    "surface-bright": "#fbf9f6",
+                    "surface-container-highest": "#e4e2df",
+                    "on-background": "#1b1c1a",
+                    "inverse-primary": "#88d982",
+                    "tertiary-fixed-dim": "#ffb1c7",
+                    "secondary-fixed-dim": "#ffb870",
+                    "outline-variant": "#bfcaba",
+                    "error-container": "#ffdad6",
+                    "error": "#ba1a1a",
+                    "inverse-surface": "#30312f",
+                    "on-secondary-container": "#653900",
+                    "primary": "#0d631b",
+                    "primary-fixed": "#a3f69c",
+                    "primary-container": "#2e7d32",
+                    "on-error-container": "#93000a",
+                    "surface-container-high": "#eae8e5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Lexend"],
+                    "display": ["Lexend"],
+                    "body": ["Lexend"],
+                    "label": ["Lexend"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body { font-family: 'Lexend', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="bg-stone-50/80 dark:bg-stone-900/80 backdrop-blur-md flex items-center justify-between px-6 h-16 w-full docked w-full top-0 z-50 shadow-sm dark:shadow-none">
+<div class="flex items-center gap-4">
+<button onclick="window.location.href='index.html'" class="hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors active:scale-95 duration-200 p-2 rounded-full">
+<span class="material-symbols-outlined text-green-800 dark:text-green-400">arrow_back</span>
+</button>
+<h1 class="font-lexend text-base font-semibold tracking-tight text-stone-500 dark:text-stone-400">Item Details</h1>
+</div>
+<div class="flex items-center">
+<button class="hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors active:scale-95 duration-200 p-2 rounded-full">
+<span class="material-symbols-outlined text-stone-500 dark:text-stone-400">bookmark</span>
+</button>
+</div>
+</header>
+<main class="max-w-screen-xl mx-auto px-4 md:px-8">
+<!-- Hero Section Asymmetric Layout -->
+<div class="mt-4 grid grid-cols-1 md:grid-cols-5 gap-8">
+<!-- Hero Image -->
+<div class="md:col-span-3">
+<div class="relative overflow-hidden rounded-xl shadow-lg aspect-[4/5] md:aspect-auto md:h-[600px]">
+<img class="w-full h-full object-cover" data-alt="sturdy silver extendable ladder leaning against a lush green leafy tree in a sunlit garden with soft natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEgOFeJ2y0YF5E5uktaQ3PBBzxcbovMW_T2Ye41dwhFixXQTGXJ2_zU30p_0drCFxLD15I0vfFzE97bFeRNbLhCJTT9eiABikyaQW1y6Y-ncbQ0JJrLv6ZYIdbbYMpLRU5XYqxWewDhUdGyjFIPnHpxVcVUKFJoNh9qlY2J-kjubGKno9bUTj70QKg7v75jDtlfsyxd6c8ZguWO_e5Q66pyZp41FafBBMJjGtPKCmE-CsH8qTsxY1zpL10hf4-XB61iJVgYAWZ5Pah"/>
+<div class="absolute top-4 left-4">
+<span class="bg-secondary-fixed text-on-secondary-fixed px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase">Borrowing</span>
+</div>
+</div>
+</div>
+<!-- Content Panel -->
+<div class="md:col-span-2 flex flex-col gap-8">
+<div>
+<h2 class="text-4xl font-bold tracking-tighter text-primary leading-tight mb-2">High-Reach Garden Ladder</h2>
+<p class="text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">location_on</span>
+                        0.3 mi away • Willow Creek District
+                    </p>
+</div>
+<!-- Owner Info Section -->
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-[0_12px_40px_rgba(51,51,51,0.04)]">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-4">
+<div class="w-14 h-14 rounded-full overflow-hidden border-2 border-primary/10">
+<img class="w-full h-full object-cover" data-alt="friendly middle-aged man with short brown hair and a welcoming smile in a casual outdoor setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCOgsIBZP9sZpFsggkYzGI8noMO7XLBObIOYLtDFlF2KqbG1mACDlI5otRk6lHU9jS_xncOyH_-S87Rf-IA10kMJ8xL6deuCUFQ5kjwsdYCxFptacLHJesPSQVkiudOpbceyOmiCHSOVw-RMN-wWkxH9db_Q_V1uDGM9y0QhU1bofBqjoUEKYqHQVdRDCydeWF4SU8KUOMWAopVzt51Pe-XL-uTStKJN83Y2af0wZIojuqyw4xcQypiFrz5rTF0mJhSlds099FLMSlF"/>
+</div>
+<div>
+<h3 class="font-bold text-lg leading-none">Marcus G.</h3>
+<div class="flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-primary text-base" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<span class="text-xs font-medium text-primary">Trust Badge</span>
+</div>
+</div>
+</div>
+<button class="px-5 py-2 border-2 border-primary/20 text-primary font-semibold rounded-lg hover:bg-primary/5 transition-all active:scale-[0.98]">
+                            Message
+                        </button>
+</div>
+<div class="bg-surface-container-low p-3 rounded-lg flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">volunteer_activism</span>
+<p class="text-sm font-medium text-on-surface-variant">Marcus has shared this 14 times with neighbors.</p>
+</div>
+</div>
+<!-- Description -->
+<div class="space-y-4">
+<h4 class="text-xl font-bold tracking-tight text-on-surface border-b border-outline-variant/15 pb-2">About this Ladder</h4>
+<p class="text-on-surface-variant leading-relaxed body-lg">
+                        A 12ft extendable ladder, lightweight but very stable. Great for fruit picking or roof work. Please return it clean!
+                    </p>
+</div>
+<!-- Details List -->
+<div class="grid grid-cols-1 gap-3">
+<div class="flex items-center justify-between p-4 bg-surface-container rounded-lg">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container">star_rate</span>
+<span class="text-sm font-medium">Condition</span>
+</div>
+<span class="text-sm font-bold">Like New</span>
+</div>
+<div class="flex items-center justify-between p-4 bg-surface-container rounded-lg">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container">height</span>
+<span class="text-sm font-medium">Max Height</span>
+</div>
+<span class="text-sm font-bold">12 feet</span>
+</div>
+<div class="flex items-center justify-between p-4 bg-surface-container rounded-lg">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container">weight</span>
+<span class="text-sm font-medium">Weight Limit</span>
+</div>
+<span class="text-sm font-bold">250 lbs</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Social Proof Extended (Bento-style section) -->
+<section class="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="bg-secondary-fixed/30 p-8 rounded-2xl flex flex-col justify-center items-center text-center">
+<span class="material-symbols-outlined text-4xl text-secondary mb-2" style="font-variation-settings: 'FILL' 1;">eco</span>
+<span class="text-2xl font-bold text-on-secondary-fixed">8.2kg CO2</span>
+<span class="text-sm text-on-secondary-fixed-variant">Saved by sharing</span>
+</div>
+<div class="md:col-span-2 bg-surface-container-low p-8 rounded-2xl flex items-center justify-between">
+<div>
+<h5 class="text-xl font-bold mb-2">Community Essential</h5>
+<p class="text-on-surface-variant max-w-md">This ladder is one of the most borrowed items in Willow Creek this season. Trusted by 12 unique households.</p>
+</div>
+<div class="hidden lg:flex -space-x-4">
+<img class="w-12 h-12 rounded-full border-4 border-surface object-cover" data-alt="neighbor profile photo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIcOeCU8004PgFFO7Wnn5eLTUxyv8BIMQHOjXP9eCk5z6z1QN8JtQu4IJsyIa_ZBKwefh9c3q0LbeBTgDT-HEpLyDYtlm5bYZA0VRDvOjYiVOgqEchhOCHjsikZ1-IJJMgaNnJMnvgIWaa6kR-XxiwP_LiqnX_8vZIkLEzo4s1u22T_Gp_Ux-cfpUjpLKVCUIEOUJHAdrVTJYiSg8Y-bd1pxpceoa3RtWx5HLC1hSw7B04sZYfFWEJYV-PGbg3R6BJ6_1KNK0J0LEG"/>
+<img class="w-12 h-12 rounded-full border-4 border-surface object-cover" data-alt="neighbor profile photo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA_2K4RAp419puFsU6QzSXPsuHop-bUQqxIzPdxmCXsN64CD5CI77fKg3IHIkUIYrnk8mUmvAISmhjB9l31ZGe0kwP6YDz18Pd-HhHz5x8kgg70iD36sF0M_gch4MTwv34hCt2YuM54NXSniDJQUofh2uqJvmFI3mvXelP_HFLk5c2jhXzNvfL93VMnPXYHF67lIwH6iEgz5tAuabHRdDQxJVdwNV7Cr5JbcsOf9CZ3MB5mGWm49YMwmTQPZfwb8Rq-JWnyYWG-cOIn"/>
+<img class="w-12 h-12 rounded-full border-4 border-surface object-cover" data-alt="neighbor profile photo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnEk_YawDcduS5fc1YYAjzMN4Ra7QUOCM8PlxBDx0KAQ6-sIAAxhfx36D1dyJziJVUBjTJgtQsRV8xGVCoDKg175uK9cZ2n3h50qh03LFcS6eourSa1G5k2fe8dNYTqE2CoCvmJrZ7BfS4IOMR3QiXK9R4e9lV5DRRmykqqnHNW9-14Qi-lim7RnZrLPTjITg8LsVcW9HGT2tbfcOmaO8E5ROJLSW39LaWxnPaLquOLoErAoks7CLNYr5SIVKZNnhbDWMcVSKgC5mp"/>
+<div class="w-12 h-12 rounded-full border-4 border-surface bg-primary text-white flex items-center justify-center text-xs font-bold">+9</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer / Bottom CTA -->
+<footer class="fixed bottom-0 w-full rounded-t-2xl px-6 py-4 bg-stone-50/80 dark:bg-stone-900/80 backdrop-blur-xl border-t border-stone-200/30 dark:border-stone-700/30 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] z-50">
+<div class="flex items-center justify-between max-w-screen-xl mx-auto">
+<div class="hidden md:block">
+<p class="text-xs font-medium text-stone-600 dark:text-stone-400 uppercase tracking-widest">Available Now</p>
+<p class="text-lg font-bold text-primary">Reserve High-Reach Ladder</p>
+</div>
+<button onclick="window.location.href='request-borrow.html'" class="w-full md:w-auto bg-gradient-to-br from-green-800 to-green-600 text-white font-bold rounded-lg px-12 py-4 active:scale-[0.98] transform transition-all shadow-lg hover:opacity-90">
+                Request to Borrow
+            </button>
+</div>
+</footer>
+</body></html>
