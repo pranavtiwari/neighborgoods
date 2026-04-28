@@ -109,13 +109,11 @@
 <a class="text-stone-600 dark:text-stone-400 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="messages.html">Inbox</a>
 <a class="text-stone-600 dark:text-stone-400 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="activity.html">My Items</a>
 </div>
-<div class="flex items-center gap-4">
-<button class="md:hidden p-2 rounded-full hover:bg-surface-container-high transition-colors">
-<span class="material-symbols-outlined">menu</span>
-</button>
-<button onclick="window.location.href='join-community.html'" class="hidden md:block bg-primary px-6 py-2.5 rounded-full text-on-primary font-semibold text-sm transition-all active:opacity-80">
-                    Join Community
-                </button>
+<div class="flex items-center gap-4" id="header-actions">
+    <button class="md:hidden p-2 rounded-full hover:bg-surface-container-high transition-colors">
+        <span class="material-symbols-outlined">menu</span>
+    </button>
+    <!-- Actions will be injected here by script -->
 </div>
 </div>
 </header>
@@ -139,7 +137,7 @@
                     Discover the hidden wealth in your neighborhood. Borrow tools, share harvests, and connect with local circles in a space that feels like a modern commons.
                 </p>
 <div class="flex flex-col sm:flex-row gap-4">
-<button onclick="window.location.href='join-community.html'" class="bg-secondary-container text-on-secondary-container px-8 py-4 rounded-lg font-bold text-lg shadow-[0_8px_30px_rgb(255,152,0,0.2)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2">
+<button onclick="window.loginWithGoogle()" class="bg-secondary-container text-on-secondary-container px-8 py-4 rounded-lg font-bold text-lg shadow-[0_8px_30px_rgb(255,152,0,0.2)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2">
                         Join Your Circle
                         <span class="material-symbols-outlined">arrow_forward</span>
 </button>
@@ -302,7 +300,7 @@
 <div class="z-10 relative">
 <h2 class="text-on-primary text-3xl md:text-5xl font-bold mb-8 max-w-2xl mx-auto">Better neighborhoods are built by sharing.</h2>
 <p class="text-on-primary-container/80 text-lg md:text-xl mb-10 max-w-xl mx-auto">Join 12,000+ neighbors already saving money and reducing waste by sharing what they own.</p>
-<button onclick="window.location.href='join-community.html'" class="bg-surface text-primary px-10 py-5 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all">
+<button onclick="window.loginWithGoogle()" class="bg-surface text-primary px-10 py-5 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all">
                     Find My Neighborhood
                 </button>
 
@@ -376,4 +374,56 @@
 <span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Activity</span>
 </a>
 </nav>
+<script>
+    async function updateHeader() {
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        const headerActions = document.getElementById('header-actions');
+        
+        if (user) {
+            // Logged in
+            const { data: profile } = await window.supabaseClient
+                .from('profiles')
+                .select('avatar_url')
+                .eq('id', user.id)
+                .single();
+                
+            const avatarUrl = profile?.avatar_url || `https://i.pravatar.cc/150?u=${user.id}`;
+            
+            headerActions.innerHTML = `
+                <div class="relative">
+                    <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
+                        <img id="header-avatar" alt="User avatar" class="w-full h-full object-cover" src="${avatarUrl}"/>
+                    </div>
+                    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2 text-left">
+                        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">person</span>
+                            <span class="text-sm font-medium">My Profile</span>
+                        </a>
+                        <button onclick="window.logout()" class="w-full flex items-center gap-3 px-4 py-2 hover:bg-error-container text-error transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">logout</span>
+                            <span class="text-sm font-bold">Logout</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Not logged in
+            headerActions.innerHTML = `
+                <button onclick="window.loginWithGoogle()" class="hidden md:block bg-primary px-6 py-2.5 rounded-full text-on-primary font-semibold text-sm transition-all active:opacity-80">
+                    Join Community
+                </button>
+            `;
+        }
+    }
+
+    // Close dropdown on outside click
+    window.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('profile-dropdown');
+        if (dropdown && !e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', updateHeader);
+</script>
 </body></html>

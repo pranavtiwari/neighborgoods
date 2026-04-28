@@ -114,8 +114,20 @@
 <a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="messages.html">Inbox</a>
 <a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="activity.html">Activity</a>
 </div>
-<div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200">
-<img alt="User avatar" class="w-full h-full object-cover" data-alt="Close-up portrait of a smiling man with a warm and friendly expression in natural daylight environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgyHe1DPY5PKhawnKW2vbfL-OOH7Kn2pJR543fqZHHBABYQZiJVla3GvsqZ0oKTsA24yesPEpPsem24nR1bOIAmTfV7mJR_VcUnJCEqzDCF2xOv9fFqiuyUDFg1FiT7rsdPkSQ9yUYSlYaX3WpQnGODoRnYB9FnypHLie4rq3f4AM-6-hmfRfbrH_lNSAczn1EkgTf8V8tS-c61296aXEphfoWAo3RgxyhkvO-OiBQ1RU1BFDuFx1XwXnq47sEweH6Wejp0_7nYIZb"/>
+<div class="relative">
+    <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
+        <img id="header-avatar" alt="User avatar" class="w-full h-full object-cover" src="https://i.pravatar.cc/150?u=me"/>
+    </div>
+    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2">
+        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
+            <span class="material-symbols-outlined text-[20px]">person</span>
+            <span class="text-sm font-medium">My Profile</span>
+        </a>
+        <button onclick="window.logout()" class="w-full flex items-center gap-3 px-4 py-2 hover:bg-error-container text-error transition-colors">
+            <span class="material-symbols-outlined text-[20px]">logout</span>
+            <span class="text-sm font-bold">Logout</span>
+        </button>
+    </div>
 </div>
 </div>
 </header>
@@ -244,7 +256,7 @@
                 // Skills have a distinct horizontal card style
                 if (item.category === 'skills') {
                     return `
-                    <div class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center" data-name="${item.name}" data-category="skills">
+                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer" data-name="${item.name}" data-category="skills">
                         <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
                             <img alt="${item.name}" class="w-full h-full object-cover mix-blend-multiply opacity-80" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x400?text=Skill'"/>
                         </div>
@@ -266,7 +278,7 @@
                 const imgAspect = index === 0 ? "aspect-square" : "aspect-[3/4]";
                 
                 return `
-                <div class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4" data-name="${item.name}" data-category="${item.category}">
+                <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${item.name}" data-category="${item.category}">
                     <div class="${imgAspect} rounded-lg overflow-hidden ${index === 0 ? 'bg-surface-container-low' : ''}">
                         <img alt="${item.name}" class="w-full h-full object-cover" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
                     </div>
@@ -278,8 +290,8 @@
                         ${index === 0 
                             ? `<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">${item.description}</p>
                                <div class="flex gap-2">
-                                   <button onclick="window.location.href='request-borrow.html'" class="flex-1 py-3 bg-primary-container text-on-primary font-bold rounded-xl active:scale-95 transition-transform">Borrow</button>
-                                   <a href="chat.html?userId=${item.owner_id}&itemId=${item.id}" class="w-12 h-12 bg-surface-container-highest flex items-center justify-center rounded-xl text-on-surface active:scale-95 transition-transform">
+                                   <button onclick="event.stopPropagation(); window.location.href='item-details.html?id=${item.id}'" class="flex-1 py-3 bg-primary-container text-on-primary font-bold rounded-xl active:scale-95 transition-transform">View Details</button>
+                                   <a href="chat.html?userId=${item.owner_id}&itemId=${item.id}" onclick="event.stopPropagation()" class="w-12 h-12 bg-surface-container-highest flex items-center justify-center rounded-xl text-on-surface active:scale-95 transition-transform">
                                        <span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
                                    </a>
                                </div>`
@@ -342,7 +354,36 @@
         });
     });
 
+    // Update header avatar
+    async function updateHeaderAvatar() {
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (user) {
+            const { data: profile } = await window.supabaseClient
+                .from('profiles')
+                .select('avatar_url')
+                .eq('id', user.id)
+                .single();
+            
+            if (profile && profile.avatar_url) {
+                document.getElementById('header-avatar').src = profile.avatar_url;
+            } else {
+                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.id}`;
+            }
+        }
+    }
+
+    // Close dropdown on outside click
+    window.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('profile-dropdown');
+        if (!e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
     // Initial fetch when page loads
-    document.addEventListener('DOMContentLoaded', fetchItems);
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchItems();
+        updateHeaderAvatar();
+    });
 </script>
 </body></html>

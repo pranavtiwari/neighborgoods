@@ -111,7 +111,21 @@
 <a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="activity.html">Activity</a>
 <a class="text-primary font-semibold border-b-2 border-primary pb-1 tracking-tight" href="profile.html">Me</a>
 </div>
-<button class="material-symbols-outlined text-green-800 dark:text-green-400 hover:bg-stone-200/50 dark:hover:bg-stone-700/50 transition-colors active:scale-95 duration-200 p-2 rounded-full" data-icon="settings">settings</button>
+<div class="relative">
+    <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
+        <img id="header-avatar" alt="User avatar" class="w-full h-full object-cover" src="https://i.pravatar.cc/150?u=me"/>
+    </div>
+    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2">
+        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 bg-surface-container-high transition-colors">
+            <span class="material-symbols-outlined text-[20px]">person</span>
+            <span class="text-sm font-medium">My Profile</span>
+        </a>
+        <button onclick="window.logout()" class="w-full flex items-center gap-3 px-4 py-2 hover:bg-error-container text-error transition-colors">
+            <span class="material-symbols-outlined text-[20px]">logout</span>
+            <span class="text-sm font-bold">Logout</span>
+        </button>
+    </div>
+</div>
 </div>
 </nav>
 <main class="pt-24 pb-32 px-6 max-w-2xl mx-auto space-y-8">
@@ -183,11 +197,8 @@
             </button>
 </section>
 <script>
-    document.getElementById('logout-button').addEventListener('click', async () => {
-        if (window.supabaseClient) {
-            await window.supabaseClient.auth.signOut();
-            window.location.href = 'join-community.html';
-        }
+    document.getElementById('logout-button').addEventListener('click', () => {
+        window.logout();
     });
 
     async function fetchProfile() {
@@ -210,11 +221,15 @@
         }
 
         // Fetch User Items
-        const { data: items } = await window.supabaseClient
+        const { data: items, count } = await window.supabaseClient
             .from('items')
-            .select('*')
+            .select('*', { count: 'exact' })
             .eq('owner_id', session.user.id)
             .order('created_at', { ascending: false });
+
+        if (count !== null) {
+            document.querySelector('.grid.grid-cols-3.gap-4 .text-2xl.font-bold.text-primary').textContent = count;
+        }
 
         const itemsList = document.getElementById('my-items-list');
         if (!items || items.length === 0) {
@@ -232,7 +247,36 @@
         }
     }
     
-    document.addEventListener('DOMContentLoaded', fetchProfile);
+    // Update header avatar
+    async function updateHeaderAvatar() {
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (user) {
+            const { data: profile } = await window.supabaseClient
+                .from('profiles')
+                .select('avatar_url')
+                .eq('id', user.id)
+                .single();
+            
+            if (profile && profile.avatar_url) {
+                document.getElementById('header-avatar').src = profile.avatar_url;
+            } else {
+                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.id}`;
+            }
+        }
+    }
+
+    // Close dropdown on outside click
+    window.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('profile-dropdown');
+        if (dropdown && !e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchProfile();
+        updateHeaderAvatar();
+    });
 </script>
 </main>
 <!-- BottomNavBar -->

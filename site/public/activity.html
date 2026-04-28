@@ -110,8 +110,20 @@
 <a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="messages.html">Inbox</a>
 <a class="text-primary font-semibold border-b-2 border-primary pb-1 tracking-tight" href="activity.html">Activity</a>
 </div>
-<div class="flex items-center gap-4">
-<img class="w-8 h-8 rounded-full object-cover" data-alt="Portrait of a smiling middle-aged man in a garden setting, natural sunlight, warm friendly community vibe" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJweNdkuQymWSDh9D9tQOpm9YelTTeEp6f5HvzaQOsQglpOVAUoq4roTYH6CDRuNRpHJxRNTRV-RlTHdazkAcsMGiSm5_B0tZDv_3M10pq9woGqfQB0lT0lwZYG6vizc0OGHKhDc4Ly2p6WRAZEhNl4G_kKx7xELBWUV5IxvSlzDVQ4rkEXaHtElarkL1KO7iaOS6X4EVC6wdE5ahuPuncjGPMFbmqZ4EgflgEyJ-FhkyzTPnvZXKjPYbHtBOkNHxoTTErzZlp6XE2"/>
+<div class="relative">
+    <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
+        <img id="header-avatar" alt="User avatar" class="w-full h-full object-cover" src="https://i.pravatar.cc/150?u=me"/>
+    </div>
+    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2">
+        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
+            <span class="material-symbols-outlined text-[20px]">person</span>
+            <span class="text-sm font-medium">My Profile</span>
+        </a>
+        <button onclick="window.logout()" class="w-full flex items-center gap-3 px-4 py-2 hover:bg-error-container text-error transition-colors">
+            <span class="material-symbols-outlined text-[20px]">logout</span>
+            <span class="text-sm font-bold">Logout</span>
+        </button>
+    </div>
 </div>
 </div>
 </header>
@@ -119,60 +131,21 @@
 <div class="mb-10">
 <h2 class="text-[3.5rem] font-display font-bold leading-none tracking-tight text-on-surface mb-8">Activity</h2>
 <div class="inline-flex p-1 bg-surface-container rounded-xl w-full md:w-auto">
-<button class="flex-1 md:px-8 py-2.5 rounded-lg bg-surface-container-lowest text-primary font-semibold shadow-sm transition-all">
+<button id="btn-borrowing" onclick="switchView('borrowing')" class="flex-1 md:px-8 py-2.5 rounded-lg bg-surface-container-lowest text-primary font-semibold shadow-sm transition-all">
                     Borrowing
                 </button>
-<button class="flex-1 md:px-8 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all">
+<button id="btn-lending" onclick="switchView('lending')" class="flex-1 md:px-8 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all">
                     Lending
                 </button>
 </div>
 </div>
 <section class="mb-12">
 <div class="flex justify-between items-end mb-6">
-<h3 class="text-1.75rem font-headline font-bold text-on-surface">In Progress</h3>
-<span class="text-label-md font-medium text-primary uppercase tracking-widest">2 Items</span>
+<h3 id="section-title" class="text-1.75rem font-headline font-bold text-on-surface">In Progress</h3>
+<span id="item-count" class="text-label-md font-medium text-primary uppercase tracking-widest">0 Items</span>
 </div>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-<div onclick="window.location.href='item-details.html'" class="bg-surface-container-lowest cursor-pointer rounded-xl p-5 group hover:shadow-lg transition-shadow">
-<div class="flex gap-4 mb-4">
-<div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-<img class="w-full h-full object-cover" data-alt="A professional high-reach aluminum extension ladder leaning against a modern house wall, clean lines, bright daylight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJYT1trQzIMSmnBtB5GtDAmbSgRTDQXJNQnazQggg-RiLhcWZrVj57Z1HpIaaPZW98rMgkxm2vr3B_NDCaR3-U442PEG_FyiEKZW8HZ4Ajy3kKtW19jEOPU9fN4b9EzOCPxioHqqUe7eV33ZiO_RzYoizKqsMulW1ybmXbDH1dRXU6RrmGZ2KCSWQGDDq5AwHJ2mf0aSlfumIck0jMCdoAZB0tk_ezW6A3rGPTs2MrtAl-Tmdt34aV6OfM2RVIfADV3yGx6-6QrLRr"/>
-</div>
-<div class="flex-1">
-<div class="flex justify-between items-start">
-<h4 class="font-bold text-lg leading-tight mb-1">High-Reach Garden Ladder</h4>
-<span class="bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">Active</span>
-</div>
-<p class="text-on-surface-variant text-sm flex items-center gap-1">
-<span class="material-symbols-outlined text-sm">person</span> Marcus G.
-</p>
-</div>
-</div>
-<div class="flex justify-between items-center pt-4 border-t border-surface-container-low">
-<span class="text-sm font-medium text-on-surface-variant">Due in 3 days</span>
-<button class="text-primary font-semibold text-sm hover:underline">Extend</button>
-</div>
-</div>
-<div class="bg-surface-container-lowest rounded-xl p-5 group border-b-2 border-transparent focus-within:border-primary transition-all">
-<div class="flex gap-4 mb-4">
-<div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-<img class="w-full h-full object-cover" data-alt="Digital soil pH tester probe being used in dark moist garden soil, close-up details, soft outdoor lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAI1Ufzu7XdQaTYPo3_JXYgcQ5H2ZTnQJoDgcUXyODchcfjcL5uxay11QSZCLLRrRLYodUyFkG7s5BybHWWaO2slpgyJ7dYcTpgFh853MmcK_zlFkuR8nb7GMt6WNtmHQo9UkaA_-DwMVO3XTPa9nQZWdRwDDv_vyQewlgAN1isJxHmRTp-jrnVQy68XrpuQQHG27GMKTKr5OyEPTupddbaDPG3pcu3gW_OPrGfANDOwNAOd8yx9fPyBq0KjV6PeMChhJuCl-i7UglK"/>
-</div>
-<div class="flex-1">
-<div class="flex justify-between items-start">
-<h4 class="font-bold text-lg leading-tight mb-1">Soil PH Tester</h4>
-<span class="material-symbols-outlined text-error text-sm" style="font-variation-settings: 'FILL' 1;">priority_high</span>
-</div>
-<p class="text-on-surface-variant text-sm flex items-center gap-1">
-<span class="material-symbols-outlined text-sm">groups</span> Main St Gardeners
-                            </p>
-</div>
-</div>
-<div class="flex justify-between items-center pt-4 border-t border-surface-container-low">
-<span class="text-sm font-bold text-error">Due tomorrow</span>
-<button onclick="window.location.href='chat.html'" class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-sm font-medium shadow-md">Message</button>
-</div>
-</div>
+<div id="activity-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Items will be injected here -->
 </div>
 </section>
 <section class="mb-12">
@@ -243,4 +216,123 @@
 <span class="font-['Lexend'] text-[10px] font-medium tracking-wide uppercase mt-1">Activity</span>
 </div>
 </nav>
+<script>
+    let currentView = 'borrowing';
+    let userSession = null;
+
+    async function switchView(view) {
+        currentView = view;
+        const btnB = document.getElementById('btn-borrowing');
+        const btnL = document.getElementById('btn-lending');
+        
+        if (view === 'borrowing') {
+            btnB.className = 'flex-1 md:px-8 py-2.5 rounded-lg bg-surface-container-lowest text-primary font-semibold shadow-sm transition-all';
+            btnL.className = 'flex-1 md:px-8 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all';
+        } else {
+            btnL.className = 'flex-1 md:px-8 py-2.5 rounded-lg bg-surface-container-lowest text-primary font-semibold shadow-sm transition-all';
+            btnB.className = 'flex-1 md:px-8 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all';
+        }
+        
+        await fetchActivity();
+    }
+
+    async function fetchActivity() {
+        if (!userSession) return;
+        
+        const grid = document.getElementById('activity-grid');
+        grid.innerHTML = '<div class="col-span-2 text-center py-12 text-stone-400">Loading activity...</div>';
+
+        try {
+            let query = window.supabaseClient
+                .from('requests')
+                .select('*, items(*, profiles(*)), profiles!borrower_id(*)');
+
+            if (currentView === 'borrowing') {
+                query = query.eq('borrower_id', userSession.user.id);
+            } else {
+                const { data: myItems } = await window.supabaseClient.from('items').select('id').eq('owner_id', userSession.user.id);
+                const itemIds = myItems.map(i => i.id);
+                query = query.in('item_id', itemIds);
+            }
+
+            const { data: requests, error } = await query.order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            document.getElementById('item-count').textContent = `${requests.length} Item${requests.length !== 1 ? 's' : ''}`;
+
+            if (requests.length === 0) {
+                grid.innerHTML = `<div class="col-span-2 text-center py-12 text-stone-400">No ${currentView} activity yet.</div>`;
+                return;
+            }
+
+            grid.innerHTML = requests.map(req => {
+                const item = req.items;
+                const otherParty = currentView === 'borrowing' ? item.profiles : req.profiles;
+                const statusColor = req.status === 'approved' ? 'bg-primary/10 text-primary' : 'bg-surface-container-highest text-on-surface-variant';
+                
+                return `
+                <div class="bg-surface-container-lowest rounded-xl p-5 group hover:shadow-lg transition-shadow">
+                    <div class="flex gap-4 mb-4">
+                        <div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
+                            <img class="w-full h-full object-cover" src="${item.image_url || 'https://placehold.co/200x200'}" />
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex justify-between items-start">
+                                <h4 class="font-bold text-lg leading-tight mb-1">${item.name}</h4>
+                                <span class="${statusColor} px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">${req.status}</span>
+                            </div>
+                            <p class="text-on-surface-variant text-sm flex items-center gap-1">
+                                <span class="material-symbols-outlined text-sm">person</span> ${otherParty?.full_name || 'Neighbor'}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center pt-4 border-t border-surface-container-low">
+                        <span class="text-sm font-medium text-on-surface-variant">${req.status === 'approved' ? 'Due soon' : 'Pending response'}</span>
+                        <button onclick="window.location.href='chat.html?userId=${currentView === 'borrowing' ? item.owner_id : req.borrower_id}&itemId=${item.id}'" class="text-primary font-semibold text-sm hover:underline">Message</button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+        } catch (err) {
+            console.error("Error fetching activity:", err);
+            grid.innerHTML = '<div class="col-span-2 text-center py-12 text-error">Failed to load activity.</div>';
+        }
+    }
+
+    // Update header avatar
+    async function updateHeaderAvatar() {
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (user) {
+            const { data: profile } = await window.supabaseClient
+                .from('profiles')
+                .select('avatar_url')
+                .eq('id', user.id)
+                .single();
+            
+            if (profile && profile.avatar_url) {
+                document.getElementById('header-avatar').src = profile.avatar_url;
+            } else {
+                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.id}`;
+            }
+        }
+    }
+
+    // Close dropdown on outside click
+    window.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('profile-dropdown');
+        if (!e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        userSession = await requireAuth();
+        if (userSession) {
+            updateHeaderAvatar();
+            fetchActivity();
+        }
+    });
+</script>
 </body></html>

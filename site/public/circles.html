@@ -3,8 +3,10 @@
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Circles | Share, Instead.</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script>requireAuth();</script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -118,8 +120,20 @@
 <a class="text-primary font-semibold border-b-2 border-primary pb-1 tracking-tight" href="circles.html">Circles</a>
 <a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="activity.html">Activity</a>
 </div>
-<div class="flex items-center">
-<button class="material-symbols-outlined text-stone-800 hover:bg-stone-200/50 transition-colors p-2 rounded-full active:scale-95 duration-200">add</button>
+<div class="relative">
+    <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
+        <img id="header-avatar" alt="User avatar" class="w-full h-full object-cover" src="https://i.pravatar.cc/150?u=me"/>
+    </div>
+    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2">
+        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
+            <span class="material-symbols-outlined text-[20px]">person</span>
+            <span class="text-sm font-medium">My Profile</span>
+        </a>
+        <button onclick="window.logout()" class="w-full flex items-center gap-3 px-4 py-2 hover:bg-error-container text-error transition-colors">
+            <span class="material-symbols-outlined text-[20px]">logout</span>
+            <span class="text-sm font-bold">Logout</span>
+        </button>
+    </div>
 </div>
 </header>
 <main class="pt-24 px-6 max-w-4xl mx-auto">
@@ -137,74 +151,16 @@
 <h2 class="text-2xl font-bold tracking-tight text-on-surface">My Circles</h2>
 <button class="text-primary font-medium text-sm hover:underline">See all activity</button>
 </div>
-<div class="space-y-6">
-<!-- Card 1 -->
-<div onclick="window.location.href='circle-detail.html'" class="group relative bg-surface-container-lowest cursor-pointer rounded-xl p-6 transition-all duration-300 hover:shadow-[0_20px_50px_rgba(51,51,51,0.08)] flex flex-col md:flex-row gap-6 items-start">
-<div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
-<img class="w-full h-full object-cover" data-alt="lush urban community garden with vibrant vegetables and flowers under soft afternoon sunlight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCDVtGmVUdCP8kCpO8OzCo47cNC6GQfY4bp8uwuRUEExA8jMjVRzh2UEmBgSdKp7A27yFD4k67Jcg4BHwA2Pop2duM0XNEQ2cF29ckkaiNm8i4gLXhYQrz4PGlPXfGk4m9PHrGpcJtS2Tii0PQjJmcuCmg7ZKJZyXJYY8C9cAnoXaMSDYjp7h022s8YtCLgnn3nABuZgedy5ve8JPs4PZ4CsqsbR9XuqpJ5XFqTrsAi-EExLX3OfD52h6GoiKJI-_MyuCJGzsLdq7_G"/>
-</div>
-<div class="flex-grow">
-<div class="flex justify-between items-start">
-<div>
-<h3 class="text-xl font-semibold text-on-surface mb-1">Main Street Gardeners</h3>
-<p class="text-stone-500 text-sm font-medium">42 members</p>
-</div>
-<span class="bg-primary-container text-on-primary-container px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">New Tool</span>
-</div>
-<div class="mt-4 p-4 bg-surface-container rounded-lg border-l-4 border-primary">
-<p class="text-stone-700 text-sm leading-relaxed">
-<span class="font-bold text-on-surface">Marcus</span> just shared: <span class="italic">Wheelbarrow</span>
-</p>
-</div>
-</div>
-</div>
-<!-- Card 2 -->
-<div class="group relative bg-surface-container-lowest rounded-xl p-6 transition-all duration-300 hover:shadow-[0_20px_50px_rgba(51,51,51,0.08)] flex flex-col md:flex-row gap-6 items-start">
-<div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
-<img class="w-full h-full object-cover" data-alt="organized workshop wall with various woodworking tools hanging neatly on pegboards" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAO707UpAPZFgxtzy-tfAWYbqRARJCSFmRGhbZXLz61043c30TnhleLxUry8lSAGHWfVsNAviLU2RF8yBrOh7EfQ_8dXsN2_yqz1sT5w-KwvgM3JQt3o8dje90y_OrMxOnJl7fC9o-v-gQpknOfthApThjxRUWtafcWkTJrA-DGdEeVw2mAnuEvefCnA-z9mYb9Em6YHjEuieWZhtEGiZqPf0DghFVWv_Inu2ZojmovoAHRaXg58OPdByq3EY1Zd0BdmwY_Ebu-Ug3R"/>
-</div>
-<div class="flex-grow">
-<h3 class="text-xl font-semibold text-on-surface mb-1">Oak Wood Tool Library</h3>
-<p class="text-stone-500 text-sm font-medium">18 members</p>
-<div class="mt-4 flex items-center gap-3 text-primary">
-<span class="material-symbols-outlined text-[20px]">calendar_today</span>
-<p class="text-sm font-medium">Meeting this Friday @ 6 PM</p>
-</div>
-</div>
-</div>
+<div id="my-circles-list" class="space-y-6">
+    <!-- Loading State -->
+    <div class="text-center py-12 text-stone-400">Loading your circles...</div>
 </div>
 </section>
 <!-- Suggested for You Section -->
 <section class="mb-12 overflow-hidden">
 <h2 class="text-2xl font-bold tracking-tight text-on-surface mb-6">Suggested for You</h2>
-<div class="flex gap-6 overflow-x-auto pb-8 custom-scrollbar snap-x">
-<!-- Card 1 -->
-<div class="snap-start min-w-[280px] bg-surface-container-low rounded-2xl p-6 flex flex-col items-center text-center border border-transparent hover:border-outline-variant transition-colors">
-<div class="w-16 h-16 bg-secondary-fixed rounded-full flex items-center justify-center mb-4">
-<span class="material-symbols-outlined text-on-secondary-fixed text-3xl" style="font-variation-settings: 'FILL' 1;">shopping_basket</span>
-</div>
-<h3 class="text-lg font-bold text-on-surface mb-1">Sunset Surplus Swap</h3>
-<p class="text-stone-500 text-sm mb-6">0.8 mi away</p>
-<button class="w-full py-3 bg-primary text-on-primary rounded-xl font-semibold text-sm active:scale-95 duration-200">Join Circle</button>
-</div>
-<!-- Card 2 -->
-<div class="snap-start min-w-[280px] bg-surface-container-low rounded-2xl p-6 flex flex-col items-center text-center border border-transparent hover:border-outline-variant transition-colors">
-<div class="w-16 h-16 bg-tertiary-fixed rounded-full flex items-center justify-center mb-4">
-<span class="material-symbols-outlined text-on-tertiary-fixed-variant text-3xl" style="font-variation-settings: 'FILL' 1;">landscape</span>
-</div>
-<h3 class="text-lg font-bold text-on-surface mb-1">Hillside Hiking Club</h3>
-<p class="text-stone-500 text-sm mb-6">1.5 mi away</p>
-<button class="w-full py-3 bg-primary text-on-primary rounded-xl font-semibold text-sm active:scale-95 duration-200">Join Circle</button>
-</div>
-<!-- Card 3 (Placeholder for scroll visual) -->
-<div class="snap-start min-w-[280px] bg-surface-container-low rounded-2xl p-6 flex flex-col items-center text-center border border-transparent hover:border-outline-variant transition-colors">
-<div class="w-16 h-16 bg-primary-fixed rounded-full flex items-center justify-center mb-4">
-<span class="material-symbols-outlined text-on-primary-fixed-variant text-3xl" style="font-variation-settings: 'FILL' 1;">menu_book</span>
-</div>
-<h3 class="text-lg font-bold text-on-surface mb-1">Local Book Exchange</h3>
-<p class="text-stone-500 text-sm mb-6">2.1 mi away</p>
-<button class="w-full py-3 bg-primary text-on-primary rounded-xl font-semibold text-sm active:scale-95 duration-200">Join Circle</button>
-</div>
+<div id="suggested-circles-list" class="flex gap-6 overflow-x-auto pb-8 custom-scrollbar snap-x">
+    <!-- Items will be injected here -->
 </div>
 </section>
 </main>
@@ -229,4 +185,135 @@
 </nav>
 <!-- Floating Action Button - Supressed on this view as per shell guidelines if prioritized context is needed, 
          but keeping the TopAppBar trailing 'add' for primary creation intent -->
+<script>
+    async function loadCircles() {
+        const session = await requireAuth();
+        if (!session) return;
+
+        try {
+            // 1. Fetch My Circles
+            const { data: myMemberships, error: memError } = await window.supabaseClient
+                .from('circle_members')
+                .select('circle_id, circles(*)')
+                .eq('profile_id', session.user.id);
+
+            if (memError) throw memError;
+
+            const myCirclesList = document.getElementById('my-circles-list');
+            const myCircleIds = myMemberships.map(m => m.circle_id);
+
+            if (myMemberships.length === 0) {
+                myCirclesList.innerHTML = `<div class="text-center py-12 text-stone-400">You haven't joined any circles yet. Discover some below!</div>`;
+            } else {
+                myCirclesList.innerHTML = myMemberships.map(m => {
+                    const circle = m.circles;
+                    if (!circle) return '';
+                    return `
+                    <div onclick="window.location.href='circle-detail.html?id=${circle.id}'" class="group relative bg-surface-container-lowest cursor-pointer rounded-xl p-6 transition-all duration-300 hover:shadow-[0_20px_50px_rgba(51,51,51,0.08)] flex flex-col md:flex-row gap-6 items-start">
+                        <div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
+                            <img class="w-full h-full object-cover" src="${circle.image_url || 'https://placehold.co/200x200?text=Circle'}" />
+                        </div>
+                        <div class="flex-grow">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="text-xl font-semibold text-on-surface mb-1">${circle.name}</h3>
+                                    <p class="text-stone-500 text-sm font-medium">Active Community</p>
+                                </div>
+                            </div>
+                            <div class="mt-4 p-4 bg-surface-container rounded-lg border-l-4 border-primary">
+                                <p class="text-stone-700 text-sm leading-relaxed">
+                                    ${circle.description || 'Welcome to our neighborhood circle!'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+            }
+
+            // 2. Fetch Suggested Circles
+            const { data: allCircles, error: allCirclesError } = await window.supabaseClient
+                .from('circles')
+                .select('*')
+                .limit(10);
+
+            if (allCirclesError) throw allCirclesError;
+
+            const suggestedCirclesList = document.getElementById('suggested-circles-list');
+            const suggestions = allCircles.filter(c => !myCircleIds.includes(c.id));
+
+            if (suggestions.length === 0) {
+                suggestedCirclesList.innerHTML = `<div class="text-center py-12 text-stone-400 w-full">No new circles found nearby.</div>`;
+            } else {
+                suggestedCirclesList.innerHTML = suggestions.map(circle => `
+                <div class="snap-start min-w-[280px] bg-surface-container-low rounded-2xl p-6 flex flex-col items-center text-center border border-transparent hover:border-outline-variant transition-colors">
+                    <div class="w-16 h-16 bg-secondary-fixed rounded-full overflow-hidden mb-4">
+                        <img src="${circle.image_url || 'https://placehold.co/200x200'}" class="w-full h-full object-cover" />
+                    </div>
+                    <h3 class="text-lg font-bold text-on-surface mb-1">${circle.name}</h3>
+                    <p class="text-stone-500 text-sm mb-6">Nearby Circle</p>
+                    <button onclick="joinCircle('${circle.id}')" class="w-full py-3 bg-primary text-on-primary rounded-xl font-semibold text-sm active:scale-95 duration-200">Join Circle</button>
+                </div>
+                `).join('');
+            }
+
+        } catch (err) {
+            console.error("Error loading circles:", err);
+        }
+    }
+
+    async function joinCircle(circleId) {
+        const session = await requireAuth();
+        if (!session) return;
+
+        try {
+            const { error } = await window.supabaseClient
+                .from('circle_members')
+                .insert({
+                    circle_id: circleId,
+                    profile_id: session.user.id,
+                    role: 'member'
+                });
+
+            if (error) throw error;
+            
+            // Refresh
+            loadCircles();
+        } catch (err) {
+            console.error("Error joining circle:", err);
+            alert("Failed to join circle. " + err.message);
+        }
+    }
+
+    // Update header avatar
+    async function updateHeaderAvatar() {
+        const { data: { user } } = await window.supabaseClient.auth.getUser();
+        if (user) {
+            const { data: profile } = await window.supabaseClient
+                .from('profiles')
+                .select('avatar_url')
+                .eq('id', user.id)
+                .single();
+            
+            if (profile && profile.avatar_url) {
+                document.getElementById('header-avatar').src = profile.avatar_url;
+            } else {
+                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.id}`;
+            }
+        }
+    }
+
+    // Close dropdown on outside click
+    window.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('profile-dropdown');
+        if (dropdown && !e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadCircles();
+        updateHeaderAvatar();
+    });
+</script>
 </body></html>

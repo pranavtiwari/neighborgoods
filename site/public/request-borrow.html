@@ -105,22 +105,22 @@
 <span class="material-symbols-outlined" data-icon="close">close</span>
 </button>
 <h1 class="text-[1.125rem] font-bold tracking-tight text-[#333333]">Check Availability</h1>
-<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container">
-<img alt="Marcus G. Profile" class="w-full h-full object-cover" data-alt="Professional headshot of Marcus, a friendly middle-aged man with a kind smile, outdoor garden setting with soft morning light." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_yIsqWjALvCwYZ8myifjv7Fs9FJbSt1r-nkxKS0F4iQKXEq57f0vM-gN44bPTs3qQLySRWX5e0tDtBj15KBQ8xL-zhDJ9dOAL_gnalXktGBOmmVKqXzOigTK2c_NMHhkf63um2Yvko_XUjXmOnNNmVUI2bbs69rsWDd3-BG80AjoU6fayxuCnqHRauiDrZJR1QaeNtPRFs74FS0kGY0lo2QicR2_4tGi2a-Qky25LwMh-f5t6nr2S0ST88rWc-lnNCkmACC41Fnp3"/>
+<div id="owner-avatar-container" class="w-10 h-10 rounded-full overflow-hidden bg-surface-container">
+<img id="owner-avatar-mini" alt="Owner Profile" class="w-full h-full object-cover" src="https://placehold.co/100x100?text=U"/>
 </div>
 </div>
 </header>
 <main class="pt-24 px-6 max-w-md mx-auto space-y-8">
 <!-- Item Summary Card -->
-<section>
+<section id="item-summary-card">
 <div class="bg-surface-container-lowest rounded-xl p-4 flex gap-4 shadow-[0_4px_20px_rgba(51,51,51,0.04)] items-center">
 <div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-<img alt="High-Reach Garden Ladder" class="w-full h-full object-cover" data-alt="Sturdy aluminum high-reach garden ladder leaning against a leafy green tree in a sun-drenched suburban backyard." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDkBiFO309bKVtgCcklIpB1TT8ykJmDgEUN3-om27dbVLRd_F14cH5dsYLgPql5Hxm8b898H3Z7d0_inKGt3S0TqhPlW0qWyfD_Vk47B3QaV40oChKEWhmyatXZfBqmlH4vU2EKzlMmzf3uRWvel25L4sczoln1HOBmOx7sc8kMHZBoAOSNw8R4ckwfHHrMUbQheF7ksVPtJHjCQiVwQMKgnRF-R9Qqvsl_bQit3eYw5G9T-eQzEVPDmbFRJyXlVNOgmbtGbr85Dkfe"/>
+<img id="item-image" alt="Item" class="w-full h-full object-cover" src="https://placehold.co/200x200?text=Loading..."/>
 </div>
 <div class="flex flex-col">
 <span class="text-label text-[0.65rem] uppercase tracking-[0.05em] text-primary font-bold">Lending Item</span>
-<h2 class="text-body-lg font-semibold text-on-surface leading-tight">High-Reach Garden Ladder</h2>
-<p class="text-body-sm text-on-surface-variant text-sm mt-1">Lent by Marcus G.</p>
+<h2 id="item-name" class="text-body-lg font-semibold text-on-surface leading-tight">Loading...</h2>
+<p id="item-owner-text" class="text-body-sm text-on-surface-variant text-sm mt-1">Lent by ...</p>
 </div>
 </div>
 </section>
@@ -172,7 +172,7 @@
 </section>
 <!-- Main Action & Note -->
 <section class="pt-4 space-y-6">
-<button onclick="window.location.href='request-sent.html'" class="w-full bg-forest-gradient text-on-primary py-5 rounded-lg font-bold text-lg shadow-[0_12px_40px_rgba(13,99,27,0.15)] active:scale-95 duration-200 transition-all">
+<button id="send-request-btn" class="w-full bg-forest-gradient text-on-primary py-5 rounded-lg font-bold text-lg shadow-[0_12px_40px_rgba(13,99,27,0.15)] active:scale-95 duration-200 transition-all">
                 Send Request
             </button>
 <div class="bg-secondary-fixed/30 p-4 rounded-xl flex items-center gap-4">
@@ -289,5 +289,81 @@
     });
 
     renderCalendar();
+
+    // DYNAMIC DATA LOADING
+    const urlParams = new URLSearchParams(window.location.search);
+    const itemId = urlParams.get('id');
+    let itemOwnerId = null;
+
+    async function loadItem() {
+        if (!itemId) return;
+
+        const { data: item, error } = await window.supabaseClient
+            .from('items')
+            .select('*, profiles!owner_id(*)')
+            .eq('id', itemId)
+            .single();
+
+        if (error || !item) {
+            console.error("Error loading item:", error);
+            return;
+        }
+
+        itemOwnerId = item.owner_id;
+        document.getElementById('item-name').textContent = item.name;
+        document.getElementById('item-image').src = item.image_url || 'https://placehold.co/200x200';
+        document.getElementById('item-owner-text').textContent = `Lent by ${item.profiles.full_name}`;
+        document.getElementById('owner-avatar-mini').src = item.profiles.avatar_url || 'https://i.pravatar.cc/150?u=' + item.profiles.id;
+    }
+
+    document.getElementById('send-request-btn').addEventListener('click', async () => {
+        const session = await requireAuth();
+        if (!session) return;
+
+        if (!startDate || !endDate) {
+            alert("Please select both start and end dates.");
+            return;
+        }
+
+        const message = document.querySelector('textarea').value;
+        
+        try {
+            // 1. Create the request
+            const { data: request, error: reqError } = await window.supabaseClient
+                .from('requests')
+                .insert({
+                    item_id: itemId,
+                    borrower_id: session.user.id,
+                    start_date: startDate.toISOString(),
+                    end_date: endDate.toISOString(),
+                    status: 'pending'
+                })
+                .select()
+                .single();
+
+            if (reqError) throw reqError;
+
+            // 2. Send an initial message to the owner
+            const { error: msgError } = await window.supabaseClient
+                .from('messages')
+                .insert({
+                    sender_id: session.user.id,
+                    receiver_id: itemOwnerId,
+                    item_id: itemId,
+                    content: message || `Hi! I'd like to borrow your ${document.getElementById('item-name').textContent}.`
+                });
+
+            if (msgError) throw msgError;
+
+            // 3. Redirect to success page
+            window.location.href = 'request-sent.html';
+
+        } catch (err) {
+            console.error("Error sending request:", err);
+            alert("Failed to send request: " + err.message);
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', loadItem);
 </script>
 </body></html>

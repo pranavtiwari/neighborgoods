@@ -11,6 +11,34 @@ if (!window.ENV || !window.ENV.SUPABASE_URL || !window.ENV.SUPABASE_ANON_KEY) {
     );
     console.log('Supabase initialized successfully.');
 
+    // Helper function to handle Google Login with profile picker
+    window.loginWithGoogle = async function(redirectTo = 'explore.html') {
+        const { data, error } = await window.supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin + '/' + redirectTo,
+                queryParams: {
+                    prompt: 'select_account'
+                }
+            }
+        });
+
+        if (error) {
+            console.error('Login error:', error.message);
+            alert('Login failed: ' + error.message);
+        }
+    };
+
+    // Helper function to handle Logout
+    window.logout = async function() {
+        const { error } = await window.supabaseClient.auth.signOut();
+        if (error) {
+            console.error('Logout error:', error.message);
+        } else {
+            window.location.href = 'index.html';
+        }
+    };
+
     // Helper function to protect routes
     window.requireAuth = async function(redirectUrl = 'join-community.html') {
         const { data: { session }, error } = await window.supabaseClient.auth.getSession();

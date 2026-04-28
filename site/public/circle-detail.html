@@ -3,8 +3,10 @@
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Main Street Gardeners - Circle Detail</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script>requireAuth();</script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -122,15 +124,10 @@
                 A space for Green Thumbs between 4th and 12th St.
             </p>
 <div class="flex items-center gap-2">
-<div class="flex -space-x-3 overflow-hidden">
-<img class="inline-block h-10 w-10 rounded-full ring-4 ring-surface" data-alt="portrait of a woman in her 30s with a warm smile and natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuACJF8ygZLjaUKZRxRm4XCA6sDJHKRg4G9RU0C_3asxeuOyQDGshEB2cJqTYL8vv2_6FLeUoxHfct1cUtgr3msMJqy8SoztNsvEh3Z3wDctA4vWWuPM9OP5_Zlp1zmL9FShyuAt4-wD-ruawoIPSLt3XfNqbi578petP15Aos427M81P7CzukDYWPYTkXGRRbbSf9YhdoC0Uj7Q6qj56fMgswSsSvxNhPHw--PinTHI9Tz_yuCqUEn4UxU1BVS-5ytt0pUPKwXcAOg8"/>
-<img class="inline-block h-10 w-10 rounded-full ring-4 ring-surface" data-alt="close up of a smiling man in an outdoor garden setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuALKoQDfsYpS0z-jTcq3cZs2tT_6LuOWsiM_dgd5_W3me9wogR5NhjeigDsJcC6T1qa6XMSo73JS_lFIEzphJ9j48hAB_Pqb7haydwfheyPPCUSr5iicUTnYxsWoUe1U76Nzpx1LrYxyNxGFHsVW5YYa8RkIOA_Rp86usyG2xA4VL0115lndW9hboSGfXAYIEGwH-o7kYcJl2O-_8MaZr9hoaPycPvlwIZUOCe8mcE05Jag2v0oj84ZJZrrmo19g79PIgFsqXxKCNY6"/>
-<img class="inline-block h-10 w-10 rounded-full ring-4 ring-surface" data-alt="candid portrait of a young woman with curly hair in a sunny park" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrx_5lqbFs3sPaCjPsxuX4SPCbqrxDpyg_e72UR-39y2FLm8zU0xDvQm_0EzosDL-3omiTfJ3uacNOEUB99xwpPmARc3yEuZI1w1tQdB-dFyAfB1nQofKCMssIQoN1Coe33ZTn5RdLkrRjyvOnIxG_a-pGFzeBcnuq8XAkCZCWz0-4J5WUSTWBX9DN5X3dUR-Gox5en_c-ueuyUY3EuzguAVc8ePr5Cb1ulmcXy0ZsX4xAB12QtLl0omWKs1oRUC6HKgt1IAoNnGwk"/>
-<div class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high ring-4 ring-surface text-label-md font-bold text-on-surface-variant">
-                        +42
-                    </div>
+<div id="member-avatars" class="flex -space-x-3 overflow-hidden">
+    <!-- Avatars will be injected here -->
 </div>
-<span class="ml-2 text-sm font-medium text-on-surface-variant uppercase tracking-widest">Active Neighbors</span>
+<span id="member-count-text" class="ml-2 text-sm font-medium text-on-surface-variant uppercase tracking-widest">Loading neighbors...</span>
 </div>
 </section>
 <!-- Action Row -->
@@ -148,40 +145,8 @@
 <h2 class="text-2xl font-bold tracking-tight">Circle Inventory</h2>
 <button class="text-primary font-bold label-md tracking-wider uppercase">View All</button>
 </div>
-<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
-<!-- Large Feature Card -->
-<div onclick="window.location.href='item-details.html'" class="md:col-span-7 bg-surface-container-lowest cursor-pointer p-8 rounded-xl shadow-[0_12px_40px_rgba(51,51,51,0.06)] flex flex-col justify-between min-h-[320px]">
-<div>
-<div class="flex items-center gap-2 mb-4">
-<span class="w-3 h-3 rounded-full bg-primary"></span>
-<span class="text-xs font-bold uppercase tracking-widest text-primary">Available</span>
-</div>
-<h3 class="text-2xl font-bold mb-2">Heavy-Duty Wheelbarrow</h3>
-<p class="text-on-surface-variant leading-relaxed">Perfect for large mulch hauls or shifting garden stones. Re-greased last month.</p>
-</div>
-<div class="mt-8">
-<img class="w-full h-40 object-cover rounded-lg" data-alt="a sturdy metal green wheelbarrow parked on a gravel path in a lush green garden" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkIXLxXddVuyfL0QvqMaUahwBBbaJHtGiVdJ7weqAdRqRjmx-l6DBJGQI-wrAfNm5c2bm2p9B8guB27fwmKZ4xIKNSOfCxOJCNznDwrhcnvy2JIz_ygPNuEfEs9FMq2zlW_EYNwNxcwVjhc6dBXJa0-ffDpac9QWehfFodATQQ5ocPTvCrOIy3wHp8tbfbIHRb5GQ8PAfTTyp-UgAvueJJ7jT-6gSNRGe7I758pUV-XaOZ5CzRWb7urza-IAwYd5t5VjcVWzfr9zJH"/>
-</div>
-</div>
-<!-- Stacked Side Cards -->
-<div class="md:col-span-5 flex flex-col gap-6">
-<div class="bg-surface-container p-6 rounded-xl flex-1">
-<div class="flex items-center gap-2 mb-4">
-<span class="w-3 h-3 rounded-full bg-secondary-container"></span>
-<span class="text-xs font-bold uppercase tracking-widest text-on-secondary-container">With Elena</span>
-</div>
-<h3 class="text-xl font-bold mb-1">Soil PH Tester</h3>
-<p class="text-sm text-on-surface-variant">Digital probe for accurate readings. Due back Sunday.</p>
-</div>
-<div class="bg-surface-container-lowest p-6 rounded-xl flex-1 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
-<div class="flex items-center gap-2 mb-4">
-<span class="w-3 h-3 rounded-full bg-primary"></span>
-<span class="text-xs font-bold uppercase tracking-widest text-primary">Available</span>
-</div>
-<h3 class="text-xl font-bold mb-1">Garden Pruners</h3>
-<p class="text-sm text-on-surface-variant">Bypass style, razor sharp. Please wipe clean after use.</p>
-</div>
-</div>
+<div id="circle-inventory" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div class="col-span-full text-center py-12 text-stone-400">Loading inventory...</div>
 </div>
 </section>
 <!-- Community Feed -->
@@ -246,4 +211,91 @@
 </div>
 </div>
 </nav>
+<script>
+    async function loadCircleDetails() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const circleId = urlParams.get('id');
+        
+        if (!circleId) {
+            console.error("No circle ID provided");
+            return;
+        }
+
+        try {
+            // 1. Fetch Circle Metadata
+            const { data: circle, error } = await window.supabaseClient
+                .from('circles')
+                .select('*')
+                .eq('id', circleId)
+                .single();
+
+            if (error) throw error;
+            if (!circle) return;
+
+            document.title = `${circle.name} - Circle Detail`;
+            document.querySelector('header .font-lexend').textContent = circle.name;
+            document.querySelector('h1').textContent = circle.name;
+            document.querySelector('p.text-on-surface-variant').textContent = circle.description || 'A neighborhood community circle.';
+
+            // 2. Fetch Members
+            const { data: members, error: memError } = await window.supabaseClient
+                .from('circle_members')
+                .select('profiles(*)')
+                .eq('circle_id', circleId);
+
+            if (!memError && members) {
+                const avatarContainer = document.getElementById('member-avatars');
+                const countText = document.getElementById('member-count-text');
+                
+                const displayMembers = members.slice(0, 5);
+                avatarContainer.innerHTML = displayMembers.map(m => `
+                    <img class="inline-block h-10 w-10 rounded-full ring-4 ring-surface" src="${m.profiles.avatar_url || 'https://i.pravatar.cc/150?u=' + m.profiles.id}" />
+                `).join('');
+                
+                if (members.length > 5) {
+                    avatarContainer.innerHTML += `
+                        <div class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high ring-4 ring-surface text-label-md font-bold text-on-surface-variant">
+                            +${members.length - 5}
+                        </div>
+                    `;
+                }
+                countText.textContent = `${members.length} Active Neighbors`;
+            }
+
+            // 3. Fetch Circle Inventory
+            const { data: items, error: itemError } = await window.supabaseClient
+                .from('items')
+                .select('*')
+                .eq('circle_id', circleId);
+
+            if (!itemError && items) {
+                const inventoryGrid = document.getElementById('circle-inventory');
+                if (items.length === 0) {
+                    inventoryGrid.innerHTML = `<div class="col-span-full text-center py-12 text-stone-400">No items shared in this circle yet.</div>`;
+                } else {
+                    inventoryGrid.innerHTML = items.map(item => `
+                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="bg-surface-container-lowest cursor-pointer p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 mb-4">
+                                <span class="w-3 h-3 rounded-full bg-primary"></span>
+                                <span class="text-xs font-bold uppercase tracking-widest text-primary">Available</span>
+                            </div>
+                            <h3 class="text-xl font-bold mb-1">${item.name}</h3>
+                            <p class="text-sm text-on-surface-variant line-clamp-2">${item.description || ''}</p>
+                        </div>
+                        <div class="mt-4">
+                            <img class="w-full h-32 object-cover rounded-lg" src="${item.image_url || 'https://placehold.co/400x200'}" />
+                        </div>
+                    </div>
+                    `).join('');
+                }
+            }
+
+        } catch (err) {
+            console.error("Error loading circle details:", err);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadCircleDetails);
+</script>
 </body></html>
