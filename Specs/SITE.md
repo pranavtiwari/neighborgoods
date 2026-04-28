@@ -1,7 +1,7 @@
-# NeighborGoods Site Specification
+# Share, Instead. Site Specification
 
 ## 1. Vision
-NeighborGoods is a community-focused platform for sharing and borrowing items locally. The mission is to foster sustainability and neighborhood connection through a premium, "Modern Commons" editorial experience.
+Share, Instead. is a community-focused platform for sharing and borrowing items locally. The mission is to foster sustainability and neighborhood connection through a premium, "Modern Commons" editorial experience.
 
 ## 2. Stitch Project
 - **Project ID:** 10682349808276374941

@@ -3,7 +3,11 @@
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>NeighborGoods Activity Dashboard</title>
+<title>Share, Instead. Activity Dashboard</title>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script>requireAuth();</script>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -97,8 +101,14 @@
 <header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl fixed top-0 w-full z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
 <div class="flex justify-between items-center px-6 h-16 w-full max-w-5xl mx-auto">
 <div class="flex items-center gap-4">
-<span class="material-symbols-outlined text-[#0d631b] dark:text-[#2e7d32] active:scale-95 duration-200">menu</span>
-<h1 class="font-['Lexend'] font-bold tracking-tight text-xl text-[#1b1c1a] dark:text-[#efeeeb]">Activity</h1>
+<span class="md:hidden material-symbols-outlined text-[#0d631b] dark:text-[#2e7d32] active:scale-95 duration-200">menu</span>
+<a href="index.html" class="font-['Lexend'] font-bold tracking-tight text-xl text-[#1b1c1a] dark:text-[#efeeeb]">Share, Instead.</a>
+</div>
+<div class="hidden md:flex gap-8 items-center">
+<a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="index.html">Home</a>
+<a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="explore.html">Explore</a>
+<a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="messages.html">Inbox</a>
+<a class="text-primary font-semibold border-b-2 border-primary pb-1 tracking-tight" href="activity.html">Activity</a>
 </div>
 <div class="flex items-center gap-4">
 <img class="w-8 h-8 rounded-full object-cover" data-alt="Portrait of a smiling middle-aged man in a garden setting, natural sunlight, warm friendly community vibe" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJweNdkuQymWSDh9D9tQOpm9YelTTeEp6f5HvzaQOsQglpOVAUoq4roTYH6CDRuNRpHJxRNTRV-RlTHdazkAcsMGiSm5_B0tZDv_3M10pq9woGqfQB0lT0lwZYG6vizc0OGHKhDc4Ly2p6WRAZEhNl4G_kKx7xELBWUV5IxvSlzDVQ4rkEXaHtElarkL1KO7iaOS6X4EVC6wdE5ahuPuncjGPMFbmqZ4EgflgEyJ-FhkyzTPnvZXKjPYbHtBOkNHxoTTErzZlp6XE2"/>
@@ -160,7 +170,7 @@
 </div>
 <div class="flex justify-between items-center pt-4 border-t border-surface-container-low">
 <span class="text-sm font-bold text-error">Due tomorrow</span>
-<button class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-sm font-medium shadow-md">Message</button>
+<button onclick="window.location.href='chat.html'" class="bg-primary text-on-primary px-4 py-1.5 rounded-lg text-sm font-medium shadow-md">Message</button>
 </div>
 </div>
 </div>
@@ -224,9 +234,9 @@
 <span class="material-symbols-outlined">explore</span>
 <span class="font-['Lexend'] text-[10px] font-medium tracking-wide uppercase mt-1">Explore</span>
 </a>
-<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 p-2 hover:text-[#0d631b] active:scale-90 duration-150" href="circles.html">
-<span class="material-symbols-outlined">group</span>
-<span class="font-['Lexend'] text-[10px] font-medium tracking-wide uppercase mt-1">Circles</span>
+<a class="flex flex-col items-center justify-center text-stone-500 dark:text-stone-400 p-2 hover:text-[#0d631b] active:scale-90 duration-150" href="messages.html">
+<span class="material-symbols-outlined">chat_bubble_outline</span>
+<span class="font-['Lexend'] text-[10px] font-medium tracking-wide uppercase mt-1">Inbox</span>
 </a>
 <div class="flex flex-col items-center justify-center bg-[#efeeeb] dark:bg-stone-800 text-[#0d631b] dark:text-[#2e7d32] rounded-2xl p-2 min-w-[64px] transition-all active:scale-90 duration-150">
 <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">notifications</span>

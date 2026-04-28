@@ -3,8 +3,12 @@
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>NeighborGoods - Explore Discovery</title>
+<title>Share, Instead. - Explore Discovery</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script>requireAuth();</script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -101,8 +105,14 @@
 <header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl fixed top-0 w-full z-50 shadow-[0_12px_40px_rgba(51,51,51,0.04)]">
 <div class="flex justify-between items-center px-6 py-4 w-full">
 <div class="flex items-center gap-4">
-<span class="material-symbols-outlined text-green-800 dark:text-green-400 active:scale-95 transition-transform duration-200" data-icon="search">search</span>
-<a href="index.html" class="text-2xl font-black tracking-tighter text-green-900 dark:text-green-50">NeighborGoods</a>
+<span class="md:hidden material-symbols-outlined text-green-800 active:scale-95 transition-transform duration-200">menu</span>
+<a href="index.html" class="text-2xl font-black tracking-tighter text-green-900">Share, Instead.</a>
+</div>
+<div class="hidden md:flex gap-8 items-center">
+<a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="index.html">Home</a>
+<a class="text-primary font-semibold border-b-2 border-primary pb-1 tracking-tight" href="explore.html">Explore</a>
+<a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="messages.html">Inbox</a>
+<a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="activity.html">Activity</a>
 </div>
 <div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200">
 <img alt="User avatar" class="w-full h-full object-cover" data-alt="Close-up portrait of a smiling man with a warm and friendly expression in natural daylight environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgyHe1DPY5PKhawnKW2vbfL-OOH7Kn2pJR543fqZHHBABYQZiJVla3GvsqZ0oKTsA24yesPEpPsem24nR1bOIAmTfV7mJR_VcUnJCEqzDCF2xOv9fFqiuyUDFg1FiT7rsdPkSQ9yUYSlYaX3WpQnGODoRnYB9FnypHLie4rq3f4AM-6-hmfRfbrH_lNSAczn1EkgTf8V8tS-c61296aXEphfoWAo3RgxyhkvO-OiBQ1RU1BFDuFx1XwXnq47sEweH6Wejp0_7nYIZb"/>
@@ -115,7 +125,7 @@
 <div class="bg-surface-container-low rounded-xl px-4 py-3 flex items-center justify-between transition-colors">
 <div class="flex items-center gap-3 flex-1">
 <span class="material-symbols-outlined text-outline" data-icon="search">search</span>
-<input class="bg-transparent border-none focus:ring-0 w-full text-body-lg placeholder-outline" placeholder="Search for tools, skills, or surplus..." type="text"/>
+<input id="search-input" class="bg-transparent border-none focus:ring-0 w-full text-body-lg placeholder-outline" placeholder="Search for tools, skills, or surplus..." type="text"/>
 </div>
 <div class="w-10 h-10 flex items-center justify-center hover:bg-stone-200/50 rounded-full transition-colors">
 <span class="material-symbols-outlined text-on-surface-variant" data-icon="tune">tune</span>
@@ -124,13 +134,13 @@
 </section>
 <!-- Category Chips -->
 <section class="mb-10">
-<div class="flex gap-3 overflow-x-auto px-6 hide-scrollbar">
-<button class="whitespace-nowrap px-6 py-2.5 rounded-full bg-primary-container text-on-primary font-semibold text-sm tracking-wide">All</button>
-<button class="whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Garden Tools</button>
-<button class="whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Power Tools</button>
-<button class="whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Kitchen Gear</button>
-<button class="whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Experience/Skills</button>
-<button class="whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Outdoor Adventure</button>
+<div id="category-chips" class="flex gap-3 overflow-x-auto px-6 hide-scrollbar">
+<button data-category="all" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-primary-container text-on-primary font-semibold text-sm tracking-wide">All</button>
+<button data-category="garden" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Garden Tools</button>
+<button data-category="power" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Power Tools</button>
+<button data-category="kitchen" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Kitchen Gear</button>
+<button data-category="skills" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Experience/Skills</button>
+<button data-category="outdoor" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Outdoor Adventure</button>
 </div>
 </section>
 <!-- Featured Carousel: Hot Near You -->
@@ -166,69 +176,13 @@
 <section class="px-6">
 <h2 class="text-2xl font-bold tracking-tight text-on-surface mb-8">Recently Added</h2>
 <!-- Asymmetric Staggered Grid -->
-<div class="grid grid-cols-2 md:grid-cols-3 gap-6">
-<!-- Card 1: Lawn Aerator -->
-<div class="col-span-2 md:col-span-1 bg-surface-container-lowest rounded-xl p-4 shadow-[0_12px_40px_rgba(51,51,51,0.06)] flex flex-col gap-4">
-<div class="aspect-square rounded-lg overflow-hidden bg-surface-container-low">
-<img alt="Lawn Aerator" class="w-full h-full object-cover" data-alt="Professional grade lawn aerator machine standing on a perfectly manicured lush green lawn in soft morning light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0aZ8U7cn8ebAuTQo-BNG_KPtM9h9RszdqTwQtXO7_vN40qWx5RobTmrNrIqVUfyxvwmw_vy9HzTMP2n7R5qNhEjrXWIgLjQYiAJR-1PvYt9KUqfvAnUI_oYBt6xUBK5FlDFg6UMRPknz_JUwoTxyjZ52awfwVLIxjbEptB1RrgyiJuG7MPfV_k4LoGEnRVm0BAQCYotKEVxGxTFU-GmBKg8txq1FJATIDcS_0dKyUgcH7M8ydhhqybKtU6CMwxesdBTTT3K2H_TqD"/>
-</div>
-<div class="flex flex-col gap-1">
-<div class="flex justify-between items-start">
-<h4 class="font-bold text-lg leading-tight">Lawn Aerator</h4>
-<span class="text-[10px] font-bold text-outline uppercase tracking-wider">0.4 mi</span>
-</div>
-<p class="text-sm text-on-surface-variant mb-4">Heavy-duty core aerator, perfect for spring lawn care.</p>
-<button onclick="window.location.href='item-details.html'" class="w-full py-3 bg-primary-container text-on-primary font-bold rounded-lg active:scale-95 transition-transform">Borrow</button>
-</div>
-</div>
-<!-- Card 2: Pasta Maker -->
-<div class="bg-surface-container-low rounded-xl p-4 flex flex-col gap-4">
-<div class="aspect-[3/4] rounded-lg overflow-hidden">
-<img alt="Pasta Maker" class="w-full h-full object-cover" data-alt="Classic chrome manual pasta machine with fresh dough on a wooden rustic kitchen table dusted with flour" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBeoxTCAcHlbcVg7VcA6tfcnM5AT2HS9BciFcjqFJRgTw_hQjV4h3RdKK1qr7n5-2g3i97lGVVi5C_geTSAX-HFv-4sWd1eB50LCFQMIlNS9DD1o-2TUQm--OYqcpOrAW1won4pdvfAOa7Te22335HNC-pTiXgpK6kusLb75Rw_PS6jIWID6pcKYDd8SIkb4nl3xzc4k8BajRULgubnp9pIKZr7SgBHyCIHItEQ1GNGu8zaCNj5KHKkZDZqlhB9D5Je3h-b0W5ptE0c"/>
-</div>
-<div class="flex flex-col gap-1">
-<h4 class="font-bold text-md leading-tight">Pasta Maker</h4>
-<span class="text-[10px] font-bold text-outline uppercase tracking-wider">1.2 mi</span>
-<div class="mt-2 flex items-center gap-2">
-<div class="w-6 h-6 rounded-full bg-secondary-fixed flex items-center justify-center">
-<span class="material-symbols-outlined text-[14px] text-on-secondary-fixed" data-icon="person">person</span>
-</div>
-<span class="text-xs text-on-surface-variant">Maria S.</span>
-</div>
-</div>
-</div>
-<!-- Card 3: A-Frame Ladder -->
-<div class="bg-surface-container-low rounded-xl p-4 flex flex-col gap-4">
-<div class="aspect-[3/4] rounded-lg overflow-hidden">
-<img alt="A-Frame Ladder" class="w-full h-full object-cover" data-alt="Sturdy aluminum A-frame step ladder leaning against a clean white wall in a sunlit modern interior" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpZsacRPANAiMwA3Gh_NnL1A3e40-H_oVjFvJsbeih-Q1QCtPB5ydzL8i5yKS74y7zyS8-lnjObZVsBZV-cSizgJBbYWX3OFQmzEUiRgjFg5wrXGoj5syh2x2w-yJjQ87XoL8_IQM7QDtDG0ijyBxDWk2lSGbBh5BucAYgoiOG9F_u5VxsKUQjuq4SOPwzUBazFsOrX1c0XRzCS403-q75slnxePSDUH2MLnrflylx239dHiFYTej0nMWQAfBKl8_ggwjKQsZh1r8X"/>
-</div>
-<div class="flex flex-col gap-1">
-<h4 class="font-bold text-md leading-tight">A-Frame Ladder</h4>
-<span class="text-[10px] font-bold text-outline uppercase tracking-wider">0.2 mi</span>
-<div class="mt-2 flex items-center gap-2">
-<div class="w-6 h-6 rounded-full bg-tertiary-fixed flex items-center justify-center">
-<span class="material-symbols-outlined text-[14px] text-on-tertiary-fixed" data-icon="bolt">bolt</span>
-</div>
-<span class="text-xs text-on-surface-variant">Super Lender</span>
-</div>
-</div>
-</div>
-<!-- Skill Card: Furniture Assembly -->
-<div class="col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center">
-<div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
-<img alt="Furniture Assembly" class="w-full h-full object-cover mix-blend-multiply opacity-80" data-alt="Hands using a screwdriver to assemble a wooden chair, focused macro shot with shallow depth of field" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCGtq7M1JXJ6EzlMB0UPkiUn-y8TFUKaf4nqc0Wb1iUXvxgzNTqHh1prD_xWH_D-ot5s3p47n5yA2klKKsqeETqdSuw4oipCfwvkXX8m8jIO9GM5utVVYhR-wn5XT-ghHyQPPiRudNjr-lk0vFZfFzWr8-P27y5LFhZBSaZQ2abn3lwELHGtw98q5125-mgAelG_ligd6eCzzsQ7r2YSiWiOk5WM3kDdRzA-Q8tQ_bZIjJs6SNbjzqbQ1HIpAGxMZAIDrbAKOOZH_-e"/>
-</div>
-<div class="flex-1">
-<span class="text-[10px] font-black text-primary uppercase tracking-widest mb-1 block">Neighbor Skill</span>
-<h4 class="font-bold text-xl leading-tight mb-1">Furniture Assembly</h4>
-<p class="text-sm text-on-surface-variant mb-2">Available Saturday mornings. 0.8 mi away.</p>
-<button class="text-primary font-bold text-sm flex items-center gap-1 group">
-                            Message Neighbor
-                            <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
-</button>
-</div>
-</div>
-</div>
+    <div id="items-grid" class="grid grid-cols-2 md:grid-cols-3 gap-6">
+        <!-- Loading State -->
+        <div id="items-loading" class="col-span-2 md:col-span-3 flex flex-col items-center justify-center py-12">
+            <span class="material-symbols-outlined animate-spin text-primary text-4xl mb-4" data-icon="progress_activity">progress_activity</span>
+            <p class="text-on-surface-variant font-medium">Discovering neighbors...</p>
+        </div>
+    </div>
 </section>
 </main>
 <!-- BottomNavBar -->
@@ -241,9 +195,9 @@
 <span class="material-symbols-outlined" data-icon="explore" style="font-variation-settings: 'FILL' 1;">explore</span>
 <span class="font-lexend text-[11px] font-medium tracking-wide uppercase mt-1">Explore</span>
 </a>
-<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 hover:text-green-700 dark:hover:text-green-300 active:scale-90 transition-all duration-300 ease-out" href="circles.html">
-<span class="material-symbols-outlined" data-icon="groups">groups</span>
-<span class="font-lexend text-[11px] font-medium tracking-wide uppercase mt-1">Circles</span>
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 hover:text-green-700 dark:hover:text-green-300 active:scale-90 transition-all duration-300 ease-out" href="messages.html">
+<span class="material-symbols-outlined" data-icon="chat_bubble_outline">chat_bubble_outline</span>
+<span class="font-lexend text-[11px] font-medium tracking-wide uppercase mt-1">Inbox</span>
 </a>
 <a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 hover:text-green-700 dark:hover:text-green-300 active:scale-90 transition-all duration-300 ease-out" href="activity.html">
 <span class="material-symbols-outlined" data-icon="notifications">notifications</span>
@@ -251,7 +205,144 @@
 </a>
 </nav>
 <!-- FAB (Suppressed on Explore Details, but relevant for Search/Create on Discovery) -->
-<button class="fixed bottom-24 right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-[0_12px_40px_rgba(51,51,51,0.2)] flex items-center justify-center active:scale-95 transition-transform z-40">
+<button onclick="window.location.href='add-item.html'" class="fixed bottom-24 right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-[0_12px_40px_rgba(51,51,51,0.2)] flex items-center justify-center active:scale-95 transition-transform z-40">
 <span class="material-symbols-outlined" data-icon="add">add</span>
 </button>
+<script>
+    const searchInput = document.getElementById('search-input');
+    const categoryChips = document.querySelectorAll('.category-chip');
+    const grid = document.getElementById('items-grid');
+    
+    let currentSearch = '';
+    let currentCategory = 'all';
+    let allItemsHtml = ''; // Keep track of rendered cards
+
+    async function fetchItems() {
+        try {
+            const { data: items, error } = await window.supabaseClient
+                .from('items')
+                .select('*, profiles(full_name)');
+                
+            if (error) throw error;
+            
+            if (!items || items.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-2 md:col-span-3 flex flex-col items-center justify-center py-12">
+                        <span class="material-symbols-outlined text-outline text-4xl mb-4" data-icon="inbox">inbox</span>
+                        <p class="text-on-surface-variant font-medium">No items found.</p>
+                        <p class="text-sm text-outline mt-1">Be the first to share something!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Generate HTML for each item
+            grid.innerHTML = items.map((item, index) => {
+                const distance = (Math.random() * 5 + 0.1).toFixed(1) + " mi"; // Mocking distance
+                const ownerName = item.profiles?.full_name || 'Neighbor';
+                
+                // Skills have a distinct horizontal card style
+                if (item.category === 'skills') {
+                    return `
+                    <div class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center" data-name="${item.name}" data-category="skills">
+                        <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
+                            <img alt="${item.name}" class="w-full h-full object-cover mix-blend-multiply opacity-80" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x400?text=Skill'"/>
+                        </div>
+                        <div class="flex-1">
+                            <span class="text-[10px] font-black text-primary uppercase tracking-widest mb-1 block">Neighbor Skill</span>
+                            <h4 class="font-bold text-xl leading-tight mb-1">${item.name}</h4>
+                            <p class="text-sm text-on-surface-variant mb-2">${item.description || 'Available to help.'} ${distance} away.</p>
+                            <button onclick="window.location.href='chat.html'" class="text-primary font-bold text-sm flex items-center gap-1 group">
+                                Message Neighbor
+                                <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+                            </button>
+                        </div>
+                    </div>`;
+                }
+                
+                // Regular items (garden, kitchen, etc.)
+                // Make the first item span 2 cols on mobile for visual interest
+                const isFeatured = index === 0 ? "col-span-2 md:col-span-1" : "";
+                const imgAspect = index === 0 ? "aspect-square" : "aspect-[3/4]";
+                
+                return `
+                <div class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4" data-name="${item.name}" data-category="${item.category}">
+                    <div class="${imgAspect} rounded-lg overflow-hidden ${index === 0 ? 'bg-surface-container-low' : ''}">
+                        <img alt="${item.name}" class="w-full h-full object-cover" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <div class="flex justify-between items-start">
+                            <h4 class="font-bold ${index === 0 ? 'text-lg' : 'text-md'} leading-tight">${item.name}</h4>
+                            <span class="text-[10px] font-bold text-outline uppercase tracking-wider">${distance}</span>
+                        </div>
+                        ${index === 0 
+                            ? `<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">${item.description}</p>
+                               <div class="flex gap-2">
+                                   <button onclick="window.location.href='request-borrow.html'" class="flex-1 py-3 bg-primary-container text-on-primary font-bold rounded-xl active:scale-95 transition-transform">Borrow</button>
+                                   <a href="chat.html?userId=${item.owner_id}&itemId=${item.id}" class="w-12 h-12 bg-surface-container-highest flex items-center justify-center rounded-xl text-on-surface active:scale-95 transition-transform">
+                                       <span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+                                   </a>
+                               </div>`
+                            : `<div class="mt-2 flex items-center justify-between">
+                                 <div class="flex items-center gap-2">
+                                     <div class="w-6 h-6 rounded-full overflow-hidden bg-secondary-fixed flex items-center justify-center">
+                                         <img src="${item.profiles?.avatar_url || 'https://placehold.co/100x100?text=A'}" class="w-full h-full object-cover">
+                                     </div>
+                                     <span class="text-xs text-on-surface-variant line-clamp-1">${ownerName}</span>
+                                 </div>
+                                 <a href="chat.html?userId=${item.owner_id}&itemId=${item.id}" class="text-primary active:scale-90 transition-transform">
+                                     <span class="material-symbols-outlined text-xl bg-primary/10 rounded-full p-1.5" data-icon="chat_bubble">chat_bubble</span>
+                                 </a>
+                               </div>`
+                        }
+                    </div>
+                </div>`;
+            }).join('');
+            
+        } catch (err) {
+            console.error("Error fetching items:", err);
+            grid.innerHTML = `<div class="col-span-2 md:col-span-3 text-error font-medium text-center">Failed to load items.</div>`;
+        }
+    }
+
+    function filterItems() {
+        // Re-query cards since they are dynamically injected
+        const currentCards = document.querySelectorAll('.item-card');
+        currentCards.forEach(card => {
+            const name = card.getAttribute('data-name').toLowerCase();
+            const category = card.getAttribute('data-category');
+            
+            const matchesSearch = name.includes(currentSearch.toLowerCase());
+            const matchesCategory = currentCategory === 'all' || category === currentCategory;
+
+            if (matchesSearch && matchesCategory) {
+                card.style.display = 'flex';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
+    searchInput.addEventListener('input', (e) => {
+        currentSearch = e.target.value;
+        filterItems();
+    });
+
+    categoryChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            categoryChips.forEach(c => {
+                c.classList.remove('bg-primary-container', 'text-on-primary');
+                c.classList.add('bg-surface-container-high', 'text-on-surface-variant');
+            });
+            chip.classList.remove('bg-surface-container-high', 'text-on-surface-variant');
+            chip.classList.add('bg-primary-container', 'text-on-primary');
+
+            currentCategory = chip.getAttribute('data-category');
+            filterItems();
+        });
+    });
+
+    // Initial fetch when page loads
+    document.addEventListener('DOMContentLoaded', fetchItems);
+</script>
 </body></html>

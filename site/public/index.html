@@ -3,7 +3,10 @@
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>NeighborGoods | The Modern Commons</title>
+<title>Share, Instead. | The Modern Commons</title>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -98,18 +101,19 @@
 <div class="flex justify-between items-center w-full px-6 py-4 max-w-screen-2xl mx-auto">
 <div class="flex items-center gap-3">
 <span class="material-symbols-outlined text-[#0d631b] dark:text-[#2e7d32] text-2xl">menu_book</span>
-<span class="text-2xl font-bold text-[#0d631b] dark:text-[#2e7d32] tracking-tighter font-headline">NeighborGoods</span>
+<span class="text-2xl font-bold text-[#0d631b] dark:text-[#2e7d32] tracking-tighter font-headline">Share, Instead.</span>
 </div>
 <div class="hidden md:flex gap-8 items-center">
 <a class="text-[#0d631b] font-semibold border-b-2 border-[#0d631b] pb-1 font-['Lexend'] tracking-tight" href="explore.html">Explore</a>
 <a class="text-stone-600 dark:text-stone-400 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="explore.html">Borrow</a>
+<a class="text-stone-600 dark:text-stone-400 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="messages.html">Inbox</a>
 <a class="text-stone-600 dark:text-stone-400 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="activity.html">My Items</a>
 </div>
 <div class="flex items-center gap-4">
 <button class="md:hidden p-2 rounded-full hover:bg-surface-container-high transition-colors">
 <span class="material-symbols-outlined">menu</span>
 </button>
-<button class="hidden md:block bg-primary px-6 py-2.5 rounded-full text-on-primary font-semibold text-sm transition-all active:opacity-80">
+<button onclick="window.location.href='join-community.html'" class="hidden md:block bg-primary px-6 py-2.5 rounded-full text-on-primary font-semibold text-sm transition-all active:opacity-80">
                     Join Community
                 </button>
 </div>
@@ -135,7 +139,7 @@
                     Discover the hidden wealth in your neighborhood. Borrow tools, share harvests, and connect with local circles in a space that feels like a modern commons.
                 </p>
 <div class="flex flex-col sm:flex-row gap-4">
-<button onclick="window.location.href='circles.html'" class="bg-secondary-container text-on-secondary-container px-8 py-4 rounded-lg font-bold text-lg shadow-[0_8px_30px_rgb(255,152,0,0.2)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2">
+<button onclick="window.location.href='join-community.html'" class="bg-secondary-container text-on-secondary-container px-8 py-4 rounded-lg font-bold text-lg shadow-[0_8px_30px_rgb(255,152,0,0.2)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2">
                         Join Your Circle
                         <span class="material-symbols-outlined">arrow_forward</span>
 </button>
@@ -194,8 +198,8 @@
 <span class="material-symbols-outlined text-on-primary-fixed" style="font-variation-settings: 'FILL' 1;">groups_2</span>
 </div>
 <div>
-<h3 class="font-bold text-lg mb-1">Circles</h3>
-<p class="text-on-surface-variant text-sm leading-relaxed">Join micro-communities based on your street.</p>
+<h3 class="font-bold text-lg mb-1">Inbox</h3>
+<p class="text-on-surface-variant text-sm leading-relaxed">Connect with neighbors directly.</p>
 </div>
 </div>
 </div>
@@ -298,9 +302,10 @@
 <div class="z-10 relative">
 <h2 class="text-on-primary text-3xl md:text-5xl font-bold mb-8 max-w-2xl mx-auto">Better neighborhoods are built by sharing.</h2>
 <p class="text-on-primary-container/80 text-lg md:text-xl mb-10 max-w-xl mx-auto">Join 12,000+ neighbors already saving money and reducing waste by sharing what they own.</p>
-<button onclick="window.location.href='circles.html'" class="bg-surface text-primary px-10 py-5 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all">
+<button onclick="window.location.href='join-community.html'" class="bg-surface text-primary px-10 py-5 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all">
                     Find My Neighborhood
                 </button>
+
 </div>
 <!-- Background Decoration -->
 <div class="absolute -top-10 -left-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
@@ -311,7 +316,7 @@
 <footer class="w-full mt-24 tonal-nesting bg-[#efeeeb] dark:bg-stone-950">
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 px-8 py-16 max-w-7xl mx-auto font-['Lexend'] text-body-lg leading-relaxed">
 <div class="flex flex-col gap-4">
-<span class="text-xl font-bold text-[#0d631b]">NeighborGoods</span>
+<span class="text-xl font-bold text-[#0d631b]">Share, Instead.</span>
 <p class="text-stone-500 max-w-xs">Built for your neighborhood. A modern commons project dedicated to local sustainability and connection.</p>
 <div class="flex gap-4 mt-2">
 <a class="text-stone-500 hover:text-[#0d631b]" href="#"><span class="material-symbols-outlined">public</span></a>
@@ -330,6 +335,10 @@
 <div class="flex flex-col gap-4">
 <h4 class="font-bold text-on-surface">Community</h4>
 <nav class="flex flex-col gap-2">
+<a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="index.html">Home</a>
+<a class="text-primary font-semibold border-b-2 border-primary pb-1 tracking-tight" href="explore.html">Explore</a>
+<a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="messages.html">Inbox</a>
+<a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="activity.html">Activity</a>
 <a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">About</a>
 <a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">Neighborhood Safety</a>
 <a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">Privacy</a>
@@ -358,9 +367,9 @@
 <span class="material-symbols-outlined mb-1">explore</span>
 <span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Explore</span>
 </a>
-<a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-green-700 transition-all active:scale-90 duration-200" href="circles.html">
-<span class="material-symbols-outlined mb-1">groups</span>
-<span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Circles</span>
+<a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-green-700 transition-all active:scale-90 duration-200" href="messages.html">
+<span class="material-symbols-outlined mb-1">chat_bubble_outline</span>
+<span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Inbox</span>
 </a>
 <a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-green-700 transition-all active:scale-90 duration-200" href="activity.html">
 <span class="material-symbols-outlined mb-1">notifications</span>

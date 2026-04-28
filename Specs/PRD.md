@@ -1,7 +1,7 @@
-# NeighborGoods Product Requirements Document
+# Share, Instead. Product Requirements Document
 
 ## Overview
-NeighborGoods is a community-focused platform designed to foster local connection and sustainability. It allows neighbors to share and borrow items (tools, books, equipment), trade homegrown produce, and offer community services.
+Share, Instead. is a community-focused platform designed to foster local connection and sustainability. It allows neighbors to share and borrow items (tools, books, equipment), trade homegrown produce, and offer community services.
 
 ## Core Features
 1.  **Item Sharing & Borrowing**: A local marketplace for non-monetary item lending.

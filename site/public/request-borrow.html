@@ -3,7 +3,11 @@
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>NeighborGoods - Request to Borrow</title>
+<title>Share, Instead. - Request to Borrow</title>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-client.js"></script>
+<script>requireAuth();</script>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -125,44 +129,24 @@
 <h3 class="text-headline-md text-lg font-bold text-on-surface">Select Dates</h3>
 <div class="bg-surface-container-low rounded-xl p-6">
 <div class="flex justify-between items-center mb-6">
-<button class="material-symbols-outlined text-outline">chevron_left</button>
-<span class="font-medium">October 2023</span>
-<button class="material-symbols-outlined text-outline">chevron_right</button>
+<button id="prev-month" class="material-symbols-outlined text-outline hover:bg-surface-container-high rounded-full p-1 transition-colors">chevron_left</button>
+<span id="current-month-display" class="font-medium">October 2023</span>
+<button id="next-month" class="material-symbols-outlined text-outline hover:bg-surface-container-high rounded-full p-1 transition-colors">chevron_right</button>
 </div>
 <div class="grid grid-cols-7 gap-2 text-center text-[0.75rem] font-bold text-outline mb-2">
 <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
 </div>
-<div class="grid grid-cols-7 gap-y-3">
-<div class="py-2 text-surface-dim">25</div>
-<div class="py-2 text-surface-dim">26</div>
-<div class="py-2 text-surface-dim">27</div>
-<div class="py-2 text-surface-dim">28</div>
-<div class="py-2 text-surface-dim">29</div>
-<div class="py-2 text-on-surface">1</div>
-<div class="py-2 text-on-surface">2</div>
-<div class="py-2 text-on-surface">3</div>
-<div class="py-2 text-on-surface">4</div>
-<div class="py-2 text-on-surface">5</div>
-<div class="py-2 text-on-surface">6</div>
-<div class="py-2 bg-primary text-on-primary rounded-lg font-bold">7</div>
-<div class="py-2 bg-primary-fixed text-on-primary-fixed-variant font-bold">8</div>
-<div class="py-2 bg-primary text-on-primary rounded-lg font-bold">9</div>
-<div class="py-2 text-on-surface">10</div>
-<div class="py-2 text-on-surface">11</div>
-<div class="py-2 text-on-surface">12</div>
-<div class="py-2 text-on-surface">13</div>
-<div class="py-2 text-on-surface">14</div>
-<div class="py-2 text-on-surface">15</div>
-<div class="py-2 text-on-surface">16</div>
+<div id="calendar-grid" class="grid grid-cols-7 gap-y-1">
+    <!-- Days will be injected here -->
 </div>
 <div class="mt-6 flex justify-between border-t border-outline-variant/15 pt-4">
 <div class="flex flex-col">
 <span class="text-[0.65rem] uppercase text-outline font-bold">Start</span>
-<span class="text-sm font-medium">Sat, Oct 7</span>
+<span id="start-date-text" class="text-sm font-medium">Select a date</span>
 </div>
 <div class="flex flex-col text-right">
 <span class="text-[0.65rem] uppercase text-outline font-bold">End</span>
-<span class="text-sm font-medium">Mon, Oct 9</span>
+<span id="end-date-text" class="text-sm font-medium">Select a date</span>
 </div>
 </div>
 </div>
@@ -203,4 +187,107 @@
 </main>
 <!-- Bottom Navigation Shell (Suppressed as per task context: Task-Focused screens hide global nav) -->
 <!-- The FAB is suppressed as per the "Contextual FAB Suppression" rule for transactional/details pages -->
+<script>
+    const calendarGrid = document.getElementById('calendar-grid');
+    const startDateText = document.getElementById('start-date-text');
+    const endDateText = document.getElementById('end-date-text');
+    const monthDisplay = document.getElementById('current-month-display');
+    const prevBtn = document.getElementById('prev-month');
+    const nextBtn = document.getElementById('next-month');
+
+    let currentViewDate = new Date();
+    currentViewDate.setDate(1); // Set to first of month for navigation
+    let startDate = null;
+    let endDate = null;
+
+    function renderCalendar() {
+        calendarGrid.innerHTML = '';
+        const year = currentViewDate.getFullYear();
+        const month = currentViewDate.getMonth();
+        
+        // Update display text
+        const monthName = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(currentViewDate);
+        monthDisplay.innerText = `${monthName} ${year}`;
+
+        // Get first day of month (0=Sun, 1=Mon...)
+        const firstDay = new Date(year, month, 1).getDay();
+        // Adjust for M-T-W-T-F-S-S grid (Monday=0)
+        let firstDayOffset = (firstDay + 6) % 7;
+        
+        const daysInCurrentMonth = new Date(year, month + 1, 0).getDate();
+        const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+        // Previous month days (offset)
+        for (let i = firstDayOffset - 1; i >= 0; i--) {
+            const div = document.createElement('div');
+            div.className = 'py-3 text-surface-dim text-center cursor-not-allowed opacity-30';
+            div.innerText = daysInPrevMonth - i;
+            calendarGrid.appendChild(div);
+        }
+
+        // Current month days
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        for (let i = 1; i <= daysInCurrentMonth; i++) {
+            const dateObj = new Date(year, month, i);
+            const isPast = dateObj < today;
+            
+            const div = document.createElement('div');
+            div.innerText = i;
+            div.className = 'py-3 text-on-surface text-center cursor-pointer rounded-lg transition-all relative';
+            
+            if (isPast) {
+                div.classList.add('cursor-not-allowed', 'opacity-30', 'text-surface-dim');
+            } else {
+                div.classList.add('hover:bg-surface-container-high');
+                div.addEventListener('click', () => selectDate(dateObj));
+            }
+
+            // Selection styles
+            if (startDate && dateObj.getTime() === startDate.getTime()) {
+                div.classList.add('bg-primary', 'text-on-primary', 'font-bold', 'z-10');
+            } else if (endDate && dateObj.getTime() === endDate.getTime()) {
+                div.classList.add('bg-primary', 'text-on-primary', 'font-bold', 'z-10');
+            } else if (startDate && endDate && dateObj > startDate && dateObj < endDate) {
+                div.classList.add('bg-primary-fixed', 'text-on-primary-fixed-variant', 'rounded-none');
+            }
+
+            calendarGrid.appendChild(div);
+        }
+    }
+
+    function selectDate(dateObj) {
+        if (!startDate || (startDate && endDate)) {
+            startDate = dateObj;
+            endDate = null;
+        } else if (dateObj < startDate) {
+            startDate = dateObj;
+        } else if (dateObj.getTime() === startDate.getTime()) {
+            startDate = null;
+        } else {
+            endDate = dateObj;
+        }
+        updateTexts();
+        renderCalendar();
+    }
+
+    function updateTexts() {
+        const options = { month: 'short', day: 'numeric', year: 'numeric' };
+        startDateText.innerText = startDate ? startDate.toLocaleDateString('en-US', options) : 'Select a date';
+        endDateText.innerText = endDate ? endDate.toLocaleDateString('en-US', options) : 'Select a date';
+    }
+
+    prevBtn.addEventListener('click', () => {
+        currentViewDate.setMonth(currentViewDate.getMonth() - 1);
+        renderCalendar();
+    });
+
+    nextBtn.addEventListener('click', () => {
+        currentViewDate.setMonth(currentViewDate.getMonth() + 1);
+        renderCalendar();
+    });
+
+    renderCalendar();
+</script>
 </body></html>

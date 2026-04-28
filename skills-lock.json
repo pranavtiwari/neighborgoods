@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "vercel-deployment": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "5ec751a3485d545bb0eb259b0a624cd84738e69298380f46dd9bbb52fd814e06"
+    }
+  }
+}

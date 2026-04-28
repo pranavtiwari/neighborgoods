@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "dev": "npx live-server site/public"
+  },
   "dependencies": {
     "24": "^0.0.0"
   }

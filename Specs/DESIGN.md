@@ -1,4 +1,4 @@
-# Design System Specification: The Hearthside Digital (NeighborGoods)
+# Design System Specification: The Hearthside Digital (Share, Instead.)
 
 ## 1. Overview & Creative North Star
 **Creative North Star: "The Modern Commons"**
