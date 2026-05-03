@@ -21,4 +21,4 @@
 
 ## 4. Backend Transition (Supabase)
 - [ ] **Schema Setup**: Apply `Specs/SCHEMA.sql` to your Supabase project.
-- [ ] **Data Fetching**: Replace hardcoded mocks with async data fetching.
+- [x] **Data Fetching**: Replace hardcoded mocks with async data fetching.

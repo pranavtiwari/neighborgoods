@@ -364,8 +364,11 @@
                 .eq('id', user.id)
                 .single();
             
+            const metaAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture;
             if (profile && profile.avatar_url) {
                 document.getElementById('header-avatar').src = profile.avatar_url;
+            } else if (metaAvatar) {
+                document.getElementById('header-avatar').src = metaAvatar;
             } else {
                 document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.id}`;
             }
