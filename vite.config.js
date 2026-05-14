@@ -15,7 +15,7 @@ htmlFiles.forEach(file => {
 export default defineConfig({
   root: 'site/public',
   build: {
-    outDir: '../../dist',
+    outDir: resolve(__dirname, 'dist'),
     emptyOutDir: true,
     rollupOptions: {
       input: input
