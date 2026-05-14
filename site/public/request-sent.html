@@ -31,7 +31,7 @@
 </head>
 <body class="bg-surface text-on-surface min-h-screen flex flex-col">
 <!-- TopAppBar -->
-<header class="fixed top-0 w-full z-50 bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-md flex items-center justify-between px-6 h-16 w-full">
+<header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
 <div class="flex items-center gap-4">
 <button class="text-stone-500 dark:text-stone-200 hover:opacity-80 transition-opacity active:scale-95 duration-200">
 <span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
@@ -125,5 +125,9 @@
 <span class="material-symbols-outlined mb-1" data-icon="person">person</span>
 <span class="font-lexend text-[10px] tracking-wide uppercase">Profile</span>
 </a>
-</nav>
+
+<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 hover:text-primary active:scale-90 transition-all duration-300 ease-out" href="circles.html">
+<span class="material-symbols-outlined">group</span>
+<span class="font-lexend text-[11px] font-medium tracking-wide uppercase mt-1">Circles</span>
+</a></nav>
 </body></html>
