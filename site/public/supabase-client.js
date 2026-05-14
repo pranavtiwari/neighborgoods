@@ -1,14 +1,14 @@
 // Supabase Client Initialization
 // Depends on config.js being loaded beforehand
 
-if (!window.ENV || !window.ENV.SUPABASE_URL || !window.ENV.SUPABASE_ANON_KEY) {
-    console.error('Supabase credentials not found. Please ensure config.js is loaded.');
+// Check for Vite environment variables first, then fallback to window.ENV
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || window.ENV?.SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || window.ENV?.SUPABASE_ANON_KEY;
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.error('Supabase credentials not found. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
 } else {
-    // Initialize the Supabase client
-    window.supabaseClient = supabase.createClient(
-        window.ENV.SUPABASE_URL,
-        window.ENV.SUPABASE_ANON_KEY
-    );
+    window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
     console.log('Supabase initialized successfully.');
 
     // Helper function to handle Google Login

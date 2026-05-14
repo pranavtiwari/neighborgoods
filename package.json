@@ -1,8 +1,13 @@
 {
   "scripts": {
-    "dev": "npx live-server site/public"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
     "24": "^0.0.0"
+  },
+  "devDependencies": {
+    "vite": "^8.0.13"
   }
 }

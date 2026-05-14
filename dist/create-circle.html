@@ -3,10 +3,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Share, Instead. - Add Item</title>
-    <script type="module" src="config.js"></script>
+    <title>Share, Instead. - Create Circle</title>
+    <script src="config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script type="module" src="supabase-client.js"></script>
+    <script src="supabase-client.js"></script>
     <script>requireAuth();</script>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
@@ -45,75 +45,72 @@
     <!-- Header -->
     <header class="fixed top-0 w-full z-50 bg-[#fbf9f6]/90 backdrop-blur-md shadow-sm">
         <div class="flex items-center px-4 py-4 max-w-2xl mx-auto">
-            <button onclick="window.history.back()" class="material-symbols-outlined active:scale-90 transition-transform p-2">arrow_back</button>
-            <h1 class="ml-2 font-bold text-xl tracking-tight text-green-900">Add New Item</h1>
+            <button onclick="window.location.href='circles.html'" class="material-symbols-outlined active:scale-90 transition-transform p-2">arrow_back</button>
+            <h1 class="ml-2 font-bold text-xl tracking-tight text-green-900">Start a Community Circle</h1>
         </div>
     </header>
 
     <main class="pt-24 pb-32 px-6 max-w-2xl mx-auto">
         <div class="mb-6">
-            <h2 class="text-2xl font-bold tracking-tight mb-2">What are you sharing?</h2>
-            <p class="text-stone-500 text-sm">Help a neighbor out by adding to the community inventory.</p>
+            <h2 class="text-2xl font-bold tracking-tight mb-2">Build your neighborhood</h2>
+            <p class="text-stone-500 text-sm">Circles are groups of neighbors who share items, advice, and updates.</p>
         </div>
 
-        <form id="add-item-form" class="space-y-6">
+        <form id="create-circle-form" class="space-y-6">
             
             <!-- Image Upload -->
             <div>
-                <label class="block text-sm font-bold mb-2">Item Photo</label>
-                <div id="image-preview-container" class="hidden relative w-full aspect-square md:aspect-video rounded-xl overflow-hidden bg-stone-100 border-2 border-stone-200 shadow-sm mb-3 group cursor-pointer" onclick="document.getElementById('image-upload').click()">
+                <label class="block text-sm font-bold mb-2">Circle Banner</label>
+                <div id="image-preview-container" class="hidden relative w-full aspect-video rounded-xl overflow-hidden bg-stone-100 border-2 border-stone-200 shadow-sm mb-3 group cursor-pointer" onclick="document.getElementById('image-upload').click()">
                     <img id="image-preview" src="" class="w-full h-full object-cover">
                     <div class="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center transition-all">
                         <span class="material-symbols-outlined text-white text-3xl">edit</span>
                     </div>
                 </div>
 
-                <div id="upload-placeholder" class="w-full aspect-square md:aspect-video rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 flex flex-col items-center justify-center cursor-pointer hover:bg-stone-100 transition-colors" onclick="document.getElementById('image-upload').click()">
+                <div id="upload-placeholder" class="w-full aspect-video rounded-xl border-2 border-dashed border-stone-300 bg-stone-50 flex flex-col items-center justify-center cursor-pointer hover:bg-stone-100 transition-colors" onclick="document.getElementById('image-upload').click()">
                     <span class="material-symbols-outlined text-outline text-4xl mb-2">add_a_photo</span>
-                    <span class="text-sm font-medium text-stone-600">Tap to upload photo</span>
+                    <span class="text-sm font-medium text-stone-600">Upload a cover photo</span>
                 </div>
                 <input type="file" id="image-upload" accept="image/*" class="hidden">
             </div>
 
-            <!-- Item Name -->
+            <!-- Circle Name -->
             <div>
-                <label class="block text-sm font-bold mb-2">Name</label>
-                <input type="text" id="item-name" required placeholder="e.g. Lawn Aerator" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
-            </div>
-
-            <!-- Category Dropdown -->
-            <div>
-                <label class="block text-sm font-bold mb-2">Category</label>
-                <div class="relative">
-                    <select id="item-category" required class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base appearance-none">
-                        <option value="garden">Garden Tools</option>
-                        <option value="kitchen">Kitchen Gear</option>
-                        <option value="skills">Experience / Skills</option>
-                        <option value="outdoor">Outdoor Adventure</option>
-                        <option value="other">Other</option>
-                    </select>
-                    <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-stone-500">expand_more</span>
-                </div>
+                <label class="block text-sm font-bold mb-2">Circle Name</label>
+                <input type="text" id="circle-name" required placeholder="e.g. Oak Street Gardeners" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
             </div>
 
             <!-- Description -->
             <div>
                 <label class="block text-sm font-bold mb-2">Description</label>
-                <textarea id="item-description" rows="3" placeholder="Condition, details, when it's available..." class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base resize-none"></textarea>
+                <textarea id="circle-description" rows="4" placeholder="What is this circle about? Who is it for?" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base resize-none"></textarea>
+            </div>
+
+            <!-- Privacy -->
+            <div class="flex items-center gap-3 bg-surface-container p-4 rounded-xl">
+                <div class="flex-1">
+                    <p class="font-bold text-sm">Private Circle</p>
+                    <p class="text-xs text-stone-500">Only members can see posts and inventory.</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="circle-private" class="sr-only peer">
+                    <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                </label>
             </div>
 
             <!-- Error Banner -->
             <div id="error-message" class="hidden bg-red-100 text-error p-4 rounded-xl text-sm font-medium"></div>
 
             <button type="submit" id="submit-btn" class="w-full bg-gradient-to-br from-primary to-primary-container text-white py-4 rounded-xl font-bold shadow-lg shadow-green-900/20 active:scale-95 transition-all mt-8 flex justify-center items-center gap-2">
-                <span class="material-symbols-outlined text-xl">share</span>
-                Share with Community
+                <span class="material-symbols-outlined text-xl">group_add</span>
+                Create Circle
             </button>
         </form>
     </main>
 
     <script>
-        const form = document.getElementById('add-item-form');
+        const form = document.getElementById('create-circle-form');
         const imageUpload = document.getElementById('image-upload');
         const uploadPlaceholder = document.getElementById('upload-placeholder');
         const previewContainer = document.getElementById('image-preview-container');
@@ -138,7 +135,7 @@
         const showError = (msg) => {
             errorDiv.textContent = msg;
             errorDiv.classList.remove('hidden');
-            btn.innerHTML = `<span class="material-symbols-outlined text-xl">share</span> Share with Community`;
+            btn.innerHTML = `<span class="material-symbols-outlined text-xl">group_add</span> Create Circle`;
             btn.classList.remove('opacity-70', 'cursor-not-allowed');
             btn.disabled = false;
         };
@@ -149,32 +146,30 @@
             
             btn.disabled = true;
             btn.classList.add('opacity-70', 'cursor-not-allowed');
-            btn.innerHTML = `<span class="material-symbols-outlined animate-spin">progress_activity</span> Uploading...`;
+            btn.innerHTML = `<span class="material-symbols-outlined animate-spin">progress_activity</span> Creating...`;
 
             try {
-                // 1. Ensure user is logged in
                 const session = await requireAuth();
-                if (!session) return; // redirect happens in requireAuth
+                if (!session) return;
 
-                const name = document.getElementById('item-name').value;
-                const category = document.getElementById('item-category').value;
-                const description = document.getElementById('item-description').value;
+                const name = document.getElementById('circle-name').value;
+                const description = document.getElementById('circle-description').value;
+                const isPrivate = document.getElementById('circle-private').checked;
 
                 let imageUrl = null;
 
-                // 2. Upload image to Storage if selected
+                // 1. Upload image if selected
                 if (selectedFile) {
                     const fileExt = selectedFile.name.split('.').pop();
                     const fileName = `${Math.random()}.${fileExt}`;
-                    const filePath = `${session.user.id}/${fileName}`; // Group by user folder
+                    const filePath = `circles/${fileName}`;
 
                     const { error: uploadError } = await window.supabaseClient.storage
-                        .from('item-images')
+                        .from('item-images') // Reusing item-images bucket for simplicity, or we could use a circle-images one
                         .upload(filePath, selectedFile);
                     
                     if (uploadError) throw uploadError;
 
-                    // Get public URL
                     const { data } = window.supabaseClient.storage
                         .from('item-images')
                         .getPublicUrl(filePath);
@@ -182,23 +177,38 @@
                     imageUrl = data.publicUrl;
                 }
 
-                // 3. Insert into Database
-                const { error: insertError } = await window.supabaseClient.from('items').insert({
-                    owner_id: session.user.id,
-                    name: name,
-                    category: category,
-                    description: description,
-                    image_url: imageUrl
-                });
+                // 2. Create Circle
+                const { data: circle, error: insertError } = await window.supabaseClient
+                    .from('circles')
+                    .insert({
+                        name: name,
+                        description: description,
+                        image_url: imageUrl,
+                        is_private: isPrivate,
+                        created_by: session.user.id
+                    })
+                    .select()
+                    .single();
 
                 if (insertError) throw insertError;
 
-                // 4. Success Redirect
-                window.location.href = 'explore.html';
+                // 3. Add Creator as Admin Member
+                const { error: memberError } = await window.supabaseClient
+                    .from('circle_members')
+                    .insert({
+                        circle_id: circle.id,
+                        profile_id: session.user.id,
+                        role: 'admin'
+                    });
+
+                if (memberError) throw memberError;
+
+                // 4. Redirect to Circle Detail
+                window.location.href = `circle-detail.html?id=${circle.id}`;
 
             } catch (err) {
                 console.error(err);
-                showError(err.message || "Failed to add item. Ensure file is an image.");
+                showError(err.message || "Failed to create circle.");
             }
         });
     </script>
