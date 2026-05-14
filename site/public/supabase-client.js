@@ -60,4 +60,29 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
             window.location.href = 'join-community.html';
         }
     });
+
+    // --- Global UI Helpers: Scroll-to-Hide Navigation ---
+    let lastScrollY = window.scrollY;
+    const scrollThreshold = 10;
+
+    window.addEventListener('scroll', () => {
+        const currentScrollY = window.scrollY;
+        const header = document.querySelector('header');
+        const bottomNav = document.querySelector('nav.fixed.bottom-0');
+        
+        if (!header || !bottomNav) return;
+
+        // Scrolling Down -> Hide bars
+        if (currentScrollY > lastScrollY + scrollThreshold && currentScrollY > 100) {
+            header.classList.add('nav-hidden-top');
+            bottomNav.classList.add('nav-hidden-bottom');
+        } 
+        // Scrolling Up -> Show both bars
+        else if (currentScrollY < lastScrollY - scrollThreshold || currentScrollY <= 0) {
+            header.classList.remove('nav-hidden-top');
+            bottomNav.classList.remove('nav-hidden-bottom');
+        }
+
+        lastScrollY = currentScrollY;
+    }, { passive: true });
 }
