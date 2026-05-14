@@ -105,7 +105,7 @@
 </div>
 <div class="hidden md:flex gap-8 items-center">
 <a class="text-[#0d631b] font-semibold border-b-2 border-[#0d631b] pb-1 font-['Lexend'] tracking-tight" href="explore.html">Explore</a>
-<a class="text-stone-600 dark:text-stone-400 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="explore.html">Borrow</a>
+<a class="text-stone-600 dark:text-stone-400 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="circles.html">Circles</a>
 <a class="text-stone-600 dark:text-stone-400 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="messages.html">Inbox</a>
 <a class="text-stone-600 dark:text-stone-400 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="activity.html">My Items</a>
 </div>
@@ -137,7 +137,7 @@
                     Discover the hidden wealth in your neighborhood. Borrow tools, share harvests, and connect with local circles in a space that feels like a modern commons.
                 </p>
 <div class="flex flex-col sm:flex-row gap-4">
-<button onclick="window.loginWithGoogle()" class="bg-secondary-container text-on-secondary-container px-8 py-4 rounded-lg font-bold text-lg shadow-[0_8px_30px_rgb(255,152,0,0.2)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2">
+<button id="hero-cta" onclick="window.loginWithGoogle()" class="bg-secondary-container text-on-secondary-container px-8 py-4 rounded-lg font-bold text-lg shadow-[0_8px_30px_rgb(255,152,0,0.2)] hover:scale-[1.02] transition-transform flex items-center justify-center gap-2">
                         Join Your Circle
                         <span class="material-symbols-outlined">arrow_forward</span>
 </button>
@@ -225,7 +225,7 @@
 <div class="z-10 relative">
 <h2 class="text-on-primary text-3xl md:text-5xl font-bold mb-8 max-w-2xl mx-auto">Better neighborhoods are built by sharing.</h2>
 <p class="text-on-primary-container/80 text-lg md:text-xl mb-10 max-w-xl mx-auto">Join 12,000+ neighbors already saving money and reducing waste by sharing what they own.</p>
-<button onclick="window.loginWithGoogle()" class="bg-surface text-primary px-10 py-5 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all">
+<button id="trust-cta" onclick="window.loginWithGoogle()" class="bg-surface text-primary px-10 py-5 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all">
                     Find My Neighborhood
                 </button>
 
@@ -260,6 +260,7 @@
 <nav class="flex flex-col gap-2">
 <a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="index.html">Home</a>
 <a class="text-primary font-semibold border-b-2 border-primary pb-1 tracking-tight" href="explore.html">Explore</a>
+<a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="circles.html">Circles</a>
 <a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="messages.html">Inbox</a>
 <a class="text-stone-600 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="activity.html">Activity</a>
 <a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">About</a>
@@ -378,6 +379,19 @@
                     </div>
                 </div>
             `;
+
+            // Update main CTA buttons
+            const heroCta = document.getElementById('hero-cta');
+            if (heroCta) {
+                heroCta.innerHTML = `
+                    Explore Circles
+                    <span class="material-symbols-outlined">explore</span>
+                `;
+            }
+            const trustCta = document.getElementById('trust-cta');
+            if (trustCta) {
+                trustCta.innerText = 'Go to Dashboard';
+            }
         } else {
             // Not logged in
             headerActions.innerHTML = `

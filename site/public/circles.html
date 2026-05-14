@@ -9,7 +9,7 @@
 <script>requireAuth();</script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script id="tailwind-config">
         tailwind.config = {
             darkMode: "class",
@@ -141,7 +141,7 @@
 <section class="mb-10">
 <div class="relative group">
 <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-stone-400">search</span>
-<input class="w-full h-14 pl-12 pr-6 bg-surface-container-low rounded-xl border-none focus:ring-0 focus:bg-surface-container-lowest transition-all duration-300 placeholder:text-stone-400 text-on-surface body-lg shadow-sm" placeholder="Find a local circle..." type="text"/>
+<input id="circle-search" class="w-full h-14 pl-12 pr-6 bg-surface-container-low rounded-xl border-none focus:ring-0 focus:bg-surface-container-lowest transition-all duration-300 placeholder:text-stone-400 text-on-surface body-lg shadow-sm" placeholder="Find a local circle..." type="text"/>
 <div class="absolute bottom-0 left-4 right-4 h-0.5 bg-primary scale-x-0 group-focus-within:scale-x-100 transition-transform duration-300 origin-left"></div>
 </div>
 </section>
@@ -163,6 +163,10 @@
     <!-- Items will be injected here -->
 </div>
 </section>
+    <!-- Floating Action Button -->
+    <button onclick="window.location.href='create-circle.html'" class="fixed bottom-24 right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform z-40">
+        <span class="material-symbols-outlined">add</span>
+    </button>
 </main>
 <!-- BottomNavBar -->
 <nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-3 bg-[#fbf9f6]/80 backdrop-blur-xl z-50 rounded-t-3xl shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
@@ -183,9 +187,11 @@
 <span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Me</span>
 </a>
 </nav>
-<!-- Floating Action Button - Supressed on this view as per shell guidelines if prioritized context is needed, 
-         but keeping the TopAppBar trailing 'add' for primary creation intent -->
+
 <script>
+    let allMyCircles = [];
+    let allSuggestions = [];
+
     async function loadCircles() {
         const session = await requireAuth();
         if (!session) return;
@@ -198,67 +204,81 @@
                 .eq('profile_id', session.user.id);
 
             if (memError) throw memError;
-
-            const myCirclesList = document.getElementById('my-circles-list');
-            const myCircleIds = myMemberships.map(m => m.circle_id);
-
-            if (myMemberships.length === 0) {
-                myCirclesList.innerHTML = `<div class="text-center py-12 text-stone-400">You haven't joined any circles yet. Discover some below!</div>`;
-            } else {
-                myCirclesList.innerHTML = myMemberships.map(m => {
-                    const circle = m.circles;
-                    if (!circle) return '';
-                    return `
-                    <div onclick="window.location.href='circle-detail.html?id=${circle.id}'" class="group relative bg-surface-container-lowest cursor-pointer rounded-xl p-6 transition-all duration-300 hover:shadow-[0_20px_50px_rgba(51,51,51,0.08)] flex flex-col md:flex-row gap-6 items-start">
-                        <div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
-                            <img class="w-full h-full object-cover" src="${circle.image_url || 'https://placehold.co/200x200?text=Circle'}" />
-                        </div>
-                        <div class="flex-grow">
-                            <div class="flex justify-between items-start">
-                                <div>
-                                    <h3 class="text-xl font-semibold text-on-surface mb-1">${circle.name}</h3>
-                                    <p class="text-stone-500 text-sm font-medium">Active Community</p>
-                                </div>
-                            </div>
-                            <div class="mt-4 p-4 bg-surface-container rounded-lg border-l-4 border-primary">
-                                <p class="text-stone-700 text-sm leading-relaxed">
-                                    ${circle.description || 'Welcome to our neighborhood circle!'}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    `;
-                }).join('');
-            }
+            allMyCircles = myMemberships || [];
+            const myCircleIds = allMyCircles.map(m => m.circle_id);
 
             // 2. Fetch Suggested Circles
             const { data: allCircles, error: allCirclesError } = await window.supabaseClient
                 .from('circles')
                 .select('*')
-                .limit(10);
+                .limit(20);
 
             if (allCirclesError) throw allCirclesError;
+            allSuggestions = (allCircles || []).filter(c => !myCircleIds.includes(c.id));
 
-            const suggestedCirclesList = document.getElementById('suggested-circles-list');
-            const suggestions = allCircles.filter(c => !myCircleIds.includes(c.id));
-
-            if (suggestions.length === 0) {
-                suggestedCirclesList.innerHTML = `<div class="text-center py-12 text-stone-400 w-full">No new circles found nearby.</div>`;
-            } else {
-                suggestedCirclesList.innerHTML = suggestions.map(circle => `
-                <div class="snap-start min-w-[280px] bg-surface-container-low rounded-2xl p-6 flex flex-col items-center text-center border border-transparent hover:border-outline-variant transition-colors">
-                    <div class="w-16 h-16 bg-secondary-fixed rounded-full overflow-hidden mb-4">
-                        <img src="${circle.image_url || 'https://placehold.co/200x200'}" class="w-full h-full object-cover" />
-                    </div>
-                    <h3 class="text-lg font-bold text-on-surface mb-1">${circle.name}</h3>
-                    <p class="text-stone-500 text-sm mb-6">Nearby Circle</p>
-                    <button onclick="joinCircle('${circle.id}')" class="w-full py-3 bg-primary text-on-primary rounded-xl font-semibold text-sm active:scale-95 duration-200">Join Circle</button>
-                </div>
-                `).join('');
-            }
+            renderCircles();
 
         } catch (err) {
             console.error("Error loading circles:", err);
+        }
+    }
+
+    function renderCircles(filter = '') {
+        const query = filter.toLowerCase();
+        
+        // Render My Circles
+        const myCirclesList = document.getElementById('my-circles-list');
+        const filteredMyCircles = allMyCircles.filter(m => 
+            m.circles && (m.circles.name.toLowerCase().includes(query) || (m.circles.description && m.circles.description.toLowerCase().includes(query)))
+        );
+
+        if (filteredMyCircles.length === 0) {
+            myCirclesList.innerHTML = `<div class="text-center py-12 text-stone-400">${query ? 'No circles match your search.' : "You haven't joined any circles yet. Discover some below!"}</div>`;
+        } else {
+            myCirclesList.innerHTML = filteredMyCircles.map(m => {
+                const circle = m.circles;
+                return `
+                <div onclick="window.location.href='circle-detail.html?id=${circle.id}'" class="group relative bg-surface-container-lowest cursor-pointer rounded-xl p-6 transition-all duration-300 hover:shadow-[0_20px_50px_rgba(51,51,51,0.08)] flex flex-col md:flex-row gap-6 items-start">
+                    <div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
+                        <img class="w-full h-full object-cover" src="${circle.image_url || 'https://placehold.co/200x200?text=Circle'}" />
+                    </div>
+                    <div class="flex-grow">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-xl font-semibold text-on-surface mb-1">${circle.name}</h3>
+                                <p class="text-stone-500 text-sm font-medium">Active Community</p>
+                            </div>
+                        </div>
+                        <div class="mt-4 p-4 bg-surface-container rounded-lg border-l-4 border-primary">
+                            <p class="text-stone-700 text-sm leading-relaxed">
+                                ${circle.description || 'Welcome to our neighborhood circle!'}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        // Render Suggested Circles
+        const suggestedCirclesList = document.getElementById('suggested-circles-list');
+        const filteredSuggestions = allSuggestions.filter(c => 
+            c.name.toLowerCase().includes(query) || (c.description && c.description.toLowerCase().includes(query))
+        );
+
+        if (filteredSuggestions.length === 0) {
+            suggestedCirclesList.innerHTML = `<div class="text-center py-12 text-stone-400 w-full">${query ? 'No suggestions match your search.' : 'No new circles found nearby.'}</div>`;
+        } else {
+            suggestedCirclesList.innerHTML = filteredSuggestions.map(circle => `
+            <div class="snap-start min-w-[280px] bg-surface-container-low rounded-2xl p-6 flex flex-col items-center text-center border border-transparent hover:border-outline-variant transition-colors">
+                <div class="w-16 h-16 bg-secondary-fixed rounded-full overflow-hidden mb-4">
+                    <img src="${circle.image_url || 'https://placehold.co/200x200'}" class="w-full h-full object-cover" />
+                </div>
+                <h3 class="text-lg font-bold text-on-surface mb-1">${circle.name}</h3>
+                <p class="text-stone-500 text-sm mb-6">Nearby Circle</p>
+                <button onclick="joinCircle('${circle.id}')" class="w-full py-3 bg-primary text-on-primary rounded-xl font-semibold text-sm active:scale-95 duration-200">Join Circle</button>
+            </div>
+            `).join('');
         }
     }
 
@@ -285,7 +305,6 @@
         }
     }
 
-    // Update header avatar
     async function updateHeaderAvatar() {
         const { data: { user } } = await window.supabaseClient.auth.getUser();
         if (user) {
@@ -306,12 +325,15 @@
         }
     }
 
-    // Close dropdown on outside click
     window.addEventListener('click', (e) => {
         const dropdown = document.getElementById('profile-dropdown');
         if (dropdown && !e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
             dropdown.classList.add('hidden');
         }
+    });
+
+    document.getElementById('circle-search').addEventListener('input', (e) => {
+        renderCircles(e.target.value);
     });
 
     document.addEventListener('DOMContentLoaded', () => {

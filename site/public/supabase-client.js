@@ -11,15 +11,18 @@ if (!window.ENV || !window.ENV.SUPABASE_URL || !window.ENV.SUPABASE_ANON_KEY) {
     );
     console.log('Supabase initialized successfully.');
 
-    // Helper function to handle Google Login with profile picker
+    // Helper function to handle Google Login
     window.loginWithGoogle = async function(redirectTo = 'explore.html') {
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        if (session) {
+            window.location.href = redirectTo;
+            return;
+        }
+
         const { data, error } = await window.supabaseClient.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: window.location.origin + '/' + redirectTo,
-                queryParams: {
-                    prompt: 'select_account'
-                }
+                redirectTo: window.location.origin + '/' + redirectTo
             }
         });
 
