@@ -4,84 +4,15 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Share, Instead. - Request to Borrow</title>
-<script type="module" src="config.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module" src="supabase-client.js"></script>
 <script>requireAuth();</script>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    "colors": {
-                        "error-container": "#ffdad6",
-                        "primary-container": "#2e7d32",
-                        "tertiary-fixed": "#ffd9e2",
-                        "secondary-container": "#ff9800",
-                        "on-error-container": "#93000a",
-                        "on-surface-variant": "#40493d",
-                        "on-surface": "#1b1c1a",
-                        "surface-container": "#efeeeb",
-                        "primary": "#0d631b",
-                        "secondary-fixed": "#ffdcbe",
-                        "on-tertiary": "#ffffff",
-                        "error": "#ba1a1a",
-                        "on-secondary": "#ffffff",
-                        "inverse-surface": "#30312f",
-                        "primary-fixed-dim": "#88d982",
-                        "on-tertiary-fixed": "#3f001c",
-                        "on-primary-container": "#cbffc2",
-                        "inverse-on-surface": "#f2f0ed",
-                        "on-primary": "#ffffff",
-                        "background": "#fbf9f6",
-                        "outline": "#707a6c",
-                        "on-secondary-fixed": "#2c1600",
-                        "on-secondary-container": "#653900",
-                        "on-tertiary-container": "#ffedf0",
-                        "primary-fixed": "#a3f69c",
-                        "on-primary-fixed": "#002204",
-                        "tertiary": "#923357",
-                        "surface-container-lowest": "#ffffff",
-                        "on-secondary-fixed-variant": "#693c00",
-                        "on-primary-fixed-variant": "#005312",
-                        "surface": "#fbf9f6",
-                        "tertiary-fixed-dim": "#ffb1c7",
-                        "surface-variant": "#e4e2df",
-                        "on-error": "#ffffff",
-                        "surface-tint": "#1b6d24",
-                        "secondary": "#8b5000",
-                        "on-tertiary-fixed-variant": "#7f2448",
-                        "surface-container-highest": "#e4e2df",
-                        "surface-container-high": "#eae8e5",
-                        "secondary-fixed-dim": "#ffb870",
-                        "surface-dim": "#dbdad7",
-                        "on-background": "#1b1c1a",
-                        "tertiary-container": "#b14b6f",
-                        "surface-container-low": "#f5f3f0",
-                        "outline-variant": "#bfcaba",
-                        "surface-bright": "#fbf9f6",
-                        "inverse-primary": "#88d982"
-                    },
-                    "borderRadius": {
-                        "DEFAULT": "0.25rem",
-                        "lg": "0.5rem",
-                        "xl": "0.75rem",
-                        "full": "9999px"
-                    },
-                    "fontFamily": {
-                        "headline": ["Lexend"],
-                        "display": ["Lexend"],
-                        "body": ["Lexend"],
-                        "label": ["Lexend"]
-                    }
-                },
-            },
-        }
-    </script>
+
 <style>
         body { font-family: 'Lexend', sans-serif; }
         .material-symbols-outlined {
@@ -96,7 +27,8 @@
       min-height: max(884px, 100dvh);
     }
   </style>
-  </head>
+    <link rel="stylesheet" href="/style.css">
+</head>
 <body class="bg-surface text-on-surface min-h-screen pb-24">
 <!-- TopAppBar -->
 <header class="bg-[#fbf9f6]/80 backdrop-blur-[20px] fixed top-0 w-full z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">

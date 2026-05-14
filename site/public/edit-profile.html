@@ -3,83 +3,14 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Share, Instead. - Edit Profile</title>
-<script type="module" src="config.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module" src="supabase-client.js"></script>
 <script>requireAuth();</script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<script id="tailwind-config">
-    tailwind.config = {
-        darkMode: "class",
-        theme: {
-            extend: {
-                "colors": {
-                    "inverse-on-surface": "#f2f0ed",
-                    "background": "#fbf9f6",
-                    "on-primary-fixed": "#002204",
-                    "surface-container": "#efeeeb",
-                    "surface-container-highest": "#e4e2df",
-                    "on-tertiary": "#ffffff",
-                    "surface-container-lowest": "#ffffff",
-                    "secondary-fixed-dim": "#ffb870",
-                    "on-secondary": "#ffffff",
-                    "secondary": "#8b5000",
-                    "primary-fixed": "#a3f69c",
-                    "secondary-fixed": "#ffdcbe",
-                    "on-tertiary-container": "#ffedf0",
-                    "outline": "#707a6c",
-                    "on-tertiary-fixed-variant": "#7f2448",
-                    "on-primary-container": "#cbffc2",
-                    "tertiary": "#923357",
-                    "primary-fixed-dim": "#88d982",
-                    "on-primary-fixed-variant": "#005312",
-                    "surface": "#fbf9f6",
-                    "on-tertiary-fixed": "#3f001c",
-                    "tertiary-fixed-dim": "#ffb1c7",
-                    "on-background": "#1b1c1a",
-                    "on-error-container": "#93000a",
-                    "on-secondary-fixed": "#2c1600",
-                    "on-secondary-fixed-variant": "#693c00",
-                    "inverse-primary": "#88d982",
-                    "primary": "#0d631b",
-                    "surface-dim": "#dbdad7",
-                    "surface-tint": "#1b6d24",
-                    "surface-container-high": "#eae8e5",
-                    "on-surface": "#1b1c1a",
-                    "on-primary": "#ffffff",
-                    "error-container": "#ffdad6",
-                    "surface-container-low": "#f5f3f0",
-                    "outline-variant": "#bfcaba",
-                    "primary-container": "#2e7d32",
-                    "tertiary-container": "#b14b6f",
-                    "surface-variant": "#e4e2df",
-                    "on-error": "#ffffff",
-                    "on-secondary-container": "#653900",
-                    "on-surface-variant": "#40493d",
-                    "error": "#ba1a1a",
-                    "surface-bright": "#fbf9f6",
-                    "inverse-surface": "#30312f",
-                    "secondary-container": "#ff9800",
-                    "tertiary-fixed": "#ffd9e2"
-                },
-                "borderRadius": {
-                    "DEFAULT": "0.5rem",
-                    "lg": "1rem",
-                    "xl": "1.5rem",
-                    "full": "9999px"
-                },
-                "fontFamily": {
-                    "headline": ["Lexend"],
-                    "display": ["Lexend"],
-                    "body": ["Lexend"],
-                    "label": ["Lexend"]
-                }
-            },
-        },
-    }
-</script>
+
+
 <style>
     .material-symbols-outlined {
         font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
@@ -90,6 +21,7 @@
         min-height: max(884px, 100dvh);
     }
 </style>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body class="text-on-surface">
 

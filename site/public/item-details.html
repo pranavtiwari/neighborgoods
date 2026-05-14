@@ -3,82 +3,13 @@
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<script type="module" src="config.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module" src="supabase-client.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<script id="tailwind-config">
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            "colors": {
-                    "on-tertiary": "#ffffff",
-                    "on-secondary": "#ffffff",
-                    "surface-container-lowest": "#ffffff",
-                    "on-surface-variant": "#40493d",
-                    "on-primary-fixed-variant": "#005312",
-                    "inverse-on-surface": "#f2f0ed",
-                    "tertiary-container": "#b14b6f",
-                    "secondary-container": "#ff9800",
-                    "on-surface": "#1b1c1a",
-                    "surface-tint": "#1b6d24",
-                    "outline": "#707a6c",
-                    "on-tertiary-fixed-variant": "#7f2448",
-                    "surface-container": "#efeeeb",
-                    "surface-dim": "#dbdad7",
-                    "on-tertiary-container": "#ffedf0",
-                    "secondary-fixed": "#ffdcbe",
-                    "on-primary-container": "#cbffc2",
-                    "surface-variant": "#e4e2df",
-                    "tertiary-fixed": "#ffd9e2",
-                    "surface-container-low": "#f5f3f0",
-                    "background": "#fbf9f6",
-                    "on-secondary-fixed-variant": "#693c00",
-                    "surface": "#fbf9f6",
-                    "on-primary": "#ffffff",
-                    "secondary": "#8b5000",
-                    "tertiary": "#923357",
-                    "on-secondary-fixed": "#2c1600",
-                    "on-primary-fixed": "#002204",
-                    "primary-fixed-dim": "#88d982",
-                    "on-tertiary-fixed": "#3f001c",
-                    "on-error": "#ffffff",
-                    "surface-bright": "#fbf9f6",
-                    "surface-container-highest": "#e4e2df",
-                    "on-background": "#1b1c1a",
-                    "inverse-primary": "#88d982",
-                    "tertiary-fixed-dim": "#ffb1c7",
-                    "secondary-fixed-dim": "#ffb870",
-                    "outline-variant": "#bfcaba",
-                    "error-container": "#ffdad6",
-                    "error": "#ba1a1a",
-                    "inverse-surface": "#30312f",
-                    "on-secondary-container": "#653900",
-                    "primary": "#0d631b",
-                    "primary-fixed": "#a3f69c",
-                    "primary-container": "#2e7d32",
-                    "on-error-container": "#93000a",
-                    "surface-container-high": "#eae8e5"
-            },
-            "borderRadius": {
-                    "DEFAULT": "0.25rem",
-                    "lg": "0.5rem",
-                    "xl": "0.75rem",
-                    "full": "9999px"
-            },
-            "fontFamily": {
-                    "headline": ["Lexend"],
-                    "display": ["Lexend"],
-                    "body": ["Lexend"],
-                    "label": ["Lexend"]
-            }
-          }
-        }
-      }
-    </script>
+
 <style>
         body { font-family: 'Lexend', sans-serif; }
         .material-symbols-outlined {
@@ -90,7 +21,8 @@
       min-height: max(884px, 100dvh);
     }
   </style>
-  </head>
+    <link rel="stylesheet" href="/style.css">
+</head>
 <body class="bg-surface text-on-surface min-h-screen pb-32">
 <!-- TopAppBar -->
 <header class="bg-stone-50/80 dark:bg-stone-900/80 backdrop-blur-md flex items-center justify-between px-6 h-16 w-full docked w-full top-0 z-50 shadow-sm dark:shadow-none">

@@ -3,3 +3,4 @@ node_modules/
 site/public/config.js
 .env
 .env.local
+dist/

@@ -1,0 +1,73 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./site/public/**/*.html",
+    "./site/public/**/*.js",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        "on-secondary-container": "#653900",
+        "on-secondary-fixed": "#2c1600",
+        "outline": "#707a6c",
+        "on-primary-fixed": "#002204",
+        "on-tertiary-fixed-variant": "#7f2448",
+        "on-secondary-fixed-variant": "#693c00",
+        "on-surface": "#1b1c1a",
+        "secondary-container": "#ff9800",
+        "surface-container-lowest": "#ffffff",
+        "tertiary-fixed-dim": "#ffb1c7",
+        "primary-fixed-dim": "#88d982",
+        "background": "#fbf9f6",
+        "error-container": "#ffdad6",
+        "surface-bright": "#fbf9f6",
+        "tertiary-fixed": "#ffd9e2",
+        "secondary-fixed": "#ffdcbe",
+        "on-primary-fixed-variant": "#005312",
+        "on-error-container": "#93000a",
+        "tertiary": "#923357",
+        "tertiary-container": "#b14b6f",
+        "surface-container-low": "#f5f3f0",
+        "surface": "#fbf9f6",
+        "on-surface-variant": "#40493d",
+        "surface-container-high": "#eae8e5",
+        "on-secondary": "#ffffff",
+        "primary": "#0d631b",
+        "inverse-on-surface": "#f2f0ed",
+        "on-primary-container": "#cbffc2",
+        "on-tertiary-container": "#ffedf0",
+        "surface-container-highest": "#e4e2df",
+        "inverse-surface": "#30312f",
+        "on-error": "#ffffff",
+        "on-tertiary-fixed": "#3f001c",
+        "secondary-fixed-dim": "#ffb870",
+        "surface-tint": "#1b6d24",
+        "secondary": "#8b5000",
+        "error": "#ba1a1a",
+        "primary-container": "#2e7d32",
+        "surface-container": "#efeeeb",
+        "surface-dim": "#dbdad7",
+        "on-tertiary": "#ffffff",
+        "on-primary": "#ffffff",
+        "surface-variant": "#e4e2df",
+        "outline-variant": "#bfcaba",
+        "inverse-primary": "#88d982",
+        "primary-fixed": "#a3f69c",
+        "on-background": "#1b1c1a"
+      },
+      borderRadius: {
+        "DEFAULT": "0.25rem",
+        "lg": "0.5rem",
+        "xl": "0.75rem",
+        "full": "9999px"
+      },
+      fontFamily: {
+        "headline": ["Lexend"],
+        "display": ["Lexend"],
+        "body": ["Lexend"],
+        "label": ["Lexend"]
+      }
+    },
+  },
+  plugins: [],
+}
