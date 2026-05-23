@@ -309,10 +309,16 @@
                     Explore Circles
                     <span class="material-symbols-outlined">explore</span>
                 `;
+                heroCta.onclick = function() {
+                    window.location.href = 'explore.html';
+                };
             }
             const trustCta = document.getElementById('trust-cta');
             if (trustCta) {
                 trustCta.innerText = 'Go to Dashboard';
+                trustCta.onclick = function() {
+                    window.location.href = 'explore.html';
+                };
             }
         } else {
             // Not logged in
