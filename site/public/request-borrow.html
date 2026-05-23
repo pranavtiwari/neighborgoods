@@ -4,9 +4,11 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Share, Instead. - Request to Borrow</title>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script type="module" src="supabase-client.js"></script>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
 <script>requireAuth();</script>
 
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
@@ -230,22 +232,18 @@
     async function loadItem() {
         if (!itemId) return;
 
-        const { data: item, error } = await window.supabaseClient
-            .from('items')
-            .select('*, profiles!owner_id(*)')
-            .eq('id', itemId)
-            .single();
+        try {
+            const item = await window.db.getItem(itemId);
+            if (!item) return;
 
-        if (error || !item) {
-            console.error("Error loading item:", error);
-            return;
+            itemOwnerId = item.owner_id;
+            document.getElementById('item-name').textContent = item.name;
+            document.getElementById('item-image').src = item.image_url || 'https://placehold.co/200x200';
+            document.getElementById('item-owner-text').textContent = `Lent by ${item.profiles?.full_name || 'Neighbor'}`;
+            document.getElementById('owner-avatar-mini').src = item.profiles?.avatar_url || 'https://i.pravatar.cc/150?u=' + item.profiles?.id;
+        } catch (err) {
+            console.error("Error loading item:", err);
         }
-
-        itemOwnerId = item.owner_id;
-        document.getElementById('item-name').textContent = item.name;
-        document.getElementById('item-image').src = item.image_url || 'https://placehold.co/200x200';
-        document.getElementById('item-owner-text').textContent = `Lent by ${item.profiles.full_name}`;
-        document.getElementById('owner-avatar-mini').src = item.profiles.avatar_url || 'https://i.pravatar.cc/150?u=' + item.profiles.id;
     }
 
     document.getElementById('send-request-btn').addEventListener('click', async () => {
@@ -261,31 +259,21 @@
         
         try {
             // 1. Create the request
-            const { data: request, error: reqError } = await window.supabaseClient
-                .from('requests')
-                .insert({
-                    item_id: itemId,
-                    borrower_id: session.user.id,
-                    start_date: startDate.toISOString(),
-                    end_date: endDate.toISOString(),
-                    status: 'pending'
-                })
-                .select()
-                .single();
-
-            if (reqError) throw reqError;
+            await window.db.createBorrowRequest({
+                item_id: itemId,
+                borrower_id: session.user.uid,
+                start_date: startDate.toISOString(),
+                end_date: endDate.toISOString(),
+                status: 'pending'
+            });
 
             // 2. Send an initial message to the owner
-            const { error: msgError } = await window.supabaseClient
-                .from('messages')
-                .insert({
-                    sender_id: session.user.id,
-                    receiver_id: itemOwnerId,
-                    item_id: itemId,
-                    content: message || `Hi! I'd like to borrow your ${document.getElementById('item-name').textContent}.`
-                });
-
-            if (msgError) throw msgError;
+            await window.db.sendMessage(
+                session.user.uid,
+                itemOwnerId,
+                itemId,
+                message || `Hi! I'd like to borrow your ${document.getElementById('item-name').textContent}.`
+            );
 
             // 3. Redirect to success page
             window.location.href = 'request-sent.html';

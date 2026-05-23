@@ -3,9 +3,11 @@
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script type="module" src="supabase-client.js"></script>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
 <script>requireAuth();</script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -138,16 +140,12 @@
         if (!session) return;
         
         // Fetch Profile Data
-        const { data, error } = await window.supabaseClient
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
+        const data = await window.db.getProfile(session.user.uid);
             
         if (data) {
             document.getElementById('profile-name').textContent = data.full_name || 'Anonymous User';
             document.getElementById('profile-location').textContent = data.location ? `${data.location} Community Member` : 'Community Member';
-            const metaAvatar = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture;
+            const metaAvatar = session.user.photoURL;
             if (data.avatar_url) {
                 document.getElementById('profile-avatar').src = data.avatar_url;
             } else if (metaAvatar) {
@@ -156,22 +154,17 @@
         }
 
         // Fetch User Items
-        const { data: items, count } = await window.supabaseClient
-            .from('items')
-            .select('*', { count: 'exact' })
-            .eq('owner_id', session.user.id)
-            .order('created_at', { ascending: false });
+        const items = await window.db.getMyItems(session.user.uid);
+        const count = items.length;
 
-        if (count !== null) {
-            document.querySelector('.grid.grid-cols-3.gap-4 .text-2xl.font-bold.text-primary').textContent = count;
-        }
+        document.querySelector('.grid.grid-cols-3.gap-4 .text-2xl.font-bold.text-primary').textContent = count;
 
         const itemsList = document.getElementById('my-items-list');
         if (!items || items.length === 0) {
             itemsList.innerHTML = `<div class="text-center py-6 text-stone-500 font-medium">You haven't shared any items yet.</div>`;
         } else {
             itemsList.innerHTML = items.map(item => `
-            <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group">
+            <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
                 <img alt="${item.name}" class="w-20 h-20 rounded-lg object-cover" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category)}"/>
                 <div class="flex-1">
                     <h4 class="font-bold text-on-surface">${item.name}</h4>
@@ -183,22 +176,16 @@
     }
     
     // Update header avatar
-    async function updateHeaderAvatar() {
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
+    async function updateHeaderAvatar(user) {
         if (user) {
-            const { data: profile } = await window.supabaseClient
-                .from('profiles')
-                .select('avatar_url')
-                .eq('id', user.id)
-                .single();
-            
-            const metaAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture;
+            const profile = await window.db.getProfile(user.uid);
+            const metaAvatar = user.photoURL;
             if (profile && profile.avatar_url) {
                 document.getElementById('header-avatar').src = profile.avatar_url;
             } else if (metaAvatar) {
                 document.getElementById('header-avatar').src = metaAvatar;
             } else {
-                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.id}`;
+                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.uid}`;
             }
         }
     }
@@ -212,8 +199,12 @@
     });
 
     document.addEventListener('DOMContentLoaded', () => {
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                updateHeaderAvatar(user);
+            }
+        });
         fetchProfile();
-        updateHeaderAvatar();
     });
 </script>
 </main>

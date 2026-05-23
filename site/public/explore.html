@@ -4,10 +4,11 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Share, Instead. - Explore Discovery</title>
-
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script type="module" src="supabase-client.js"></script>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
     <script>requireAuth();</script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -164,12 +165,8 @@
 
     async function fetchItems() {
         try {
-            const { data: items, error } = await window.supabaseClient
-                .from('items')
-                .select('*, profiles(full_name)');
+            const items = await window.db.getItems();
                 
-            if (error) throw error;
-            
             if (!items || items.length === 0) {
                 grid.innerHTML = `
                     <div class="col-span-2 md:col-span-3 flex flex-col items-center justify-center py-12">
@@ -184,7 +181,7 @@
             // Generate HTML for each item
             grid.innerHTML = items.map((item, index) => {
                 const distance = (Math.random() * 5 + 0.1).toFixed(1) + " mi"; // Mocking distance
-                const ownerName = item.profiles?.full_name || 'Neighbor';
+                const ownerName = item.owner_name || 'Neighbor';
                 
                 // Skills have a distinct horizontal card style
                 if (item.category === 'skills') {
@@ -227,11 +224,11 @@
                                    <a href="chat.html?userId=${item.owner_id}&itemId=${item.id}" onclick="event.stopPropagation()" class="w-12 h-12 bg-surface-container-highest flex items-center justify-center rounded-xl text-on-surface active:scale-95 transition-transform">
                                        <span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
                                    </a>
-                               </div>`
+                                </div>`
                             : `<div class="mt-2 flex items-center justify-between">
                                  <div class="flex items-center gap-2">
                                      <div class="w-6 h-6 rounded-full overflow-hidden bg-secondary-fixed flex items-center justify-center">
-                                         <img src="${item.profiles?.avatar_url || 'https://placehold.co/100x100?text=A'}" class="w-full h-full object-cover">
+                                         <img src="${item.owner_avatar || 'https://placehold.co/100x100?text=A'}" class="w-full h-full object-cover">
                                      </div>
                                      <span class="text-xs text-on-surface-variant line-clamp-1">${ownerName}</span>
                                  </div>
@@ -288,22 +285,16 @@
     });
 
     // Update header avatar
-    async function updateHeaderAvatar() {
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
+    async function updateHeaderAvatar(user) {
         if (user) {
-            const { data: profile } = await window.supabaseClient
-                .from('profiles')
-                .select('avatar_url')
-                .eq('id', user.id)
-                .single();
-            
-            const metaAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture;
+            const profile = await window.db.getProfile(user.uid);
+            const metaAvatar = user.photoURL;
             if (profile && profile.avatar_url) {
                 document.getElementById('header-avatar').src = profile.avatar_url;
             } else if (metaAvatar) {
                 document.getElementById('header-avatar').src = metaAvatar;
             } else {
-                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.id}`;
+                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.uid}`;
             }
         }
     }
@@ -319,7 +310,11 @@
     // Initial fetch when page loads
     document.addEventListener('DOMContentLoaded', () => {
         fetchItems();
-        updateHeaderAvatar();
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                updateHeaderAvatar(user);
+            }
+        });
     });
 </script>
 </body></html>

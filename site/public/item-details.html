@@ -3,9 +3,11 @@
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script type="module" src="supabase-client.js"></script>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -160,13 +162,8 @@
         }
 
         try {
-            const { data: item, error } = await window.supabaseClient
-                .from('items')
-                .select('*, profiles(*)')
-                .eq('id', itemId)
-                .single();
+            const item = await window.db.getItem(itemId);
 
-            if (error) throw error;
             if (!item) return;
 
             // Update DOM
@@ -188,12 +185,12 @@
             if (conditionEl) conditionEl.textContent = item.condition || 'Good';
 
             // Update Buttons
-            const borrowBtn = document.querySelector('button.bg-primary-container');
+            const borrowBtn = document.getElementById('request-button') || document.querySelector('button.bg-primary-container');
             if (borrowBtn) {
                 borrowBtn.onclick = () => window.location.href = `request-borrow.html?id=${itemId}`;
             }
 
-            const chatBtn = document.querySelector('button.border-primary');
+            const chatBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Message'));
             if (chatBtn) {
                 chatBtn.onclick = () => window.location.href = `chat.html?userId=${item.owner_id}&itemId=${itemId}`;
             }

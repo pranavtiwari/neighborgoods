@@ -6,10 +6,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
 <style>
     .material-symbols-outlined {
       font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
@@ -23,42 +24,20 @@
     }
   </style>
   <script>
-    // Load credentials from config.js (which is ignored by git)
-    const SUPABASE_URL = window.ENV?.SUPABASE_URL || 'YOUR_SUPABASE_URL'; 
-    const SUPABASE_ANON_KEY = window.ENV?.SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
-    
-    // Initialize the Supabase client
-    const _supabase = typeof supabase !== 'undefined' && SUPABASE_URL !== 'YOUR_SUPABASE_URL' 
-        ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) 
-        : null;
-
     // Redirect if already logged in
-    if (_supabase) {
-        _supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-                window.location.href = 'explore.html';
-            }
-        });
-    }
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            window.location.href = 'explore.html';
+        }
+    });
 
     async function loginWithGoogle() {
-      if (!_supabase) {
-        alert('Action Required: Please configure your Supabase URL and Anon Key in site/public/config.js to enable real Google Login.');
+      if (!window.ENV || window.ENV.FIREBASE_API_KEY === 'YOUR_FIREBASE_API_KEY') {
+        alert('Action Required: Please configure your Firebase API Key and Project Credentials in site/public/config.js to enable Google Login.');
         console.warn('Real Google OAuth is not yet configured. Please check site/public/config.js.');
         return;
       }
-      
-      const { data, error } = await _supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin + '/explore.html'
-        }
-      });
-      
-      if (error) {
-        console.error('Login error:', error.message);
-        alert('Login failed: ' + error.message);
-      }
+      await window.loginWithGoogle('explore.html');
     }
   </script>
 <style>

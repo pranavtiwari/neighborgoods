@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Profiles: Everyone can view, authenticated users can write their own profile
+    match /profiles/{profileId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == profileId;
+    }
+    
+    // Circles: Anyone logged in can read and write circles
+    match /circles/{circleId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Circle Members: Anyone logged in can read and write circle memberships
+    match /circle_members/{membershipId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Items: Anyone logged in can read and write items
+    match /items/{itemId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Borrow Requests: Anyone logged in can read and write requests
+    match /requests/{requestId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Messages: Users can only read and write messages if they are a participant (sender or receiver)
+    match /messages/{messageId} {
+      allow read: if request.auth != null && (request.auth.uid == resource.data.sender_id || request.auth.uid == resource.data.receiver_id);
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.sender_id;
+      allow update, delete: if request.auth != null && (request.auth.uid == resource.data.sender_id || request.auth.uid == resource.data.receiver_id);
+    }
+  }
+}

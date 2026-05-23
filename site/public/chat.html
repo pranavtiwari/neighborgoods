@@ -4,9 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Share, Instead. - Chat</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script type="module" src="supabase-client.js"></script>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
     <script>requireAuth();</script>
     
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
@@ -128,11 +130,7 @@
             }
 
             // Fetch Target User Info
-            const { data: profileData } = await window.supabaseClient
-                .from('profiles')
-                .select('*')
-                .eq('id', targetUserId)
-                .single();
+            const profileData = await window.db.getProfile(targetUserId);
             
             if (profileData) {
                 targetUser = profileData;
@@ -144,11 +142,7 @@
 
             // Context Item Logic
             if (contextItemId) {
-                const { data: itemData } = await window.supabaseClient
-                    .from('items')
-                    .select('*')
-                    .eq('id', contextItemId)
-                    .single();
+                const itemData = await window.db.getItem(contextItemId);
                 if (itemData) {
                     document.getElementById('context-card').classList.remove('hidden');
                     document.getElementById('context-item-name').textContent = itemData.name;
@@ -159,46 +153,25 @@
                 }
             }
 
-            loadMessages();
-            subscribeToMessages();
-        }
-
-        async function loadMessages() {
-            const { data: messages, error } = await window.supabaseClient
-                .from('messages')
-                .select('*')
-                .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${targetUserId}),and(sender_id.eq.${targetUserId},receiver_id.eq.${currentUser.id})`)
-                .order('created_at', { ascending: true });
-
-            if (error) {
-                console.error(error);
-                chatMessages.innerHTML = `<div class="text-center text-error mt-4">Failed to load messages</div>`;
-                return;
-            }
-
-            chatMessages.innerHTML = ''; // clear loading
-
-            // Date divider placeholder
+            // Clear loading placeholder
+            chatMessages.innerHTML = '';
             chatMessages.innerHTML += `
             <div class="flex justify-center mt-2 mb-4">
                 <span class="text-[10px] uppercase font-black text-on-surface-variant/40 tracking-[0.2em] bg-stone-100 px-4 py-1 rounded-full">Message History</span>
             </div>`;
 
-            if (messages && messages.length > 0) {
-                messages.forEach(msg => appendMessage(msg));
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            } else {
-                chatMessages.innerHTML += `<div class="text-center font-medium text-stone-400 mt-6" id="empty-state">Send a message to start the conversation!</div>`;
-            }
+            subscribeToMessages();
         }
 
         function appendMessage(msg) {
             const emptyState = document.getElementById('empty-state');
             if (emptyState) emptyState.remove();
 
-            const isMine = msg.sender_id === currentUser.id;
+            const isMine = msg.sender_id === currentUser.uid;
             
-            const timeString = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            // Format time cleanly
+            const timeVal = msg.created_at ? new Date(msg.created_at) : new Date();
+            const timeString = timeVal.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             if (isMine) {
                 chatMessages.innerHTML += `
@@ -236,31 +209,28 @@
 
             messageInput.value = '';
             
-            // Optimistic rendering could go here, but let's wait for DB for prototype simplicity
-            const { data, error } = await window.supabaseClient.from('messages').insert({
-                sender_id: currentUser.id,
-                receiver_id: targetUserId,
-                item_id: contextItemId || null,
-                content: text
-            }).select().single();
-
-            if (error) {
+            try {
+                await window.db.sendMessage(
+                    currentUser.uid,
+                    targetUserId,
+                    contextItemId || null,
+                    text
+                );
+            } catch (error) {
                 console.error("Failed to send", error);
                 alert("Message failed to send.");
-            } else {
-                appendMessage(data);
             }
         });
 
+        let renderedMessageIds = new Set();
+        let unsubscribeMessages = null;
+
         function subscribeToMessages() {
-            window.supabaseClient
-                .channel('chat_channel')
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${currentUser.id}` }, payload => {
-                    if (payload.new.sender_id === targetUserId) {
-                        appendMessage(payload.new);
-                    }
-                })
-                .subscribe();
+            unsubscribeMessages = window.db.subscribeToChatMessages(currentUser.uid, targetUserId, (msg) => {
+                if (renderedMessageIds.has(msg.id)) return;
+                renderedMessageIds.add(msg.id);
+                appendMessage(msg);
+            });
         }
 
         document.addEventListener('DOMContentLoaded', initChat);

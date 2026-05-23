@@ -4,9 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Share, Instead. - Add Item</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script type="module" src="supabase-client.js"></script>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
     <script>requireAuth();</script>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
@@ -145,32 +147,20 @@
                 if (selectedFile) {
                     const fileExt = selectedFile.name.split('.').pop();
                     const fileName = `${Math.random()}.${fileExt}`;
-                    const filePath = `${session.user.id}/${fileName}`; // Group by user folder
+                    const filePath = `item-images/${session.user.uid}/${fileName}`; // Group by user folder
 
-                    const { error: uploadError } = await window.supabaseClient.storage
-                        .from('item-images')
-                        .upload(filePath, selectedFile);
-                    
-                    if (uploadError) throw uploadError;
-
-                    // Get public URL
-                    const { data } = window.supabaseClient.storage
-                        .from('item-images')
-                        .getPublicUrl(filePath);
-                        
-                    imageUrl = data.publicUrl;
+                    imageUrl = await window.db.uploadFile(filePath, selectedFile);
                 }
 
                 // 3. Insert into Database
-                const { error: insertError } = await window.supabaseClient.from('items').insert({
-                    owner_id: session.user.id,
+                await window.db.addItem({
+                    owner_id: session.user.uid,
                     name: name,
                     category: category,
                     description: description,
-                    image_url: imageUrl
+                    image_url: imageUrl,
+                    status: 'available'
                 });
-
-                if (insertError) throw insertError;
 
                 // 4. Success Redirect
                 window.location.href = 'explore.html';

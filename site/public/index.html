@@ -4,10 +4,11 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Share, Instead. | The Modern Commons</title>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script type="module" src="supabase-client.js"></script>
-
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -237,23 +238,18 @@
     async function fetchGems() {
         const carousel = document.getElementById('gems-carousel');
         try {
-            const { data: items, error } = await window.supabaseClient
-                .from('items')
-                .select('*, profiles(full_name)')
-                .order('created_at', { ascending: false })
-                .limit(6);
-                
-            if (error) throw error;
+            const items = await window.db.getItems();
+            const topGems = items.slice(0, 6);
             
-            if (!items || items.length === 0) {
+            if (!topGems || topGems.length === 0) {
                 carousel.innerHTML = '<div class="text-center w-full py-8 text-stone-500">No items available yet.</div>';
                 return;
             }
             
-            carousel.innerHTML = items.map(item => {
+            carousel.innerHTML = topGems.map(item => {
                 const distance = (Math.random() * 5 + 0.1).toFixed(1);
                 const imageUrl = item.image_url || 'https://images.unsplash.com/photo-1581092160562-40aa08e78837?q=80&w=400&auto=format&fit=crop';
-                const actionText = item.action_type === 'lend' ? 'Borrow' : 'Request';
+                const actionText = item.status === 'available' ? 'Borrow' : 'Request';
                 
                 return '<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group cursor-pointer" onclick="window.location.href=\'item-details.html?id=' + item.id + '\'">' +
                         '<div class="h-48 overflow-hidden">' +
@@ -280,19 +276,13 @@
         }
     }
 
-    async function updateHeader() {
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
+    async function updateHeader(user) {
         const headerActions = document.getElementById('header-actions');
         
         if (user) {
             // Logged in
-            const { data: profile } = await window.supabaseClient
-                .from('profiles')
-                .select('avatar_url')
-                .eq('id', user.id)
-                .single();
-                
-            const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || `https://i.pravatar.cc/150?u=${user.id}`;
+            const profile = await window.db.getProfile(user.uid);
+            const avatarUrl = profile?.avatar_url || user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`;
             
             headerActions.innerHTML = `
                 <div class="relative">
@@ -343,7 +333,9 @@
     });
 
     document.addEventListener('DOMContentLoaded', () => {
-        updateHeader();
+        firebase.auth().onAuthStateChanged((user) => {
+            updateHeader(user);
+        });
         fetchGems();
     });
 </script>

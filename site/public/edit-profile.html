@@ -3,9 +3,11 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Share, Instead. - Edit Profile</title>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script type="module" src="supabase-client.js"></script>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
 <script>requireAuth();</script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -112,11 +114,7 @@
         const session = await requireAuth();
         if (!session) return;
         
-        const { data } = await window.supabaseClient
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
+        const data = await window.db.getProfile(session.user.uid);
 
         if (data) {
             if (data.full_name) document.getElementById('fullName').value = data.full_name;
@@ -131,7 +129,7 @@
         const errorDiv = document.getElementById('error-message');
         errorDiv.classList.add('hidden');
         
-        btn.innerHTML = `<span class="material-symbols-outlined animate-spin align-middle mr-2">progress_activity</span> Saving...`;
+        btn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin align-middle mr-2">progress_activity</span> Saving...`;
         btn.disabled = true;
         btn.classList.add('opacity-70');
 
@@ -146,17 +144,9 @@
             if (selectedFile) {
                 const fileExt = selectedFile.name.split('.').pop();
                 const fileName = `${Math.random()}.${fileExt}`;
-                const filePath = `${session.user.id}/${fileName}`;
+                const filePath = `avatars/${session.user.uid}/${fileName}`;
 
-                const { error: uploadError } = await window.supabaseClient.storage
-                    .from('avatars')
-                    .upload(filePath, selectedFile, { upsert: true });
-                if (uploadError) throw uploadError;
-
-                const { data: urlData } = window.supabaseClient.storage
-                    .from('avatars')
-                    .getPublicUrl(filePath);
-                avatarUrl = urlData.publicUrl;
+                avatarUrl = await window.db.uploadFile(filePath, selectedFile);
             }
 
             const updates = {
@@ -166,12 +156,7 @@
             };
             if (avatarUrl) updates.avatar_url = avatarUrl;
 
-            const { error: updateError } = await window.supabaseClient
-                .from('profiles')
-                .update(updates)
-                .eq('id', session.user.id);
-
-            if (updateError) throw updateError;
+            await window.db.updateProfile(session.user.uid, updates);
             
             window.location.href = 'profile.html';
         } catch (err) {

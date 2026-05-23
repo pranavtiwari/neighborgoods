@@ -3,9 +3,11 @@
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script type="module" src="supabase-client.js"></script>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
 <script>requireAuth();</script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -129,26 +131,11 @@
         if (!session) return;
 
         try {
-            // 1. Fetch My Circles
-            const { data: myMemberships, error: memError } = await window.supabaseClient
-                .from('circle_members')
-                .select('circle_id, circles(*)')
-                .eq('profile_id', session.user.id);
-
-            if (memError) throw memError;
-            allMyCircles = myMemberships || [];
-            const myCircleIds = allMyCircles.map(m => m.circle_id);
-
-            // 2. Fetch Suggested Circles
-            const { data: allCircles, error: allCirclesError } = await window.supabaseClient
-                .from('circles')
-                .select('*')
-                .limit(20);
-
-            if (allCirclesError) throw allCirclesError;
-            allSuggestions = (allCircles || []).filter(c => !myCircleIds.includes(c.id));
-
-            renderCircles();
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
 
         } catch (err) {
             console.error("Error loading circles:", err);
@@ -219,16 +206,7 @@
         if (!session) return;
 
         try {
-            const { error } = await window.supabaseClient
-                .from('circle_members')
-                .insert({
-                    circle_id: circleId,
-                    profile_id: session.user.id,
-                    role: 'member'
-                });
-
-            if (error) throw error;
-            
+            await window.db.joinCircle(circleId, session.user.uid);
             // Refresh
             loadCircles();
         } catch (err) {
@@ -237,22 +215,20 @@
         }
     }
 
-    async function updateHeaderAvatar() {
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
         if (user) {
-            const { data: profile } = await window.supabaseClient
-                .from('profiles')
-                .select('avatar_url')
-                .eq('id', user.id)
-                .single();
-            
-            const metaAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture;
+            const profile = await window.db.getProfile(user.uid);
+            const metaAvatar = user.photoURL;
             if (profile && profile.avatar_url) {
                 document.getElementById('header-avatar').src = profile.avatar_url;
             } else if (metaAvatar) {
                 document.getElementById('header-avatar').src = metaAvatar;
             } else {
-                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.id}`;
+                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.uid}`;
             }
         }
     }
@@ -269,8 +245,12 @@
     });
 
     document.addEventListener('DOMContentLoaded', () => {
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                updateHeaderAvatar(user);
+            }
+        });
         loadCircles();
-        updateHeaderAvatar();
     });
 </script>
 </body></html>

@@ -4,9 +4,11 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Share, Instead. Activity Dashboard</title>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script type="module" src="supabase-client.js"></script>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
 <script>requireAuth();</script>
 
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
@@ -176,21 +178,7 @@
         grid.innerHTML = '<div class="col-span-2 text-center py-12 text-stone-400">Loading activity...</div>';
 
         try {
-            let query = window.supabaseClient
-                .from('requests')
-                .select('*, items(*, profiles(*)), profiles!borrower_id(*)');
-
-            if (currentView === 'borrowing') {
-                query = query.eq('borrower_id', userSession.user.id);
-            } else {
-                const { data: myItems } = await window.supabaseClient.from('items').select('id').eq('owner_id', userSession.user.id);
-                const itemIds = myItems.map(i => i.id);
-                query = query.in('item_id', itemIds);
-            }
-
-            const { data: requests, error } = await query.order('created_at', { ascending: false });
-
-            if (error) throw error;
+            const requests = await window.db.getBorrowRequestsForUser(userSession.user.uid, currentView);
 
             document.getElementById('item-count').textContent = `${requests.length} Item${requests.length !== 1 ? 's' : ''}`;
 
@@ -235,22 +223,16 @@
     }
 
     // Update header avatar
-    async function updateHeaderAvatar() {
-        const { data: { user } } = await window.supabaseClient.auth.getUser();
+    async function updateHeaderAvatar(user) {
         if (user) {
-            const { data: profile } = await window.supabaseClient
-                .from('profiles')
-                .select('avatar_url')
-                .eq('id', user.id)
-                .single();
-            
-            const metaAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture;
+            const profile = await window.db.getProfile(user.uid);
+            const metaAvatar = user.photoURL;
             if (profile && profile.avatar_url) {
                 document.getElementById('header-avatar').src = profile.avatar_url;
             } else if (metaAvatar) {
                 document.getElementById('header-avatar').src = metaAvatar;
             } else {
-                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.id}`;
+                document.getElementById('header-avatar').src = `https://i.pravatar.cc/150?u=${user.uid}`;
             }
         }
     }
@@ -264,11 +246,16 @@
     });
 
     document.addEventListener('DOMContentLoaded', async () => {
-        userSession = await requireAuth();
-        if (userSession) {
-            updateHeaderAvatar();
-            fetchActivity();
-        }
+        firebase.auth().onAuthStateChanged(async (user) => {
+            if (user) {
+                userSession = { user: user };
+                userSession.user.id = user.uid; // compatibility mapping
+                updateHeaderAvatar(user);
+                fetchActivity();
+            } else {
+                window.location.href = 'join-community.html';
+            }
+        });
     });
 </script>
 </body></html>

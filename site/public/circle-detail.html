@@ -1,45 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" class="light">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Circle Details - Share, Instead.</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script type="module" src="supabase-client.js"></script>
-    <script>requireAuth();</script>
-    
-    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: "#0d631b",
-                        "primary-container": "#2e7d32",
-                        secondary: "#8b5000",
-                        "secondary-container": "#ffdcbe",
-                        surface: "#fbf9f6",
-                        "on-surface": "#1b1c1a",
-                        "on-surface-variant": "#40493d",
-                        "surface-container": "#efeeeb",
-                        "surface-container-low": "#f5f3f0",
-                        "surface-container-lowest": "#ffffff",
-                        "outline-variant": "#bfcaba",
-                        error: "#ba1a1a",
-                    },
-                    fontFamily: {
-                        sans: ["Lexend", "sans-serif"],
-                        display: ["Lexend", "sans-serif"],
-                    },
-                    borderRadius: {
-                        'DEFAULT': '8px',
-                        'lg': '16px',
-                        'xl': '24px',
-                    }
-                }
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
+<script>requireAuth();</script>
             }
         }
     </script>
@@ -77,43 +42,31 @@
 </head>
 <body class="bg-surface font-sans text-on-surface antialiased min-h-screen pb-20">
 
-    <!-- Premium Glass Header -->
-    <header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
-        <div class="flex items-center gap-6">
-            <a href="circles.html" class="group flex items-center gap-2 text-primary font-bold transition-all active:scale-95">
-                <span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
-                <span class="label-md">All Circles</span>
-            </a>
-        </div>
-        <div class="flex items-center gap-4">
-            <button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors">
-                <span class="material-symbols-outlined text-on-surface-variant">share</span>
-            </button>
-            <div id="header-profile-btn" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden cursor-pointer active:scale-95 transition-transform">
-                <img id="header-avatar" src="https://i.pravatar.cc/150?u=me" class="w-full h-full object-cover">
-            </div>
-        </div>
-    </header>
+        try {
+            // 1. Fetch Circle Metadata
+            const circle = await window.db.getCircle(circleId);
+            if (!circle) return;
 
-    <!-- Main Content Layout -->
-    <main class="pt-32 px-8 max-w-[1400px] mx-auto">
-        
-        <!-- Hero Section: Editorial Style -->
-        <div class="mb-20">
-            <div class="flex flex-col md:flex-row md:items-end justify-between gap-8">
-                <div class="max-w-2xl">
-                    <span class="label-md text-primary mb-4 block">Neighborhood Circle</span>
-                    <h1 id="circle-name" class="text-display-lg font-black text-on-surface mb-6">
-                        Loading...
-                    </h1>
-                    <p id="circle-description" class="text-xl text-on-surface-variant leading-relaxed max-w-xl">
-                        ...
-                    </p>
-                </div>
-                <div class="flex flex-col items-start md:items-end gap-6">
-                    <div class="flex items-center gap-3">
-                        <div id="member-avatars" class="flex -space-x-3">
-                            <!-- Avatars injected here -->
+            document.title = `${circle.name} - Circle Detail`;
+            document.querySelector('header .font-lexend').textContent = circle.name;
+            document.querySelector('h1').textContent = circle.name;
+            document.querySelector('p.text-on-surface-variant').textContent = circle.description || 'A neighborhood community circle.';
+
+            // 2. Fetch Members
+            const members = await window.db.getCircleMembers(circleId);
+            if (members) {
+                const avatarContainer = document.getElementById('member-avatars');
+                const countText = document.getElementById('member-count-text');
+                
+                const displayMembers = members.slice(0, 5);
+                avatarContainer.innerHTML = displayMembers.map(m => `
+                    <img class="inline-block h-10 w-10 rounded-full ring-4 ring-surface" src="${m.avatar_url || 'https://i.pravatar.cc/150?u=' + m.id}" />
+                `).join('');
+                
+                if (members.length > 5) {
+                    avatarContainer.innerHTML += `
+                        <div class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high ring-4 ring-surface text-label-md font-bold text-on-surface-variant">
+                            +${members.length - 5}
                         </div>
                         <span id="member-count-text" class="label-md text-on-surface-variant">Neighbors</span>
                     </div>
@@ -129,17 +82,25 @@
             </div>
         </div>
 
-        <!-- Asymmetric Content Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-16">
-            
-            <!-- Main Feed (65%) -->
-            <div class="lg:col-span-8 space-y-12">
-                <div>
-                    <h2 class="text-headline-md font-bold mb-8">Recent Activity</h2>
-                    <div id="circle-feed" class="space-y-8">
-                        <div class="animate-pulse space-y-4">
-                            <div class="h-40 bg-surface-container rounded-xl"></div>
-                            <div class="h-40 bg-surface-container rounded-xl"></div>
+            // 3. Fetch Circle Inventory
+            const items = await window.db.getCircleItems(circleId);
+            if (items) {
+                const inventoryGrid = document.getElementById('circle-inventory');
+                if (items.length === 0) {
+                    inventoryGrid.innerHTML = `<div class="col-span-full text-center py-12 text-stone-400">No items shared in this circle yet.</div>`;
+                } else {
+                    inventoryGrid.innerHTML = items.map(item => `
+                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="bg-surface-container-lowest cursor-pointer p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 mb-4">
+                                <span class="w-3 h-3 rounded-full bg-primary"></span>
+                                <span class="text-xs font-bold uppercase tracking-widest text-primary">Available</span>
+                            </div>
+                            <h3 class="text-xl font-bold mb-1">${item.name}</h3>
+                            <p class="text-sm text-on-surface-variant line-clamp-2">${item.description || ''}</p>
+                        </div>
+                        <div class="mt-4">
+                            <img class="w-full h-32 object-cover rounded-lg" src="${item.image_url || 'https://placehold.co/400x200'}" />
                         </div>
                     </div>
                 </div>
