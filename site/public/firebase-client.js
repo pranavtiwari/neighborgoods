@@ -116,10 +116,45 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 const snapshot = await ref.put(file);
                 return await snapshot.ref.getDownloadURL();
             } catch (err) {
-                console.warn("Storage upload failed or is disabled. Falling back to Base64 data URL:", err);
+                console.warn("Storage upload failed or is disabled. Falling back to compressed Base64 data URL:", err);
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result);
+                    reader.onload = (event) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            // Define maximum dimensions (e.g. 800px max width/height)
+                            const MAX_WIDTH = 800;
+                            const MAX_HEIGHT = 800;
+                            let width = img.width;
+                            let height = img.height;
+
+                            // Calculate new dimensions while maintaining aspect ratio
+                            if (width > height) {
+                                if (width > MAX_WIDTH) {
+                                    height = Math.round((height * MAX_WIDTH) / width);
+                                    width = MAX_WIDTH;
+                                }
+                            } else {
+                                if (height > MAX_HEIGHT) {
+                                    width = Math.round((width * MAX_HEIGHT) / height);
+                                    height = MAX_HEIGHT;
+                                }
+                            }
+
+                            // Create an offscreen canvas to perform resizing and compression
+                            const canvas = document.createElement('canvas');
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+
+                            // Export as compressed JPEG (quality: 0.7)
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                            resolve(dataUrl);
+                        };
+                        img.onerror = (e) => reject(new Error("Failed to load image for resizing"));
+                        img.src = event.target.result;
+                    };
                     reader.onerror = (e) => reject(new Error("Failed to read file as data URL: " + e.target.error));
                     reader.readAsDataURL(file);
                 });
