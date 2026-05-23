@@ -2,7 +2,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && cp site/public/config.js site/public/firebase-client.js dist/",
     "preview": "vite preview"
   },
   "dependencies": {
