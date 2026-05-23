@@ -5,8 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Share, Instead. - Create Circle</title>
     
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script type="module" src="supabase-client.js"></script>
+    <script src="config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-client.js"></script>
     <script>requireAuth();</script>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
@@ -143,46 +146,18 @@
                     const fileName = `${Math.random()}.${fileExt}`;
                     const filePath = `circles/${fileName}`;
 
-                    const { error: uploadError } = await window.supabaseClient.storage
-                        .from('item-images') // Reusing item-images bucket for simplicity, or we could use a circle-images one
-                        .upload(filePath, selectedFile);
-                    
-                    if (uploadError) throw uploadError;
-
-                    const { data } = window.supabaseClient.storage
-                        .from('item-images')
-                        .getPublicUrl(filePath);
-                        
-                    imageUrl = data.publicUrl;
+                    imageUrl = await window.db.uploadFile(filePath, selectedFile);
                 }
 
-                // 2. Create Circle
-                const { data: circle, error: insertError } = await window.supabaseClient
-                    .from('circles')
-                    .insert({
-                        name: name,
-                        description: description,
-                        image_url: imageUrl,
-                        is_private: isPrivate,
-                        created_by: session.user.id
-                    })
-                    .select()
-                    .single();
+                // 2. Create Circle (this also adds the creator as admin)
+                const circle = await window.db.createCircle({
+                    name: name,
+                    description: description,
+                    image_url: imageUrl,
+                    is_private: isPrivate
+                }, session.user.id);
 
-                if (insertError) throw insertError;
-
-                // 3. Add Creator as Admin Member
-                const { error: memberError } = await window.supabaseClient
-                    .from('circle_members')
-                    .insert({
-                        circle_id: circle.id,
-                        profile_id: session.user.id,
-                        role: 'admin'
-                    });
-
-                if (memberError) throw memberError;
-
-                // 4. Redirect to Circle Detail
+                // 3. Redirect to Circle Detail
                 window.location.href = `circle-detail.html?id=${circle.id}`;
 
             } catch (err) {

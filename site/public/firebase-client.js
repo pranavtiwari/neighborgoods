@@ -213,6 +213,31 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         },
 
         // --- Circles ---
+        createCircle: async function(circleData, creatorId) {
+            try {
+                const db = firebase.firestore();
+                const ref = await db.collection('circles').add({
+                    ...circleData,
+                    created_by: creatorId,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Add creator as Admin member
+                const id = `${ref.id}_${creatorId}`;
+                await db.collection('circle_members').doc(id).set({
+                    circle_id: ref.id,
+                    profile_id: creatorId,
+                    role: 'admin',
+                    joined_at: new Date().toISOString()
+                });
+                
+                return { id: ref.id };
+            } catch (err) {
+                console.error("Error creating circle:", err);
+                throw err;
+            }
+        },
+
         getCircles: async function() {
             try {
                 const snapshot = await firebase.firestore().collection('circles').get();

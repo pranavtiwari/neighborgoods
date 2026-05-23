@@ -1,15 +1,16 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Profiles: Everyone can view, authenticated users can write their own profile
+    // Profiles: Everyone can read, authenticated users can write their own profile
     match /profiles/{profileId} {
       allow read: if true;
       allow write: if request.auth != null && request.auth.uid == profileId;
     }
     
-    // Circles: Anyone logged in can read and write circles
+    // Circles: Everyone can read, authenticated users can write
     match /circles/{circleId} {
-      allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if request.auth != null;
     }
     
     // Circle Members: Anyone logged in can read and write circle memberships
@@ -17,9 +18,10 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
     
-    // Items: Anyone logged in can read and write items
+    // Items: Everyone can read, authenticated users can write
     match /items/{itemId} {
-      allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if request.auth != null;
     }
     
     // Borrow Requests: Anyone logged in can read and write requests
