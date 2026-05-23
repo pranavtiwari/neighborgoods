@@ -50,18 +50,32 @@
 
     <!-- Premium Glass Header -->
     <header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
-        <div class="flex items-center gap-6">
-            <a href="circles.html" class="group flex items-center gap-2 text-primary font-bold transition-all active:scale-95">
-                <span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
-                <span class="label-md">All Circles</span>
-            </a>
-        </div>
-        <div class="flex items-center gap-4">
-            <button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors">
-                <span class="material-symbols-outlined text-on-surface-variant">share</span>
-            </button>
-            <div id="header-profile-btn" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden cursor-pointer active:scale-95 transition-transform">
-                <img id="header-avatar" src="https://i.pravatar.cc/150?u=me" class="w-full h-full object-cover">
+        <div class="flex justify-between items-center w-full px-6 py-4 max-w-7xl mx-auto">
+            <div class="flex items-center gap-6">
+                <a href="circles.html" class="group flex items-center gap-2 text-primary font-bold transition-all active:scale-95">
+                    <span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
+                    <span class="label-md">All Circles</span>
+                </a>
+            </div>
+            <div class="flex items-center gap-4">
+                <button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors">
+                    <span class="material-symbols-outlined text-on-surface-variant">share</span>
+                </button>
+                <div id="header-profile-btn" class="relative">
+                    <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
+                        <img id="header-avatar" src="https://i.pravatar.cc/150?u=me" class="w-full h-full object-cover">
+                    </div>
+                    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2">
+                        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">person</span>
+                            <span class="text-sm font-medium">My Profile</span>
+                        </a>
+                        <button onclick="window.logout()" class="w-full flex items-center gap-3 px-4 py-2 hover:bg-error-container text-error transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">logout</span>
+                            <span class="text-sm font-bold text-left">Logout</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </header>
@@ -337,6 +351,14 @@
                 btn.classList.remove('opacity-70');
             }
         };
+
+        // Close dropdown on outside click
+        window.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('profile-dropdown');
+            if (dropdown && !e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
+                dropdown.classList.add('hidden');
+            }
+        });
 
         document.addEventListener('DOMContentLoaded', loadCircleDetails);
     </script>
