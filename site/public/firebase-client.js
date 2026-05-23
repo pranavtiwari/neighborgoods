@@ -498,6 +498,46 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 }, (error) => {
                     console.error("Realtime listener error:", error);
                 });
+        },
+
+        getCirclePosts: async function(circleId) {
+            try {
+                const snapshot = await firebase.firestore().collection('circle_posts')
+                    .where('circle_id', '==', circleId).get();
+                const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // Fetch profiles in parallel or sequentially
+                for (const post of posts) {
+                    const profile = await this.getProfile(post.profile_id);
+                    post.profiles = profile;
+                }
+                
+                // Sort by created_at descending
+                posts.sort((a, b) => {
+                    const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
+                    const dateB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
+                    return dateB - dateA;
+                });
+                return posts;
+            } catch (err) {
+                console.error("Error getting circle posts:", err);
+                return [];
+            }
+        },
+
+        createCirclePost: async function(circleId, profileId, content) {
+            try {
+                const ref = await firebase.firestore().collection('circle_posts').add({
+                    circle_id: circleId,
+                    profile_id: profileId,
+                    content: content,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                return { id: ref.id };
+            } catch (err) {
+                console.error("Error creating circle post:", err);
+                throw err;
+            }
         }
     };
 

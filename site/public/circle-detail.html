@@ -1,13 +1,19 @@
 <!DOCTYPE html>
-<script src="config.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-<script src="firebase-client.js"></script>
-<script>requireAuth();</script>
-            }
-        }
-    </script>
+<html lang="en" class="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circle Details - Share, Instead.</title>
+    
+    <script src="config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-client.js"></script>
+    <script>requireAuth();</script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <style>
         .material-symbols-outlined {
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
@@ -42,31 +48,43 @@
 </head>
 <body class="bg-surface font-sans text-on-surface antialiased min-h-screen pb-20">
 
-        try {
-            // 1. Fetch Circle Metadata
-            const circle = await window.db.getCircle(circleId);
-            if (!circle) return;
+    <!-- Premium Glass Header -->
+    <header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
+        <div class="flex items-center gap-6">
+            <a href="circles.html" class="group flex items-center gap-2 text-primary font-bold transition-all active:scale-95">
+                <span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
+                <span class="label-md">All Circles</span>
+            </a>
+        </div>
+        <div class="flex items-center gap-4">
+            <button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors">
+                <span class="material-symbols-outlined text-on-surface-variant">share</span>
+            </button>
+            <div id="header-profile-btn" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden cursor-pointer active:scale-95 transition-transform">
+                <img id="header-avatar" src="https://i.pravatar.cc/150?u=me" class="w-full h-full object-cover">
+            </div>
+        </div>
+    </header>
 
-            document.title = `${circle.name} - Circle Detail`;
-            document.querySelector('header .font-lexend').textContent = circle.name;
-            document.querySelector('h1').textContent = circle.name;
-            document.querySelector('p.text-on-surface-variant').textContent = circle.description || 'A neighborhood community circle.';
-
-            // 2. Fetch Members
-            const members = await window.db.getCircleMembers(circleId);
-            if (members) {
-                const avatarContainer = document.getElementById('member-avatars');
-                const countText = document.getElementById('member-count-text');
-                
-                const displayMembers = members.slice(0, 5);
-                avatarContainer.innerHTML = displayMembers.map(m => `
-                    <img class="inline-block h-10 w-10 rounded-full ring-4 ring-surface" src="${m.avatar_url || 'https://i.pravatar.cc/150?u=' + m.id}" />
-                `).join('');
-                
-                if (members.length > 5) {
-                    avatarContainer.innerHTML += `
-                        <div class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-container-high ring-4 ring-surface text-label-md font-bold text-on-surface-variant">
-                            +${members.length - 5}
+    <!-- Main Content Layout -->
+    <main class="pt-32 px-8 max-w-[1400px] mx-auto">
+        
+        <!-- Hero Section: Editorial Style -->
+        <div class="mb-20">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-8">
+                <div class="max-w-2xl">
+                    <span class="label-md text-primary mb-4 block">Neighborhood Circle</span>
+                    <h1 id="circle-name" class="text-display-lg font-black text-on-surface mb-6">
+                        Loading...
+                    </h1>
+                    <p id="circle-description" class="text-xl text-on-surface-variant leading-relaxed max-w-xl">
+                        ...
+                    </p>
+                </div>
+                <div class="flex flex-col items-start md:items-end gap-6">
+                    <div class="flex items-center gap-3">
+                        <div id="member-avatars" class="flex -space-x-3">
+                            <!-- Avatars injected here -->
                         </div>
                         <span id="member-count-text" class="label-md text-on-surface-variant">Neighbors</span>
                     </div>
@@ -82,25 +100,17 @@
             </div>
         </div>
 
-            // 3. Fetch Circle Inventory
-            const items = await window.db.getCircleItems(circleId);
-            if (items) {
-                const inventoryGrid = document.getElementById('circle-inventory');
-                if (items.length === 0) {
-                    inventoryGrid.innerHTML = `<div class="col-span-full text-center py-12 text-stone-400">No items shared in this circle yet.</div>`;
-                } else {
-                    inventoryGrid.innerHTML = items.map(item => `
-                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="bg-surface-container-lowest cursor-pointer p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center gap-2 mb-4">
-                                <span class="w-3 h-3 rounded-full bg-primary"></span>
-                                <span class="text-xs font-bold uppercase tracking-widest text-primary">Available</span>
-                            </div>
-                            <h3 class="text-xl font-bold mb-1">${item.name}</h3>
-                            <p class="text-sm text-on-surface-variant line-clamp-2">${item.description || ''}</p>
-                        </div>
-                        <div class="mt-4">
-                            <img class="w-full h-32 object-cover rounded-lg" src="${item.image_url || 'https://placehold.co/400x200'}" />
+        <!-- Asymmetric Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-16">
+            
+            <!-- Main Feed (65%) -->
+            <div class="lg:col-span-8 space-y-12">
+                <div>
+                    <h2 class="text-headline-md font-bold mb-8">Recent Activity</h2>
+                    <div id="circle-feed" class="space-y-8">
+                        <div class="animate-pulse space-y-4">
+                            <div class="h-40 bg-surface-container rounded-xl"></div>
+                            <div class="h-40 bg-surface-container rounded-xl"></div>
                         </div>
                     </div>
                 </div>
@@ -174,13 +184,7 @@
 
             try {
                 // 1. Fetch Circle Metadata
-                const { data: circle, error } = await window.supabaseClient
-                    .from('circles')
-                    .select('*')
-                    .eq('id', circleId)
-                    .single();
-
-                if (error) throw error;
+                const circle = await window.db.getCircle(circleId);
                 if (!circle) return;
 
                 document.title = `${circle.name} - Share, Instead.`;
@@ -188,18 +192,14 @@
                 document.getElementById('circle-description').textContent = circle.description || 'A neighborhood community circle.';
 
                 // 2. Fetch Members
-                const { data: members, error: memError } = await window.supabaseClient
-                    .from('circle_members')
-                    .select('profiles(*)')
-                    .eq('circle_id', circleId);
-
-                if (!memError && members) {
+                const members = await window.db.getCircleMembers(circleId);
+                if (members) {
                     const avatarContainer = document.getElementById('member-avatars');
                     const countText = document.getElementById('member-count-text');
                     
                     const displayMembers = members.slice(0, 4);
                     avatarContainer.innerHTML = displayMembers.map(m => `
-                        <img class="h-10 w-10 rounded-full ring-4 ring-surface object-cover" src="${m.profiles.avatar_url || 'https://i.pravatar.cc/150?u=' + m.profiles.id}" />
+                        <img class="h-10 w-10 rounded-full ring-4 ring-surface object-cover" src="${m.avatar_url || 'https://i.pravatar.cc/150?u=' + m.id}" />
                     `).join('');
                     
                     if (members.length > 4) {
@@ -213,13 +213,9 @@
                 }
 
                 // 3. Fetch Circle Inventory (Sidebar Preview)
-                const { data: items, error: itemError } = await window.supabaseClient
-                    .from('items')
-                    .select('*')
-                    .eq('circle_id', circleId)
-                    .limit(3);
-
-                if (!itemError && items) {
+                const allItems = await window.db.getCircleItems(circleId);
+                if (allItems) {
+                    const items = allItems.slice(0, 3);
                     const inventoryContainer = document.getElementById('circle-inventory');
                     if (items.length === 0) {
                         inventoryContainer.innerHTML = `<p class="text-sm text-on-surface-variant italic">No items shared yet.</p>`;
@@ -242,9 +238,9 @@
                 loadFeed(circleId);
 
                 // Update Profile Avatar
-                const { data: { user } } = await window.supabaseClient.auth.getUser();
+                const user = firebase.auth().currentUser;
                 if (user) {
-                    const { data: profile } = await window.supabaseClient.from('profiles').select('avatar_url').eq('id', user.id).single();
+                    const profile = await window.db.getProfile(user.uid);
                     if (profile?.avatar_url) document.getElementById('header-avatar').src = profile.avatar_url;
                 }
 
@@ -256,13 +252,7 @@
         async function loadFeed(circleId) {
             const feedContainer = document.getElementById('circle-feed');
             try {
-                const { data: posts, error } = await window.supabaseClient
-                    .from('circle_posts')
-                    .select('*, profiles(full_name, avatar_url)')
-                    .eq('circle_id', circleId)
-                    .order('created_at', { ascending: false });
-
-                if (error) throw error;
+                const posts = await window.db.getCirclePosts(circleId);
 
                 if (posts.length === 0) {
                     feedContainer.innerHTML = `
@@ -274,7 +264,7 @@
                 }
 
                 feedContainer.innerHTML = posts.map(post => {
-                    const date = new Date(post.created_at);
+                    const date = post.created_at?.toDate ? post.created_at.toDate() : new Date(post.created_at || 0);
                     const timeStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
                     return `
                     <div class="bg-surface-container-lowest rounded-xl p-8 shadow-sm hover:shadow-md transition-all duration-300">
@@ -331,18 +321,10 @@
             btn.classList.add('opacity-70');
             
             try {
-                const { data: { user } } = await window.supabaseClient.auth.getUser();
+                const user = firebase.auth().currentUser;
                 if (!user) throw new Error("Not logged in");
 
-                const { error } = await window.supabaseClient
-                    .from('circle_posts')
-                    .insert({
-                        circle_id: circleId,
-                        profile_id: user.id,
-                        content: content
-                    });
-
-                if (error) throw error;
+                await window.db.createCirclePost(circleId, user.uid, content);
 
                 closePostModal();
                 loadFeed(circleId);
