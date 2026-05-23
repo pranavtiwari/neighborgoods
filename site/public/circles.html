@@ -131,12 +131,22 @@
         if (!session) return;
 
         try {
-<script src="config.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-<script src="firebase-client.js"></script>
+            // Load My Joined Circles
+            const memberships = await window.db.getMyMemberships(session.user.uid);
+            allMyCircles = [];
+            for (const m of memberships) {
+                const circle = await window.db.getCircle(m.circle_id);
+                if (circle) {
+                    allMyCircles.push({ circles: circle });
+                }
+            }
 
+            // Load Suggestion Circles
+            const circles = await window.db.getCircles();
+            const myCircleIds = new Set(allMyCircles.map(m => m.circles.id));
+            allSuggestions = circles.filter(c => !myCircleIds.has(c.id));
+
+            renderCircles();
         } catch (err) {
             console.error("Error loading circles:", err);
         }
@@ -158,20 +168,14 @@
                 const circle = m.circles;
                 return `
                 <div onclick="window.location.href='circle-detail.html?id=${circle.id}'" class="group relative bg-surface-container-lowest cursor-pointer rounded-xl p-6 transition-all duration-300 hover:shadow-[0_20px_50px_rgba(51,51,51,0.08)] flex flex-col md:flex-row gap-6 items-start">
-                    <div class="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
-                        <img class="w-full h-full object-cover" src="${circle.image_url || 'https://placehold.co/200x200?text=Circle'}" />
+                    <div class="w-full md:w-48 aspect-video rounded-lg overflow-hidden bg-surface-container">
+                        <img alt="${circle.name}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="${circle.image_url || 'https://placehold.co/400x250?text=Circle'}"/>
                     </div>
-                    <div class="flex-grow">
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <h3 class="text-xl font-semibold text-on-surface mb-1">${circle.name}</h3>
-                                <p class="text-stone-500 text-sm font-medium">Active Community</p>
-                            </div>
-                        </div>
-                        <div class="mt-4 p-4 bg-surface-container rounded-lg border-l-4 border-primary">
-                            <p class="text-stone-700 text-sm leading-relaxed">
-                                ${circle.description || 'Welcome to our neighborhood circle!'}
-                            </p>
+                    <div class="flex-1">
+                        <h3 class="text-lg font-bold text-on-surface mb-2 group-hover:text-primary transition-colors">${circle.name}</h3>
+                        <p class="text-on-surface-variant text-sm line-clamp-2 mb-4">${circle.description || 'No description provided.'}</p>
+                        <div class="flex items-center gap-4 text-xs text-outline">
+                            <span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">groups</span> Members</span>
                         </div>
                     </div>
                 </div>
@@ -179,23 +183,25 @@
             }).join('');
         }
 
-        // Render Suggested Circles
-        const suggestedCirclesList = document.getElementById('suggested-circles-list');
+        // Render Suggestions
+        const suggestionsList = document.getElementById('suggestions-list');
         const filteredSuggestions = allSuggestions.filter(c => 
             c.name.toLowerCase().includes(query) || (c.description && c.description.toLowerCase().includes(query))
         );
 
         if (filteredSuggestions.length === 0) {
-            suggestedCirclesList.innerHTML = `<div class="text-center py-12 text-stone-400 w-full">${query ? 'No suggestions match your search.' : 'No new circles found nearby.'}</div>`;
+            suggestionsList.innerHTML = `<div class="text-center py-12 text-stone-400">${query ? 'No matching circles found.' : 'No new circles available.'}</div>`;
         } else {
-            suggestedCirclesList.innerHTML = filteredSuggestions.map(circle => `
-            <div class="snap-start min-w-[280px] bg-surface-container-low rounded-2xl p-6 flex flex-col items-center text-center border border-transparent hover:border-outline-variant transition-colors">
-                <div class="w-16 h-16 bg-secondary-fixed rounded-full overflow-hidden mb-4">
-                    <img src="${circle.image_url || 'https://placehold.co/200x200'}" class="w-full h-full object-cover" />
+            suggestionsList.innerHTML = filteredSuggestions.map(circle => `
+            <div class="bg-surface-container-low rounded-xl p-6 flex flex-col justify-between h-full border border-outline-variant/10">
+                <div class="mb-6">
+                    <div class="aspect-video w-full rounded-lg overflow-hidden bg-surface-container mb-4">
+                        <img alt="${circle.name}" class="w-full h-full object-cover" src="${circle.image_url || 'https://placehold.co/400x250?text=Circle'}"/>
+                    </div>
+                    <h3 class="text-lg font-bold text-on-surface mb-1">${circle.name}</h3>
+                    <p class="text-stone-500 text-sm mb-6">Nearby Circle</p>
+                    <button onclick="joinCircle('${circle.id}')" class="w-full py-3 bg-primary text-on-primary rounded-xl font-semibold text-sm active:scale-95 duration-200">Join Circle</button>
                 </div>
-                <h3 class="text-lg font-bold text-on-surface mb-1">${circle.name}</h3>
-                <p class="text-stone-500 text-sm mb-6">Nearby Circle</p>
-                <button onclick="joinCircle('${circle.id}')" class="w-full py-3 bg-primary text-on-primary rounded-xl font-semibold text-sm active:scale-95 duration-200">Join Circle</button>
             </div>
             `).join('');
         }
@@ -215,11 +221,7 @@
         }
     }
 
-<script src="config.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-<script src="firebase-client.js"></script>
+    async function updateHeaderAvatar(user) {
         if (user) {
             const profile = await window.db.getProfile(user.uid);
             const metaAvatar = user.photoURL;
