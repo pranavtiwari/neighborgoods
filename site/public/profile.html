@@ -122,7 +122,7 @@
 </section>
 <!-- Actions -->
 <section class="flex flex-col gap-3">
-<button onclick="window.location.href='add-item.html'" class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
+<button onclick="window.location.href='add-item'" class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
 <span class="material-symbols-outlined" data-icon="add">add</span>
                 Add New Item
             </button>
@@ -185,7 +185,7 @@
                     <h4 class="font-bold text-on-surface">${item.name}</h4>
                     <p class="text-on-surface-variant font-medium text-sm mt-1">Ready to share</p>
                 </div>
-                <a href="add-item.html?id=${item.id}" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold active:scale-[0.98]">
+                <a href="add-item?id=${item.id}" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold active:scale-[0.98]">
                     <span class="material-symbols-outlined text-[16px] font-bold" data-icon="edit">edit</span>
                     <span>Edit</span>
                 </a>
