@@ -147,9 +147,24 @@
                 if (itemData) {
                     document.getElementById('context-card').classList.remove('hidden');
                     document.getElementById('context-item-name').textContent = itemData.name;
-                    document.getElementById('context-item-category').textContent = itemData.category;
+                    
+                    const isLending = itemData.owner_id === currentUser.uid;
+                    const contextCategoryEl = document.getElementById('context-item-category');
+                    if (isLending) {
+                        contextCategoryEl.textContent = 'Lending';
+                        contextCategoryEl.className = 'text-[10px] uppercase font-black text-primary tracking-widest';
+                    } else {
+                        contextCategoryEl.textContent = 'Borrowing';
+                        contextCategoryEl.className = 'text-[10px] uppercase font-black text-secondary tracking-widest';
+                    }
+
                     if (itemData.image_url) {
                         document.getElementById('context-item-img').src = itemData.image_url;
+                    }
+                    
+                    const viewItemBtn = document.querySelector('#context-card button');
+                    if (viewItemBtn) {
+                        viewItemBtn.onclick = () => window.location.href = `item-details.html?id=${contextItemId}`;
                     }
                 }
             }

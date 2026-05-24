@@ -127,9 +127,9 @@
 <section class="px-6">
 <h2 class="text-2xl font-bold tracking-tight text-on-surface mb-8">Recently Added</h2>
 <!-- Asymmetric Staggered Grid -->
-    <div id="items-grid" class="grid grid-cols-2 md:grid-cols-3 gap-6">
+    <div id="items-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         <!-- Loading State -->
-        <div id="items-loading" class="col-span-2 md:col-span-3 flex flex-col items-center justify-center py-12">
+        <div id="items-loading" class="col-span-1 sm:col-span-2 md:col-span-3 flex flex-col items-center justify-center py-12">
             <span class="material-symbols-outlined animate-spin text-primary text-4xl mb-4" data-icon="progress_activity">progress_activity</span>
             <p class="text-on-surface-variant font-medium">Discovering neighbors...</p>
         </div>
@@ -212,8 +212,8 @@
                 }
                 
                 // Regular items (garden, kitchen, etc.)
-                // Make the first item span 2 cols on mobile for visual interest
-                const isFeatured = index === 0 ? "col-span-2 md:col-span-1" : "";
+                // Make the first item span 2 cols on tablet for visual interest
+                const isFeatured = index === 0 ? "col-span-1 sm:col-span-2 md:col-span-1" : "";
                 const imgAspect = index === 0 ? "aspect-square" : "aspect-[3/4]";
                 
                 return `
