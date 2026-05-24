@@ -97,26 +97,28 @@
         </div>
     </main>
 
-    <!-- Bottom Nav -->
-    <nav class="bg-surface border-t border-outline-variant/20 pb-safe shrink-0">
-        <div class="flex justify-around items-center h-16">
-            <a href="explore.html" class="flex flex-col items-center justify-center w-full h-full text-on-surface-variant hover:bg-surface-container-low transition-colors">
-                <span class="material-symbols-outlined mb-1 text-xl">explore</span>
-                <span class="text-[10px] font-medium tracking-wide">Explore</span>
-            </a>
-            <a href="circles.html" class="flex flex-col items-center justify-center w-full h-full text-on-surface-variant hover:bg-surface-container-low transition-colors">
-                <span class="material-symbols-outlined mb-1 text-xl">group</span>
-                <span class="text-[10px] font-medium tracking-wide">Circles</span>
-            </a>
-            <a href="messages.html" class="flex flex-col items-center justify-center w-full h-full text-primary hover:bg-surface-container-low transition-colors">
-                <span class="material-symbols-outlined mb-1 text-xl drop-shadow-sm font-bold" data-icon="mail">mail</span>
-                <span class="text-[10px] font-bold tracking-wide">Inbox</span>
-            </a>
-            <a href="profile.html" class="flex flex-col items-center justify-center w-full h-full text-on-surface-variant hover:bg-surface-container-low transition-colors">
-                <span class="material-symbols-outlined mb-1 text-xl" data-icon="person">person</span>
-                <span class="text-[10px] font-medium tracking-wide">Profile</span>
-            </a>
-        </div>
+    <!-- BottomNavBar -->
+    <nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 pb-6 pt-3 bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl z-50 rounded-t-3xl shadow-[0_-8px_30px_rgba(51,51,51,0.04)] md:hidden">
+        <a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-primary transition-all active:scale-90 duration-200" href="index.html">
+            <span class="material-symbols-outlined mb-1">home</span>
+            <span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Home</span>
+        </a>
+        <a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-primary transition-all active:scale-90 duration-200" href="explore.html">
+            <span class="material-symbols-outlined mb-1">explore</span>
+            <span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Explore</span>
+        </a>
+        <a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-primary transition-all active:scale-90 duration-200" href="circles.html">
+            <span class="material-symbols-outlined mb-1">groups</span>
+            <span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Circles</span>
+        </a>
+        <a class="flex flex-col items-center justify-center bg-green-100/50 text-primary rounded-2xl px-5 py-2 transition-all active:scale-90 duration-200" href="#">
+            <span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+            <span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Inbox</span>
+        </a>
+        <a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-primary transition-all active:scale-90 duration-200" href="activity.html">
+            <span class="material-symbols-outlined mb-1">notifications</span>
+            <span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Activity</span>
+        </a>
     </nav>
 
     <script>
