@@ -135,27 +135,27 @@
 </section>
 </main>
 <!-- BottomNavBar -->
-<nav class="fixed bottom-0 left-0 w-full bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl flex justify-around items-center px-4 pt-3 pb-8 z-50 shadow-[0_-8px_30px_rgba(51,51,51,0.05)]">
-<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 hover:text-primary dark:hover:text-green-300 active:scale-90 transition-all duration-300 ease-out" href="index.html">
-<span class="material-symbols-outlined" data-icon="home">home</span>
-<span class="font-lexend text-[11px] font-medium tracking-wide uppercase mt-1">Home</span>
-</a>
-<a class="flex flex-col items-center justify-center text-primary-fixed-dim dark:text-green-400 bg-green-50/50 dark:bg-green-900/20 rounded-xl px-3 py-1 active:scale-90 transition-all duration-300 ease-out" href="explore.html">
-<span class="material-symbols-outlined" data-icon="explore" style="font-variation-settings: 'FILL' 1;">explore</span>
-<span class="font-lexend text-[11px] font-medium tracking-wide uppercase mt-1">Explore</span>
-</a>
-<a class="flex flex-col items-center justify-center text-stone-500 px-5 py-2 hover:text-primary transition-all active:scale-90 duration-200" href="circles.html">
-<span class="material-symbols-outlined mb-1">groups</span>
-<span class="font-lexend text-[11px] font-medium uppercase tracking-wider">Circles</span>
-</a>
-<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 hover:text-primary dark:hover:text-green-300 active:scale-90 transition-all duration-300 ease-out" href="messages.html">
-<span class="material-symbols-outlined" data-icon="chat_bubble_outline">chat_bubble_outline</span>
-<span class="font-lexend text-[11px] font-medium tracking-wide uppercase mt-1">Inbox</span>
-</a>
-<a class="flex flex-col items-center justify-center text-stone-400 dark:text-stone-500 hover:text-primary dark:hover:text-green-300 active:scale-90 transition-all duration-300 ease-out" href="activity.html">
-<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
-<span class="font-lexend text-[11px] font-medium tracking-wide uppercase mt-1">Activity</span>
-</a>
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-2 pb-6 pt-3 bg-[#fbf9f6]/90 dark:bg-stone-900/90 backdrop-blur-xl z-50 rounded-t-3xl shadow-[0_-8px_30px_rgba(51,51,51,0.06)] md:hidden border-t border-outline-variant/10">
+    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="index.html">
+        <span class="material-symbols-outlined mb-0.5">home</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider">Home</span>
+    </a>
+    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-primary dark:text-green-400 bg-primary/10 dark:bg-green-900/30" href="explore.html">
+        <span class="material-symbols-outlined mb-0.5" style="font-variation-settings: 'FILL' 1;">explore</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider">Explore</span>
+    </a>
+    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="circles.html">
+        <span class="material-symbols-outlined mb-0.5">groups</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider">Circles</span>
+    </a>
+    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="messages.html">
+        <span class="material-symbols-outlined mb-0.5">chat_bubble</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider">Inbox</span>
+    </a>
+    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="activity.html">
+        <span class="material-symbols-outlined mb-0.5">notifications</span>
+        <span class="text-[10px] font-bold uppercase tracking-wider">Activity</span>
+    </a>
 </nav>
 <!-- FAB (Suppressed on Explore Details, but relevant for Search/Create on Discovery) -->
 <button onclick="window.location.href='add-item.html'" class="fixed bottom-24 right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-[0_12px_40px_rgba(51,51,51,0.2)] flex items-center justify-center active:scale-95 transition-transform z-40">
