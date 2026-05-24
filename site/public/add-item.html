@@ -81,6 +81,25 @@
                     <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-stone-500">expand_more</span>
                 </div>
             </div>
+            
+            <!-- Listing Type Selector -->
+            <div>
+                <label class="block text-sm font-bold mb-2">Listing Type</label>
+                <div class="grid grid-cols-2 gap-4">
+                    <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 cursor-pointer transition-all active:scale-[0.98]" id="type-free-label">
+                        <input type="radio" name="listing-type" value="free" checked class="hidden">
+                        <span class="material-symbols-outlined text-primary text-2xl mb-1" style="font-variation-settings: 'FILL' 1;">volunteer_activism</span>
+                        <span class="text-sm font-bold text-on-surface">Free to Borrow</span>
+                        <span class="text-[10px] text-stone-500 text-center mt-1">Shared with neighbors at no charge</span>
+                    </label>
+                    <label class="flex flex-col items-center justify-center p-4 rounded-xl border border-outline-variant/30 hover:bg-stone-50 cursor-pointer transition-all active:scale-[0.98]" id="type-rental-label">
+                        <input type="radio" name="listing-type" value="rental" class="hidden">
+                        <span class="material-symbols-outlined text-stone-500 text-2xl mb-1">payments</span>
+                        <span class="text-sm font-bold text-on-surface">Rental</span>
+                        <span class="text-[10px] text-stone-500 text-center mt-1">Price negotiated over messages</span>
+                    </label>
+                </div>
+            </div>
 
             <!-- Description -->
             <div>
@@ -173,6 +192,46 @@
             }
         });
 
+        // Listing Type Interactive Highlighting
+        const typeFreeLabel = document.getElementById('type-free-label');
+        const typeRentalLabel = document.getElementById('type-rental-label');
+        const typeFreeRadio = typeFreeLabel.querySelector('input');
+        const typeRentalRadio = typeRentalLabel.querySelector('input');
+
+        function updateTypeSelection() {
+            if (typeFreeRadio.checked) {
+                typeFreeLabel.className = "flex flex-col items-center justify-center p-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 cursor-pointer transition-all active:scale-[0.98]";
+                typeFreeLabel.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 1";
+                typeFreeLabel.querySelector('.material-symbols-outlined').classList.add('text-primary');
+                typeFreeLabel.querySelector('.material-symbols-outlined').classList.remove('text-stone-500');
+
+                typeRentalLabel.className = "flex flex-col items-center justify-center p-4 rounded-xl border border-outline-variant/30 hover:bg-stone-50 cursor-pointer transition-all active:scale-[0.98]";
+                typeRentalLabel.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 0";
+                typeRentalLabel.querySelector('.material-symbols-outlined').classList.remove('text-primary');
+                typeRentalLabel.querySelector('.material-symbols-outlined').classList.add('text-stone-500');
+            } else {
+                typeRentalLabel.className = "flex flex-col items-center justify-center p-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 cursor-pointer transition-all active:scale-[0.98]";
+                typeRentalLabel.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 1";
+                typeRentalLabel.querySelector('.material-symbols-outlined').classList.add('text-primary');
+                typeRentalLabel.querySelector('.material-symbols-outlined').classList.remove('text-stone-500');
+
+                typeFreeLabel.className = "flex flex-col items-center justify-center p-4 rounded-xl border border-outline-variant/30 hover:bg-stone-50 cursor-pointer transition-all active:scale-[0.98]";
+                typeFreeLabel.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 0";
+                typeFreeLabel.querySelector('.material-symbols-outlined').classList.remove('text-primary');
+                typeFreeLabel.querySelector('.material-symbols-outlined').classList.add('text-stone-500');
+            }
+        }
+
+        typeFreeLabel.addEventListener('click', () => {
+            typeFreeRadio.checked = true;
+            updateTypeSelection();
+        });
+
+        typeRentalLabel.addEventListener('click', () => {
+            typeRentalRadio.checked = true;
+            updateTypeSelection();
+        });
+
         const showError = (msg) => {
             errorDiv.textContent = msg;
             errorDiv.classList.remove('hidden');
@@ -210,12 +269,14 @@
                 }
 
                 // 3. Insert into Database
+                const listingType = document.querySelector('input[name="listing-type"]:checked').value;
                 await window.db.addItem({
                     owner_id: session.user.uid,
                     name: name,
                     category: category,
                     description: description,
                     image_url: imageUrl,
+                    listing_type: listingType,
                     status: 'available'
                 });
 

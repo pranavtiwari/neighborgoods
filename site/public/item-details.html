@@ -95,6 +95,21 @@
 </div>
 <span id="item-condition" class="text-sm font-bold">...</span>
 </div>
+<div class="flex items-center justify-between p-4 bg-surface-container rounded-lg">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container">payments</span>
+<span class="text-sm font-medium">Listing Type</span>
+</div>
+<span id="item-type" class="text-sm font-bold">...</span>
+</div>
+</div>
+
+<!-- Rental Notice Banner -->
+<div id="rental-notice" class="hidden bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30 text-amber-800 dark:text-amber-300 p-4 rounded-xl flex items-start gap-3 mt-4">
+    <span class="material-symbols-outlined shrink-0 text-xl">info</span>
+    <p class="text-xs font-semibold leading-normal">
+        <strong>Rental Listing:</strong> The borrowing price/terms for this item will be negotiated with the owner over messages.
+    </p>
 </div>
 </div>
 </div>
@@ -146,6 +161,18 @@
             // Update condition
             const conditionEl = document.getElementById('item-condition');
             if (conditionEl) conditionEl.textContent = item.condition || 'Good';
+
+            // Update listing type and notice
+            const isRental = item.listing_type === 'rental';
+            const itemTypeEl = document.getElementById('item-type');
+            const rentalNoticeEl = document.getElementById('rental-notice');
+            
+            if (itemTypeEl) {
+                itemTypeEl.textContent = isRental ? 'Rental' : 'Free to Borrow';
+            }
+            if (isRental && rentalNoticeEl) {
+                rentalNoticeEl.classList.remove('hidden');
+            }
 
             // Update Reserve Title
             const reserveTitleEl = document.getElementById('reserve-title');

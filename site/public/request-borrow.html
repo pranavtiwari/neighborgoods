@@ -110,11 +110,11 @@
 <button id="send-request-btn" class="w-full bg-forest-gradient text-on-primary py-5 rounded-lg font-bold text-lg shadow-[0_12px_40px_rgba(13,99,27,0.15)] active:scale-95 duration-200 transition-all">
                 Send Request
             </button>
-<div class="bg-secondary-fixed/30 p-4 rounded-xl flex items-center gap-4">
-<div class="bg-secondary-container text-on-secondary rounded-full p-2 flex items-center justify-center">
-<span class="material-symbols-outlined text-[20px]" data-icon="volunteer_activism" style="font-variation-settings: 'FILL' 1;">volunteer_activism</span>
+<div id="price-notice-card" class="bg-secondary-fixed/30 p-4 rounded-xl flex items-center gap-4">
+<div id="price-notice-icon-container" class="bg-secondary-container text-on-secondary rounded-full p-2 flex items-center justify-center">
+<span id="price-notice-icon" class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">volunteer_activism</span>
 </div>
-<p class="text-xs font-medium text-on-secondary-fixed-variant leading-normal">
+<p id="price-notice-text" class="text-xs font-medium text-on-secondary-fixed-variant leading-normal">
                     You won't be charged. <span class="text-secondary font-bold">This is a neighborly share!</span>
 </p>
 </div>
@@ -247,7 +247,20 @@
             
             const firstName = ownerName.split(' ')[0];
             document.getElementById('message-label').textContent = `Message ${firstName} (Optional)`;
-            document.getElementById('message-text').placeholder = `Hi ${firstName}, I'd love to use the ${item.name} this week...`;
+            
+            const isRental = item.listing_type === 'rental';
+            const priceNoticeText = document.getElementById('price-notice-text');
+            const priceNoticeIcon = document.getElementById('price-notice-icon');
+            
+            if (isRental) {
+                priceNoticeText.innerHTML = `Rental Listing: <span class="text-secondary font-bold">Price and terms will be negotiated over chat.</span>`;
+                priceNoticeIcon.textContent = 'payments';
+                document.getElementById('message-text').placeholder = `Hi ${firstName}, I'd like to rent your ${item.name}. What are your rates and availability?`;
+            } else {
+                priceNoticeText.innerHTML = `You won't be charged. <span class="text-secondary font-bold">This is a free neighborhood share!</span>`;
+                priceNoticeIcon.textContent = 'volunteer_activism';
+                document.getElementById('message-text').placeholder = `Hi ${firstName}, I'd love to use the ${item.name} this week...`;
+            }
         } catch (err) {
             console.error("Error loading item:", err);
         }
