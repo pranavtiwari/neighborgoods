@@ -12,6 +12,9 @@
     <script src="firebase-client.js"></script>
     <script>requireAuth();</script>
     
+    <!-- Fuzzy Search -->
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
+    
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <style>
@@ -188,12 +191,21 @@
                 </div>
 
                 <!-- Inventory Preview -->
-                <div class="bg-surface-container-low rounded-xl p-8">
-                    <div class="flex items-center justify-between mb-8">
+                <div class="bg-surface-container-low rounded-xl p-8 flex flex-col max-h-[600px]">
+                    <div class="flex items-center justify-between mb-4 shrink-0">
                         <h3 class="label-md text-on-surface">Circle Inventory</h3>
-                        <a href="#" class="text-primary text-xs font-bold hover:underline">VIEW ALL</a>
+                        <span id="inventory-count" class="text-xs font-bold text-stone-400 bg-surface px-2 py-0.5 rounded-md"></span>
                     </div>
-                    <div id="circle-inventory" class="space-y-6"><!-- Inventory --></div>
+                    
+                    <div class="relative mb-4 shrink-0">
+                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-[20px]">search</span>
+                        <input type="text" id="inventory-search" placeholder="Search items..." class="w-full pl-10 pr-12 py-3 rounded-lg border-none bg-surface focus:ring-2 focus:ring-primary text-sm shadow-sm transition-shadow">
+                        <button id="location-sort-btn" onclick="toggleLocationSort()" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-md flex items-center justify-center text-stone-400 hover:text-primary hover:bg-primary/10 transition-colors" title="Sort by distance">
+                            <span class="material-symbols-outlined text-[18px]">location_on</span>
+                        </button>
+                    </div>
+
+                    <div id="circle-inventory" class="space-y-4 overflow-y-auto custom-scrollbar pr-2 flex-1 pb-4"><!-- Inventory --></div>
                 </div>
 
                 <!-- About -->
@@ -311,6 +323,136 @@
         let currentUserIsMember = false;
         let editSelectedFile = null;
 
+        // Inventory & Search State
+        let allInventoryItems = [];
+        let fuseIndex = null;
+        let userLocation = null; // { lat, lng }
+        let isLocationSortActive = false;
+
+        // Haversine distance formula (returns distance in miles)
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 3958.8; // Radius of earth in miles
+            const dLat = (lat2 - lat1) * (Math.PI / 180);
+            const dLon = (lon2 - lon1) * (Math.PI / 180);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        // Render Inventory items
+        function renderInventory(items) {
+            const inventoryContainer = document.getElementById('circle-inventory');
+            document.getElementById('inventory-count').textContent = `${items.length} items`;
+
+            if (items.length === 0) {
+                inventoryContainer.innerHTML = `<p class="text-sm text-on-surface-variant italic text-center py-4">No matching items found.</p>`;
+                return;
+            }
+
+            inventoryContainer.innerHTML = items.map(item => {
+                let distanceHtml = '';
+                if (userLocation && item.latitude && item.longitude && isLocationSortActive) {
+                    const dist = getDistance(userLocation.lat, userLocation.lng, item.latitude, item.longitude);
+                    distanceHtml = `<p class="text-[10px] text-stone-500 font-medium flex items-center gap-0.5 mt-0.5"><span class="material-symbols-outlined text-[12px]">near_me</span> ${dist.toFixed(1)} mi</p>`;
+                }
+                return `
+                <div onclick="window.location.href='item-details.html?id=${item.id}'" class="group flex items-center gap-4 cursor-pointer bg-surface p-2 rounded-xl border border-transparent hover:border-outline-variant/30 transition-all shadow-sm">
+                    <div class="w-14 h-14 rounded-lg overflow-hidden bg-surface-container flex-shrink-0">
+                        <img src="${item.image_url || 'https://placehold.co/100x100?text=Item'}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-bold text-sm truncate">${item.name}</h4>
+                        <p class="text-xs text-primary font-bold uppercase tracking-tighter mt-1">Available</p>
+                        ${distanceHtml}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function handleInventorySearch() {
+            const query = document.getElementById('inventory-search').value.trim();
+            let results = [];
+
+            // 1. Fuzzy Search
+            if (query && fuseIndex) {
+                const searchResults = fuseIndex.search(query);
+                // Extract items and keep the Fuse score for ranking
+                results = searchResults.map(r => ({ ...r.item, _score: r.score }));
+            } else {
+                results = [...allInventoryItems];
+                results.forEach(r => r._score = 0); // Base score
+            }
+
+            // 2. Location Sorting
+            if (isLocationSortActive && userLocation) {
+                results.forEach(item => {
+                    if (item.latitude && item.longitude) {
+                        const dist = getDistance(userLocation.lat, userLocation.lng, item.latitude, item.longitude);
+                        // Normalize distance roughly (e.g. 10 miles = 0.1 penalty)
+                        const distancePenalty = Math.min(dist / 100, 0.5); 
+                        item._sortScore = item._score + distancePenalty;
+                    } else {
+                        item._sortScore = item._score + 0.6; // Penalty for no location
+                    }
+                });
+                
+                results.sort((a, b) => a._sortScore - b._sortScore);
+            } else if (query) {
+                // Just sort by Fuse score
+                results.sort((a, b) => a._score - b._score);
+            } else {
+                // Default: newest first (assuming items are already fetched in decent order)
+                // We'll leave them in default array order
+            }
+
+            renderInventory(results);
+        }
+
+        function toggleLocationSort() {
+            const btn = document.getElementById('location-sort-btn');
+            
+            if (isLocationSortActive) {
+                // Turn off
+                isLocationSortActive = false;
+                btn.classList.remove('text-primary', 'bg-primary/10');
+                btn.classList.add('text-stone-400');
+                handleInventorySearch();
+                return;
+            }
+
+            // Turn on - request location if we don't have it
+            if (!userLocation) {
+                btn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>`;
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        isLocationSortActive = true;
+                        btn.innerHTML = `<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">location_on</span>`;
+                        btn.classList.remove('text-stone-400');
+                        btn.classList.add('text-primary', 'bg-primary/10');
+                        handleInventorySearch();
+                    },
+                    (error) => {
+                        console.error("Error getting location", error);
+                        alert("Could not get your location. Please ensure location services are enabled.");
+                        btn.innerHTML = `<span class="material-symbols-outlined text-[18px]">location_on</span>`;
+                    }
+                );
+            } else {
+                isLocationSortActive = true;
+                btn.classList.remove('text-stone-400');
+                btn.classList.add('text-primary', 'bg-primary/10');
+                btn.innerHTML = `<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">location_on</span>`;
+                handleInventorySearch();
+            }
+        }
+
+
         async function loadCircleDetails() {
             const urlParams = new URLSearchParams(window.location.search);
             currentCircleId = urlParams.get('id');
@@ -365,22 +507,23 @@
                 await renderRoleUI();
 
                 // 4. Fetch Circle Inventory (sidebar)
-                const allItems = await window.db.getCircleItems(currentCircleId);
-                const inventoryContainer = document.getElementById('circle-inventory');
-                if (!allItems || allItems.length === 0) {
-                    inventoryContainer.innerHTML = `<p class="text-sm text-on-surface-variant italic">No items shared yet.</p>`;
-                } else {
-                    inventoryContainer.innerHTML = allItems.slice(0, 3).map(item => `
-                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="group flex items-center gap-4 cursor-pointer">
-                        <div class="w-16 h-16 rounded-lg overflow-hidden bg-surface-container flex-shrink-0">
-                            <img src="${item.image_url || 'https://placehold.co/100x100?text=Item'}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <h4 class="font-bold text-sm truncate">${item.name}</h4>
-                            <p class="text-xs text-primary font-bold uppercase tracking-tighter mt-1">Available</p>
-                        </div>
-                    </div>`).join('');
+                allInventoryItems = await window.db.getCircleItems(currentCircleId);
+                
+                // Initialize Fuse
+                if (window.Fuse) {
+                    fuseIndex = new Fuse(allInventoryItems, {
+                        keys: ['name', 'description'],
+                        threshold: 0.4,
+                        includeScore: true
+                    });
                 }
+                
+                // Bind search listener
+                document.getElementById('inventory-search').addEventListener('input', () => {
+                    handleInventorySearch();
+                });
+
+                renderInventory(allInventoryItems);
 
                 // 5. Update header avatar
                 if (user) {
