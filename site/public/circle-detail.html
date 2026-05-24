@@ -234,14 +234,15 @@
 
     <!-- Edit Circle Modal (Admin only) -->
     <div id="edit-circle-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-md">
-        <div class="modal-content bg-surface w-full max-w-lg rounded-xl shadow-2xl">
-            <div class="p-6 border-b border-surface-container flex items-center justify-between">
+        <div class="modal-content bg-surface w-full max-w-lg rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-6 border-b border-surface-container flex items-center justify-between shrink-0">
                 <h3 class="text-xl font-bold">Edit Circle</h3>
                 <button onclick="closeEditModal()" class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors">
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
-            <form id="edit-circle-form" class="p-6 space-y-5">
+            <form id="edit-circle-form" class="flex flex-col overflow-hidden">
+                <div class="p-6 space-y-5 overflow-y-auto">
                 <!-- Image preview -->
                 <div>
                     <label class="block text-sm font-bold mb-2">Circle Banner</label>
@@ -277,10 +278,13 @@
                 </div>
                 <!-- Error -->
                 <div id="edit-error" class="hidden bg-error/10 text-error p-4 rounded-xl text-sm font-medium"></div>
+                </div>
                 <!-- Actions -->
-                <div class="flex gap-3 pt-2">
-                    <button type="button" onclick="closeEditModal()" class="flex-1 py-3 rounded-xl font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-container transition-colors">Cancel</button>
-                    <button type="submit" id="edit-submit-btn" class="flex-1 py-3 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-all">Save Changes</button>
+                <div class="p-6 pt-0 shrink-0">
+                    <div class="flex gap-3">
+                        <button type="button" onclick="closeEditModal()" class="flex-1 py-3 rounded-xl font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-container transition-colors">Cancel</button>
+                        <button type="submit" id="edit-submit-btn" class="flex-1 py-3 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-all">Save Changes</button>
+                    </div>
                 </div>
             </form>
         </div>
