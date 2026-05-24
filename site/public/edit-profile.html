@@ -12,7 +12,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 
-
 <style>
     .material-symbols-outlined {
         font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
@@ -21,6 +20,19 @@
         font-family: 'Lexend', sans-serif;
         background-color: #fbf9f6;
         min-height: max(884px, 100dvh);
+    }
+    .nickname-badge {
+        display: inline-flex;
+        align-items: center;
+        background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
+        border: 1px solid #a5d6a7;
+        border-radius: 9999px;
+        padding: 2px 10px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #2e7d32;
+        letter-spacing: 0.05em;
+        text-transform: lowercase;
     }
 </style>
   <link rel="stylesheet" href="/style.css">
@@ -40,7 +52,7 @@
     </div>
 </header>
 
-<main class="py-8 px-6 max-w-2xl mx-auto space-y-8">
+<main class="py-8 px-6 max-w-2xl mx-auto space-y-8 pb-32">
     <!-- Avatar Edit -->
     <section class="flex flex-col items-center justify-center space-y-4">
         <label for="avatar-upload" class="relative group cursor-pointer block">
@@ -57,6 +69,7 @@
     <section class="bg-surface-container-low p-6 rounded-2xl shadow-sm border border-outline-variant/20">
         <form class="space-y-6" id="editProfileForm">
             
+            <!-- Full Name -->
             <div class="space-y-2">
                 <label for="fullName" class="block text-sm font-semibold text-on-surface-variant">Full Name</label>
                 <div class="relative">
@@ -67,6 +80,28 @@
                 </div>
             </div>
 
+            <!-- Nickname -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <label for="nickname" class="block text-sm font-semibold text-on-surface-variant">Nickname / Handle</label>
+                    <button type="button" id="generate-initials-btn" class="text-xs text-primary font-bold hover:underline flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">auto_awesome</span>
+                        Generate from name
+                    </button>
+                </div>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span class="material-symbols-outlined text-outline">tag</span>
+                    </div>
+                    <input type="text" id="nickname" maxlength="20" class="block w-full pl-10 pr-16 py-3 border border-outline-variant rounded-xl bg-surface-container-lowest focus:ring-primary focus:border-primary text-on-surface lowercase" placeholder="e.g. bdt" autocomplete="off" autocapitalize="off" spellcheck="false">
+                    <div class="absolute inset-y-0 right-3 flex items-center">
+                        <span id="nickname-preview" class="nickname-badge hidden"></span>
+                    </div>
+                </div>
+                <p class="text-xs text-outline font-medium">Shown alongside your name in circles. Lowercase letters only. Max 20 chars.</p>
+            </div>
+
+            <!-- Location -->
             <div class="space-y-2">
                 <label for="location" class="block text-sm font-semibold text-on-surface-variant">Location (Neighborhood)</label>
                 <div class="relative">
@@ -77,6 +112,7 @@
                 </div>
             </div>
 
+            <!-- Bio -->
             <div class="space-y-2">
                 <label for="bio" class="block text-sm font-semibold text-on-surface-variant">Bio</label>
                 <textarea id="bio" rows="4" class="block w-full p-3 border border-outline-variant rounded-xl bg-surface-container-lowest focus:ring-primary focus:border-primary text-on-surface" placeholder="Tell your neighbors a bit about yourself!"></textarea>
@@ -99,7 +135,43 @@
 <script>
     const avatarUpload = document.getElementById('avatar-upload');
     const avatarPreview = document.getElementById('avatar-preview');
+    const nicknameInput = document.getElementById('nickname');
+    const nicknamePreview = document.getElementById('nickname-preview');
     let selectedFile = null;
+
+    // Generate initials from a full name (e.g. "B D Tiwari" → "bdt")
+    function generateInitials(name) {
+        if (!name || !name.trim()) return '';
+        return name.trim()
+            .split(/\s+/)
+            .map(w => w[0])
+            .join('')
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '');
+    }
+
+    // Live preview of nickname badge
+    nicknameInput.addEventListener('input', () => {
+        const val = nicknameInput.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+        nicknameInput.value = val;
+        if (val) {
+            nicknamePreview.textContent = val;
+            nicknamePreview.classList.remove('hidden');
+        } else {
+            nicknamePreview.classList.add('hidden');
+        }
+    });
+
+    // Generate initials button
+    document.getElementById('generate-initials-btn').addEventListener('click', () => {
+        const name = document.getElementById('fullName').value;
+        const initials = generateInitials(name);
+        if (initials) {
+            nicknameInput.value = initials;
+            nicknamePreview.textContent = initials;
+            nicknamePreview.classList.remove('hidden');
+        }
+    });
 
     // Image Preview
     avatarUpload.addEventListener('change', (e) => {
@@ -122,6 +194,22 @@
             if (data.location) document.getElementById('location').value = data.location;
             if (data.bio) document.getElementById('bio').value = data.bio;
             if (data.avatar_url) avatarPreview.src = data.avatar_url;
+
+            // Populate nickname — auto-generate initials if none set yet
+            const savedNickname = data.nickname || '';
+            if (savedNickname) {
+                nicknameInput.value = savedNickname;
+                nicknamePreview.textContent = savedNickname;
+                nicknamePreview.classList.remove('hidden');
+            } else if (data.full_name) {
+                // Auto-suggest initials (but don't save yet — just pre-fill)
+                const initials = generateInitials(data.full_name);
+                if (initials) {
+                    nicknameInput.value = initials;
+                    nicknamePreview.textContent = initials;
+                    nicknamePreview.classList.remove('hidden');
+                }
+            }
         }
     });
 
@@ -137,21 +225,22 @@
         try {
             const session = await requireAuth();
             
-            const fullName = document.getElementById('fullName').value;
-            const location = document.getElementById('location').value;
-            const bio = document.getElementById('bio').value;
-            let avatarUrl = undefined; // Undefined means we don't update it if unchanged
+            const fullName = document.getElementById('fullName').value.trim();
+            const nickname = document.getElementById('nickname').value.trim().toLowerCase();
+            const location = document.getElementById('location').value.trim();
+            const bio = document.getElementById('bio').value.trim();
+            let avatarUrl = undefined;
 
             if (selectedFile) {
                 const fileExt = selectedFile.name.split('.').pop();
                 const fileName = `${Math.random()}.${fileExt}`;
                 const filePath = `avatars/${session.user.uid}/${fileName}`;
-
                 avatarUrl = await window.db.uploadFile(filePath, selectedFile);
             }
 
             const updates = {
                 full_name: fullName,
+                nickname: nickname || generateInitials(fullName),
                 location: location,
                 bio: bio,
             };

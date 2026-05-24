@@ -362,6 +362,98 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
+        updateCircle: async function(circleId, data) {
+            try {
+                await firebase.firestore().collection('circles').doc(circleId).set({
+                    ...data,
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+            } catch (err) {
+                console.error("Error updating circle:", err);
+                throw err;
+            }
+        },
+
+        requestToJoinCircle: async function(circleId, profileId) {
+            try {
+                const id = `${circleId}_${profileId}`;
+                await firebase.firestore().collection('circle_join_requests').doc(id).set({
+                    circle_id: circleId,
+                    profile_id: profileId,
+                    status: 'pending',
+                    requested_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (err) {
+                console.error("Error requesting to join circle:", err);
+                throw err;
+            }
+        },
+
+        cancelJoinRequest: async function(circleId, profileId) {
+            try {
+                const id = `${circleId}_${profileId}`;
+                await firebase.firestore().collection('circle_join_requests').doc(id).delete();
+            } catch (err) {
+                console.error("Error cancelling join request:", err);
+                throw err;
+            }
+        },
+
+        getMyJoinRequest: async function(circleId, profileId) {
+            try {
+                const id = `${circleId}_${profileId}`;
+                const doc = await firebase.firestore().collection('circle_join_requests').doc(id).get();
+                return doc.exists ? { id: doc.id, ...doc.data() } : null;
+            } catch (err) {
+                console.error("Error getting join request:", err);
+                return null;
+            }
+        },
+
+        getJoinRequests: async function(circleId) {
+            try {
+                const snapshot = await firebase.firestore().collection('circle_join_requests')
+                    .where('circle_id', '==', circleId)
+                    .get();
+                const requests = [];
+                for (const doc of snapshot.docs) {
+                    const data = doc.data();
+                    // Only show pending requests (approved/denied are deleted, but filter for safety)
+                    if (!data.status || data.status === 'pending') {
+                        const profile = await this.getProfile(data.profile_id);
+                        requests.push({ id: doc.id, ...data, profile });
+                    }
+                }
+                return requests;
+            } catch (err) {
+                console.error("Error getting join requests:", err);
+                return [];
+            }
+        },
+
+        approveJoinRequest: async function(circleId, profileId) {
+            try {
+                // Add as member
+                await this.joinCircle(circleId, profileId, 'member');
+                // Delete the request
+                const id = `${circleId}_${profileId}`;
+                await firebase.firestore().collection('circle_join_requests').doc(id).delete();
+            } catch (err) {
+                console.error("Error approving join request:", err);
+                throw err;
+            }
+        },
+
+        denyJoinRequest: async function(circleId, profileId) {
+            try {
+                const id = `${circleId}_${profileId}`;
+                await firebase.firestore().collection('circle_join_requests').doc(id).delete();
+            } catch (err) {
+                console.error("Error denying join request:", err);
+                throw err;
+            }
+        },
+
         // --- Borrow Requests ---
         createBorrowRequest: async function(requestData) {
             try {

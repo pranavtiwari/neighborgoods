@@ -40,9 +40,16 @@
             letter-spacing: 0.05em;
             font-weight: 600;
         }
-        /* Custom scrollbar */
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .custom-scrollbar::-webkit-scrollbar { display: none; }
+        .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        /* Modal animation */
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.95) translateY(8px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .modal-content { animation: modalIn 0.2s ease-out; }
     </style>
   <link rel="stylesheet" href="/style.css">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -58,9 +65,16 @@
                     <span class="label-md">All Circles</span>
                 </a>
             </div>
-            <div class="flex items-center gap-4">
-                <button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors">
-                    <span class="material-symbols-outlined text-on-surface-variant">share</span>
+            <div class="flex items-center gap-3">
+                <!-- Admin: Edit Circle -->
+                <button id="edit-circle-btn" class="hidden items-center gap-2 px-4 py-2 rounded-xl border border-outline-variant text-on-surface-variant font-semibold text-sm hover:bg-surface-container transition-colors active:scale-95">
+                    <span class="material-symbols-outlined text-base">edit</span>
+                    <span class="hidden sm:inline">Edit Circle</span>
+                </button>
+                <!-- Member: Leave Circle -->
+                <button id="leave-circle-btn" class="hidden items-center gap-2 px-4 py-2 rounded-xl border border-error/30 text-error font-semibold text-sm hover:bg-error-container transition-colors active:scale-95">
+                    <span class="material-symbols-outlined text-base">logout</span>
+                    <span class="hidden sm:inline">Leave</span>
                 </button>
                 <div id="header-profile-btn" class="relative">
                     <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
@@ -84,32 +98,50 @@
     <!-- Main Content Layout -->
     <main class="pt-32 px-8 max-w-[1400px] mx-auto">
         
-        <!-- Hero Section: Editorial Style -->
+        <!-- Hero Section -->
         <div class="mb-20">
             <div class="flex flex-col md:flex-row md:items-end justify-between gap-8">
                 <div class="max-w-2xl">
-                    <span class="label-md text-primary mb-4 block">Neighborhood Circle</span>
-                    <h1 id="circle-name" class="text-display-lg font-black text-on-surface mb-6">
-                        Loading...
-                    </h1>
-                    <p id="circle-description" class="text-xl text-on-surface-variant leading-relaxed max-w-xl">
-                        ...
-                    </p>
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="label-md text-primary">Neighborhood Circle</span>
+                        <span id="privacy-badge" class="hidden items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-stone-100 text-stone-600">
+                            <span class="material-symbols-outlined text-xs" style="font-size:14px">lock</span>
+                            Private
+                        </span>
+                    </div>
+                    <h1 id="circle-name" class="text-display-lg font-black text-on-surface mb-6">Loading...</h1>
+                    <p id="circle-description" class="text-xl text-on-surface-variant leading-relaxed max-w-xl">...</p>
                 </div>
                 <div class="flex flex-col items-start md:items-end gap-6">
                     <div class="flex items-center gap-3">
-                        <div id="member-avatars" class="flex -space-x-3">
-                            <!-- Avatars injected here -->
-                        </div>
+                        <div id="member-avatars" class="flex -space-x-3"><!-- Avatars --></div>
                         <span id="member-count-text" class="label-md text-on-surface-variant">Neighbors</span>
                     </div>
-                    <div class="flex gap-4 w-full md:w-auto">
+                    <!-- Member action buttons (shown when user is a member) -->
+                    <div id="member-actions" class="hidden flex gap-4 w-full md:w-auto">
                         <button onclick="openPostModal()" class="flex-1 md:flex-none px-8 py-4 rounded-lg bg-surface-container-lowest text-primary font-bold shadow-sm hover:shadow-md transition-all active:scale-95">
                             Post Update
                         </button>
                         <button id="share-item-btn" class="flex-1 md:flex-none px-8 py-4 rounded-lg bg-forest-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all active:scale-95">
                             Share Item
                         </button>
+                    </div>
+                    <!-- Non-member: public join -->
+                    <button id="join-btn" class="hidden px-8 py-4 rounded-lg bg-forest-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all active:scale-95 w-full md:w-auto" onclick="handleJoin()">
+                        Join Circle
+                    </button>
+                    <!-- Non-member: private request to join -->
+                    <button id="request-join-btn" class="hidden px-8 py-4 rounded-lg bg-primary/10 border-2 border-primary text-primary font-bold hover:bg-primary/20 transition-all active:scale-95 w-full md:w-auto" onclick="handleRequestJoin()">
+                        <span class="material-symbols-outlined text-base align-middle mr-1">person_add</span>
+                        Request to Join
+                    </button>
+                    <!-- Non-member: request pending -->
+                    <div id="request-pending-ui" class="hidden flex-col items-end gap-2 w-full md:w-auto">
+                        <div class="px-8 py-4 rounded-lg bg-stone-100 text-stone-500 font-bold text-center w-full md:w-auto">
+                            <span class="material-symbols-outlined text-base align-middle mr-1" style="font-variation-settings:'FILL' 1">schedule</span>
+                            Request Pending
+                        </div>
+                        <button onclick="handleCancelRequest()" class="text-xs text-error hover:underline font-medium">Cancel request</button>
                     </div>
                 </div>
             </div>
@@ -120,7 +152,18 @@
             
             <!-- Main Feed (65%) -->
             <div class="lg:col-span-8 space-y-12">
-                <div>
+                <!-- Private circle non-member gate -->
+                <div id="private-gate" class="hidden bg-surface-container-low rounded-xl p-12 text-center">
+                    <span class="material-symbols-outlined text-5xl text-on-surface-variant/30 mb-4 block">lock</span>
+                    <h3 class="text-xl font-bold mb-2">Private Circle</h3>
+                    <p class="text-on-surface-variant mb-6">Join this circle to see posts and shared items.</p>
+                    <button id="gate-request-btn" onclick="handleRequestJoin()" class="px-8 py-3 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-transform">Request to Join</button>
+                    <div id="gate-pending" class="hidden mt-4 text-stone-500 text-sm">
+                        Your request is pending admin approval.
+                        <button onclick="handleCancelRequest()" class="text-error underline ml-1">Cancel</button>
+                    </div>
+                </div>
+                <div id="feed-section">
                     <h2 class="text-headline-md font-bold mb-8">Recent Activity</h2>
                     <div id="circle-feed" class="space-y-8">
                         <div class="animate-pulse space-y-4">
@@ -132,20 +175,28 @@
             </div>
 
             <!-- Sidebar (35%) -->
-            <div class="lg:col-span-4 space-y-16">
+            <div class="lg:col-span-4 space-y-10">
                 
+                <!-- Admin: Pending Join Requests -->
+                <div id="join-requests-panel" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-6">
+                    <h3 class="label-md text-amber-700 mb-4 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-base text-amber-600">pending</span>
+                        Pending Requests
+                        <span id="request-count-badge" class="ml-auto bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full"></span>
+                    </h3>
+                    <div id="join-requests-list" class="space-y-3"></div>
+                </div>
+
                 <!-- Inventory Preview -->
                 <div class="bg-surface-container-low rounded-xl p-8">
                     <div class="flex items-center justify-between mb-8">
                         <h3 class="label-md text-on-surface">Circle Inventory</h3>
                         <a href="#" class="text-primary text-xs font-bold hover:underline">VIEW ALL</a>
                     </div>
-                    <div id="circle-inventory" class="space-y-6">
-                        <!-- Inventory items injected here -->
-                    </div>
+                    <div id="circle-inventory" class="space-y-6"><!-- Inventory --></div>
                 </div>
 
-                <!-- Community Rules / Info -->
+                <!-- About -->
                 <div class="p-8 border-t border-outline-variant/20">
                     <h3 class="label-md text-on-surface mb-6">About this Commons</h3>
                     <div class="space-y-4 text-sm text-on-surface-variant leading-relaxed">
@@ -158,9 +209,9 @@
         </div>
     </main>
 
-    <!-- Post Modal (Premium Glass) -->
+    <!-- Post Modal -->
     <div id="post-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-md">
-        <div class="bg-surface w-full max-w-xl rounded-xl shadow-2xl animate-in fade-in zoom-in duration-300">
+        <div class="modal-content bg-surface w-full max-w-xl rounded-xl shadow-2xl">
             <div class="p-8 border-b border-surface-container flex items-center justify-between">
                 <h3 class="text-xl font-bold">New Update</h3>
                 <button onclick="closePostModal()" class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors">
@@ -170,9 +221,7 @@
             <form id="post-form" class="p-8">
                 <textarea id="post-content" required rows="5" placeholder="Share something with your neighbors..." 
                     class="w-full bg-surface-container-low rounded-lg border-none focus:ring-0 py-4 px-4 text-lg resize-none mb-8 placeholder:text-on-surface-variant/40"></textarea>
-                
                 <div id="post-error" class="hidden bg-error/10 text-error p-4 rounded-lg text-sm mb-6 font-medium"></div>
-                
                 <div class="flex justify-end gap-4">
                     <button type="button" onclick="closePostModal()" class="px-6 py-3 rounded-lg font-bold text-on-surface-variant hover:bg-surface-container transition-colors">Cancel</button>
                     <button type="submit" id="submit-post-btn" class="px-10 py-3 rounded-lg bg-forest-gradient text-white font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all">
@@ -183,80 +232,166 @@
         </div>
     </div>
 
+    <!-- Edit Circle Modal (Admin only) -->
+    <div id="edit-circle-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-md">
+        <div class="modal-content bg-surface w-full max-w-lg rounded-xl shadow-2xl">
+            <div class="p-6 border-b border-surface-container flex items-center justify-between">
+                <h3 class="text-xl font-bold">Edit Circle</h3>
+                <button onclick="closeEditModal()" class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <form id="edit-circle-form" class="p-6 space-y-5">
+                <!-- Image preview -->
+                <div>
+                    <label class="block text-sm font-bold mb-2">Circle Banner</label>
+                    <div id="edit-image-preview-container" class="relative w-full aspect-video rounded-xl overflow-hidden bg-stone-100 border-2 border-stone-200 mb-2 group cursor-pointer" onclick="document.getElementById('edit-image-upload').click()">
+                        <img id="edit-image-preview" src="" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center transition-all">
+                            <span class="material-symbols-outlined text-white text-3xl">edit</span>
+                        </div>
+                    </div>
+                    <input type="file" id="edit-image-upload" accept="image/*" class="hidden">
+                    <p class="text-xs text-stone-400">Click banner to change image</p>
+                </div>
+                <!-- Circle Name -->
+                <div>
+                    <label class="block text-sm font-bold mb-2">Circle Name</label>
+                    <input type="text" id="edit-circle-name" required class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-3 px-4 text-base">
+                </div>
+                <!-- Description -->
+                <div>
+                    <label class="block text-sm font-bold mb-2">Description</label>
+                    <textarea id="edit-circle-description" rows="3" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-3 px-4 text-base resize-none"></textarea>
+                </div>
+                <!-- Privacy Toggle -->
+                <div class="flex items-center gap-3 bg-surface-container p-4 rounded-xl">
+                    <div class="flex-1">
+                        <p class="font-bold text-sm">Private Circle</p>
+                        <p class="text-xs text-stone-500">New members must request to join and be approved.</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="edit-circle-private" class="sr-only peer">
+                        <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                </div>
+                <!-- Error -->
+                <div id="edit-error" class="hidden bg-error/10 text-error p-4 rounded-xl text-sm font-medium"></div>
+                <!-- Actions -->
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeEditModal()" class="flex-1 py-3 rounded-xl font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-container transition-colors">Cancel</button>
+                    <button type="submit" id="edit-submit-btn" class="flex-1 py-3 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-all">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Leave Circle Confirmation Modal -->
+    <div id="leave-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-md">
+        <div class="modal-content bg-surface w-full max-w-sm rounded-xl shadow-2xl p-8 text-center">
+            <span class="material-symbols-outlined text-4xl text-error mb-4 block">exit_to_app</span>
+            <h3 class="text-xl font-bold mb-2">Leave Circle?</h3>
+            <p id="leave-modal-msg" class="text-on-surface-variant text-sm mb-8">You'll need to rejoin to access this circle again.</p>
+            <div class="flex gap-3">
+                <button onclick="closeleaveModal()" class="flex-1 py-3 rounded-xl font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-container transition-colors">Cancel</button>
+                <button id="confirm-leave-btn" onclick="confirmLeave()" class="flex-1 py-3 rounded-xl bg-error text-on-error font-bold active:scale-95 transition-all">Leave</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        let currentCircleId = null;
+        let currentCircle = null;
+        let currentUser = null;
+        let currentUserRole = null; // 'admin' | 'member' | null
+        let currentUserIsMember = false;
+        let editSelectedFile = null;
+
         async function loadCircleDetails() {
             const urlParams = new URLSearchParams(window.location.search);
-            const circleId = urlParams.get('id');
+            currentCircleId = urlParams.get('id');
             
-            if (!circleId) {
+            if (!currentCircleId) {
                 window.location.href = 'circles.html';
                 return;
             }
 
-            document.getElementById('share-item-btn').onclick = () => {
-                window.location.href = `add-item?circleId=${circleId}`;
-            };
+            const user = firebase.auth().currentUser;
+            currentUser = user;
 
             try {
                 // 1. Fetch Circle Metadata
-                const circle = await window.db.getCircle(circleId);
-                if (!circle) return;
+                currentCircle = await window.db.getCircle(currentCircleId);
+                if (!currentCircle) { window.location.href = 'circles.html'; return; }
 
-                document.title = `${circle.name} - Share, Instead.`;
-                document.getElementById('circle-name').textContent = circle.name;
-                document.getElementById('circle-description').textContent = circle.description || 'A neighborhood community circle.';
+                document.title = `${currentCircle.name} - Share, Instead.`;
+                document.getElementById('circle-name').textContent = currentCircle.name;
+                document.getElementById('circle-description').textContent = currentCircle.description || 'A neighborhood community circle.';
 
-                // 2. Fetch Members
-                const members = await window.db.getCircleMembers(circleId);
+                // Show privacy badge
+                if (currentCircle.is_private) {
+                    document.getElementById('privacy-badge').classList.remove('hidden');
+                    document.getElementById('privacy-badge').classList.add('flex');
+                }
+
+                // 2. Fetch Members & determine current user role
+                const members = await window.db.getCircleMembers(currentCircleId);
                 if (members) {
-                    const avatarContainer = document.getElementById('member-avatars');
-                    const countText = document.getElementById('member-count-text');
-                    
                     const displayMembers = members.slice(0, 4);
-                    avatarContainer.innerHTML = displayMembers.map(m => `
-                        <img class="h-10 w-10 rounded-full ring-4 ring-surface object-cover" src="${m.avatar_url || 'https://i.pravatar.cc/150?u=' + m.id}" />
-                    `).join('');
-                    
+                    const avatarContainer = document.getElementById('member-avatars');
+                    avatarContainer.innerHTML = displayMembers.map(m =>
+                        `<img class="h-10 w-10 rounded-full ring-4 ring-surface object-cover" src="${m.avatar_url || 'https://i.pravatar.cc/150?u=' + m.id}" />`
+                    ).join('');
                     if (members.length > 4) {
-                        avatarContainer.innerHTML += `
-                            <div class="h-10 w-10 rounded-full bg-surface-container ring-4 ring-surface flex items-center justify-center text-[10px] font-black text-primary">
-                                +${members.length - 4}
-                            </div>
-                        `;
+                        avatarContainer.innerHTML += `<div class="h-10 w-10 rounded-full bg-surface-container ring-4 ring-surface flex items-center justify-center text-[10px] font-black text-primary">+${members.length - 4}</div>`;
                     }
-                    countText.textContent = `${members.length} Neighbors Active`;
+                    document.getElementById('member-count-text').textContent = `${members.length} Neighbors Active`;
+
+                    // Determine membership
+                    if (user) {
+                        const myMembership = members.find(m => m.id === user.uid);
+                        if (myMembership) {
+                            currentUserIsMember = true;
+                            currentUserRole = myMembership.role;
+                        }
+                    }
                 }
 
-                // 3. Fetch Circle Inventory (Sidebar Preview)
-                const allItems = await window.db.getCircleItems(circleId);
-                if (allItems) {
-                    const items = allItems.slice(0, 3);
-                    const inventoryContainer = document.getElementById('circle-inventory');
-                    if (items.length === 0) {
-                        inventoryContainer.innerHTML = `<p class="text-sm text-on-surface-variant italic">No items shared yet.</p>`;
-                    } else {
-                        inventoryContainer.innerHTML = items.map(item => `
-                        <div onclick="window.location.href='item-details.html?id=${item.id}'" class="group flex items-center gap-4 cursor-pointer">
-                            <div class="w-16 h-16 rounded-lg overflow-hidden bg-surface-container flex-shrink-0">
-                                <img src="${item.image_url || 'https://placehold.co/100x100?text=Item'}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <h4 class="font-bold text-sm truncate">${item.name}</h4>
-                                <p class="text-xs text-primary font-bold uppercase tracking-tighter mt-1">Available</p>
-                            </div>
+                // 3. Render role-appropriate UI
+                await renderRoleUI();
+
+                // 4. Fetch Circle Inventory (sidebar)
+                const allItems = await window.db.getCircleItems(currentCircleId);
+                const inventoryContainer = document.getElementById('circle-inventory');
+                if (!allItems || allItems.length === 0) {
+                    inventoryContainer.innerHTML = `<p class="text-sm text-on-surface-variant italic">No items shared yet.</p>`;
+                } else {
+                    inventoryContainer.innerHTML = allItems.slice(0, 3).map(item => `
+                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="group flex items-center gap-4 cursor-pointer">
+                        <div class="w-16 h-16 rounded-lg overflow-hidden bg-surface-container flex-shrink-0">
+                            <img src="${item.image_url || 'https://placehold.co/100x100?text=Item'}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
                         </div>
-                        `).join('');
-                    }
+                        <div class="flex-1 min-w-0">
+                            <h4 class="font-bold text-sm truncate">${item.name}</h4>
+                            <p class="text-xs text-primary font-bold uppercase tracking-tighter mt-1">Available</p>
+                        </div>
+                    </div>`).join('');
                 }
 
-                // 4. Fetch Feed
-                loadFeed(circleId);
-
-                // Update Profile Avatar
-                const user = firebase.auth().currentUser;
+                // 5. Update header avatar
                 if (user) {
                     const profile = await window.db.getProfile(user.uid);
                     if (profile?.avatar_url) document.getElementById('header-avatar').src = profile.avatar_url;
+                }
+
+                // 6. Load feed if member (or public circle)
+                if (currentUserIsMember || !currentCircle.is_private) {
+                    loadFeed(currentCircleId);
+                }
+
+                // 7. Admin: always load join requests (panel only shows if there are any)
+                if (currentUserRole === 'admin') {
+                    loadJoinRequests();
                 }
 
             } catch (err) {
@@ -264,11 +399,321 @@
             }
         }
 
+        async function renderRoleUI() {
+            const shareItemBtn = document.getElementById('share-item-btn');
+            shareItemBtn.onclick = () => {
+                const addUrl = window.location.pathname.endsWith('.html') ? 'add-item.html' : 'add-item';
+                window.location.href = `${addUrl}?circleId=${currentCircleId}`;
+            };
+
+            if (currentUserIsMember) {
+                // Show member actions (Post + Share Item)
+                document.getElementById('member-actions').classList.remove('hidden');
+                document.getElementById('member-actions').classList.add('flex');
+
+                // Show Leave button
+                document.getElementById('leave-circle-btn').classList.remove('hidden');
+                document.getElementById('leave-circle-btn').classList.add('flex');
+
+                // Admin: show Edit button
+                if (currentUserRole === 'admin') {
+                    document.getElementById('edit-circle-btn').classList.remove('hidden');
+                    document.getElementById('edit-circle-btn').classList.add('flex');
+                }
+
+                // Show feed
+                document.getElementById('private-gate').classList.add('hidden');
+                document.getElementById('feed-section').classList.remove('hidden');
+
+            } else {
+                // Non-member: hide feed for private circles
+                if (currentCircle.is_private) {
+                    document.getElementById('feed-section').classList.add('hidden');
+                    document.getElementById('private-gate').classList.remove('hidden');
+
+                    // Check for pending request
+                    if (currentUser) {
+                        const req = await window.db.getMyJoinRequest(currentCircleId, currentUser.uid);
+                        if (req) {
+                            document.getElementById('request-pending-ui').classList.remove('hidden');
+                            document.getElementById('request-pending-ui').classList.add('flex');
+                            document.getElementById('gate-request-btn').classList.add('hidden');
+                            document.getElementById('gate-pending').classList.remove('hidden');
+                        } else {
+                            document.getElementById('request-join-btn').classList.remove('hidden');
+                            document.getElementById('request-join-btn').classList.add('flex');
+                        }
+                    }
+                } else {
+                    // Public circle — show Join button
+                    document.getElementById('join-btn').classList.remove('hidden');
+                    document.getElementById('join-btn').classList.add('flex');
+                    document.getElementById('feed-section').classList.remove('hidden');
+                }
+            }
+        }
+
+        async function loadJoinRequests() {
+            const requests = await window.db.getJoinRequests(currentCircleId);
+            const panel = document.getElementById('join-requests-panel');
+            const list = document.getElementById('join-requests-list');
+            const badge = document.getElementById('request-count-badge');
+
+            if (requests.length === 0) {
+                panel.classList.add('hidden');
+                return;
+            }
+
+            panel.classList.remove('hidden');
+            badge.textContent = requests.length;
+            list.innerHTML = requests.map(req => `
+            <div class="flex items-center gap-3 bg-white rounded-xl p-3 shadow-sm">
+                <img class="h-9 w-9 rounded-full object-cover" src="${req.profile?.avatar_url || 'https://i.pravatar.cc/150?u=' + req.profile_id}">
+                <div class="flex-1 min-w-0">
+                    <p class="font-bold text-sm truncate">${req.profile?.full_name || 'Unknown'}</p>
+                    <p class="text-xs text-stone-400">Wants to join</p>
+                </div>
+                <div class="flex gap-1.5">
+                    <button onclick="handleApprove('${req.profile_id}')" class="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-bold active:scale-95 transition-transform">Approve</button>
+                    <button onclick="handleDeny('${req.profile_id}')" class="px-3 py-1.5 rounded-lg bg-stone-100 text-stone-600 text-xs font-bold active:scale-95 transition-transform">Deny</button>
+                </div>
+            </div>`).join('');
+        }
+
+        async function handleApprove(profileId) {
+            try {
+                await window.db.approveJoinRequest(currentCircleId, profileId);
+                loadJoinRequests();
+                loadCircleDetails(); // refresh member count
+            } catch (err) {
+                alert('Failed to approve: ' + err.message);
+            }
+        }
+        window.handleApprove = handleApprove;
+
+        async function handleDeny(profileId) {
+            try {
+                await window.db.denyJoinRequest(currentCircleId, profileId);
+                loadJoinRequests();
+            } catch (err) {
+                alert('Failed to deny: ' + err.message);
+            }
+        }
+        window.handleDeny = handleDeny;
+
+        async function handleJoin() {
+            if (!currentUser) return;
+            const btn = document.getElementById('join-btn');
+            btn.disabled = true;
+            btn.textContent = 'Joining...';
+            try {
+                await window.db.joinCircle(currentCircleId, currentUser.uid);
+                window.location.reload();
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = 'Join Circle';
+                alert('Failed to join: ' + err.message);
+            }
+        }
+
+        async function handleRequestJoin() {
+            if (!currentUser) return;
+            const btns = [document.getElementById('request-join-btn'), document.getElementById('gate-request-btn')];
+            btns.forEach(b => { if (b) { b.disabled = true; b.textContent = 'Sending...'; } });
+            try {
+                await window.db.requestToJoinCircle(currentCircleId, currentUser.uid);
+                // Update UI to "pending" state
+                document.getElementById('request-join-btn').classList.add('hidden');
+                document.getElementById('request-join-btn').classList.remove('flex');
+                document.getElementById('request-pending-ui').classList.remove('hidden');
+                document.getElementById('request-pending-ui').classList.add('flex');
+                document.getElementById('gate-request-btn').classList.add('hidden');
+                document.getElementById('gate-pending').classList.remove('hidden');
+            } catch (err) {
+                btns.forEach(b => { if (b) { b.disabled = false; b.textContent = 'Request to Join'; } });
+                alert('Failed to send request: ' + err.message);
+            }
+        }
+
+        async function handleCancelRequest() {
+            if (!currentUser) return;
+            try {
+                await window.db.cancelJoinRequest(currentCircleId, currentUser.uid);
+                window.location.reload();
+            } catch (err) {
+                alert('Failed to cancel: ' + err.message);
+            }
+        }
+
+        // --- Leave Circle ---
+        function openLeaveModal() {
+            const adminWarning = currentUserRole === 'admin'
+                ? 'As an admin, you will lose admin access. If you\'re the only admin, the circle will be left without an admin.'
+                : 'You\'ll need to rejoin to access this circle again.';
+            document.getElementById('leave-modal-msg').textContent = adminWarning;
+            document.getElementById('leave-modal').classList.remove('hidden');
+        }
+
+        function closeleaveModal() {
+            document.getElementById('leave-modal').classList.add('hidden');
+        }
+
+        async function confirmLeave() {
+            if (!currentUser) return;
+            const btn = document.getElementById('confirm-leave-btn');
+            btn.disabled = true;
+            btn.textContent = 'Leaving...';
+            try {
+                await window.db.leaveCircle(currentCircleId, currentUser.uid);
+                window.location.href = 'circles.html';
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = 'Leave';
+                alert('Failed to leave circle: ' + err.message);
+            }
+        }
+
+        document.getElementById('leave-circle-btn').addEventListener('click', openLeaveModal);
+
+        // --- Edit Circle ---
+        function openEditModal() {
+            if (!currentCircle) return;
+            document.getElementById('edit-circle-name').value = currentCircle.name || '';
+            document.getElementById('edit-circle-description').value = currentCircle.description || '';
+            document.getElementById('edit-circle-private').checked = currentCircle.is_private || false;
+            document.getElementById('edit-image-preview').src = currentCircle.image_url || '';
+            document.getElementById('edit-circle-modal').classList.remove('hidden');
+            editSelectedFile = null;
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-circle-modal').classList.add('hidden');
+            document.getElementById('edit-error').classList.add('hidden');
+        }
+
+        document.getElementById('edit-circle-btn').addEventListener('click', openEditModal);
+
+        document.getElementById('edit-image-upload').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                editSelectedFile = file;
+                document.getElementById('edit-image-preview').src = URL.createObjectURL(file);
+            }
+        });
+
+        document.getElementById('edit-circle-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('edit-submit-btn');
+            const errorDiv = document.getElementById('edit-error');
+            errorDiv.classList.add('hidden');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                let imageUrl = currentCircle.image_url;
+                if (editSelectedFile) {
+                    const fileExt = editSelectedFile.name.split('.').pop();
+                    const fileName = `${Math.random()}.${fileExt}`;
+                    imageUrl = await window.db.uploadFile(`circles/${fileName}`, editSelectedFile);
+                }
+
+                const updatedData = {
+                    name: document.getElementById('edit-circle-name').value.trim(),
+                    description: document.getElementById('edit-circle-description').value.trim(),
+                    is_private: document.getElementById('edit-circle-private').checked,
+                    image_url: imageUrl
+                };
+
+                await window.db.updateCircle(currentCircleId, updatedData);
+
+                // Update local state and UI
+                currentCircle = { ...currentCircle, ...updatedData };
+                document.getElementById('circle-name').textContent = updatedData.name;
+                document.getElementById('circle-description').textContent = updatedData.description || 'A neighborhood community circle.';
+                document.title = `${updatedData.name} - Share, Instead.`;
+                
+                const badge = document.getElementById('privacy-badge');
+                if (updatedData.is_private) {
+                    badge.classList.remove('hidden');
+                    badge.classList.add('flex');
+                } else {
+                    badge.classList.add('hidden');
+                    badge.classList.remove('flex');
+                }
+
+                closeEditModal();
+            } catch (err) {
+                console.error(err);
+                errorDiv.textContent = err.message || 'Failed to save changes.';
+                errorDiv.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Save Changes';
+            }
+        };
+
+        // --- Feed ---
+        async function toggleHelpful(postId) {
+            const user = firebase.auth().currentUser;
+            if (!user) { alert("Please log in."); return; }
+            try {
+                const ref = firebase.firestore().collection('circle_posts').doc(postId);
+                const doc = await ref.get();
+                if (!doc.exists) return;
+                const data = doc.data();
+                const helpful = data.helpful_by || [];
+                const index = helpful.indexOf(user.uid);
+                if (index > -1) helpful.splice(index, 1);
+                else helpful.push(user.uid);
+                await ref.update({ helpful_by: helpful });
+                loadFeed(currentCircleId);
+            } catch (err) { console.error("Error toggling helpful:", err); }
+        }
+        window.toggleHelpful = toggleHelpful;
+
+        function toggleRepliesSection(postId) {
+            const section = document.getElementById(`replies-section-${postId}`);
+            if (section) {
+                section.classList.toggle('hidden');
+                if (!section.classList.contains('hidden')) document.getElementById(`reply-input-${postId}`).focus();
+            }
+        }
+        window.toggleRepliesSection = toggleRepliesSection;
+
+        async function submitReply(postId) {
+            const user = firebase.auth().currentUser;
+            if (!user) { alert("Please log in to reply."); return; }
+            const input = document.getElementById(`reply-input-${postId}`);
+            const content = input.value.trim();
+            if (!content) return;
+
+            try {
+                const profile = await window.db.getProfile(user.uid);
+                const replyObj = {
+                    author_id: user.uid,
+                    author_name: profile?.full_name || 'Anonymous',
+                    author_avatar: profile?.avatar_url || 'https://i.pravatar.cc/150?u=' + user.uid,
+                    content: content,
+                    created_at: new Date().toISOString()
+                };
+                const ref = firebase.firestore().collection('circle_posts').doc(postId);
+                const doc = await ref.get();
+                if (!doc.exists) return;
+                const replies = (doc.data().replies || []);
+                replies.push(replyObj);
+                await ref.update({ replies });
+                input.value = '';
+                await loadFeed(currentCircleId);
+                document.getElementById(`replies-section-${postId}`).classList.remove('hidden');
+            } catch (err) { console.error("Error submitting reply:", err); }
+        }
+        window.submitReply = submitReply;
+
         async function loadFeed(circleId) {
             const feedContainer = document.getElementById('circle-feed');
+            const currentUser = firebase.auth().currentUser;
             try {
                 const posts = await window.db.getCirclePosts(circleId);
-
                 if (posts.length === 0) {
                     feedContainer.innerHTML = `
                         <div class="bg-surface-container-low rounded-xl p-12 text-center">
@@ -281,6 +726,23 @@
                 feedContainer.innerHTML = posts.map(post => {
                     const date = post.created_at?.toDate ? post.created_at.toDate() : new Date(post.created_at || 0);
                     const timeStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    const helpfulBy = post.helpful_by || [];
+                    const isHelpful = currentUser && helpfulBy.includes(currentUser.uid);
+                    const iconFill = isHelpful ? "'FILL' 1" : "'FILL' 0";
+                    const textColor = isHelpful ? "text-primary font-bold" : "text-on-surface-variant font-medium";
+                    const replies = post.replies || [];
+                    const repliesHtml = replies.map(r => `
+                        <div class="flex items-start gap-3 bg-stone-100 dark:bg-stone-800/40 p-3.5 rounded-xl text-sm">
+                            <img class="h-6 w-6 rounded-full object-cover shrink-0 mt-0.5" src="${r.author_avatar || 'https://i.pravatar.cc/150?u=' + r.author_id}"/>
+                            <div class="flex-1">
+                                <div class="flex items-baseline justify-between">
+                                    <span class="font-bold text-on-surface text-xs">${r.author_name}</span>
+                                    <span class="text-[9px] text-outline">${new Date(r.created_at).toLocaleDateString([], {month: 'short', day: 'numeric'})}</span>
+                                </div>
+                                <p class="text-on-surface-variant mt-1 leading-snug">${r.content}</p>
+                            </div>
+                        </div>`).join('');
+
                     return `
                     <div class="bg-surface-container-lowest rounded-xl p-8 shadow-sm hover:shadow-md transition-all duration-300">
                         <div class="flex items-center gap-4 mb-6">
@@ -292,17 +754,23 @@
                         </div>
                         <p class="text-xl leading-relaxed text-on-surface mb-8">${post.content}</p>
                         <div class="flex items-center gap-8 pt-6 border-t border-surface-container">
-                            <button class="group flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
-                                <span class="material-symbols-outlined text-xl transition-transform group-active:scale-125">favorite</span>
-                                <span class="font-bold text-xs">Helpful</span>
+                            <button onclick="toggleHelpful('${post.id}')" class="group flex items-center gap-2 ${textColor} hover:text-primary transition-colors">
+                                <span class="material-symbols-outlined text-xl transition-transform group-active:scale-125" style="font-variation-settings: ${iconFill}">favorite</span>
+                                <span class="text-xs">Helpful (${helpfulBy.length})</span>
                             </button>
-                            <button class="group flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
+                            <button onclick="toggleRepliesSection('${post.id}')" class="group flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
                                 <span class="material-symbols-outlined text-xl">comment</span>
-                                <span class="font-bold text-xs">Reply</span>
+                                <span class="font-bold text-xs">Reply (${replies.length})</span>
                             </button>
                         </div>
-                    </div>
-                    `;
+                        <div id="replies-section-${post.id}" class="hidden mt-6 pt-6 border-t border-surface-container-high/40 space-y-3">
+                            <div class="max-h-48 overflow-y-auto pr-2 custom-scrollbar space-y-3">${repliesHtml}</div>
+                            <div class="flex gap-2 mt-4 pt-2">
+                                <input type="text" id="reply-input-${post.id}" placeholder="Write a reply..." class="flex-1 bg-surface-container-low border-none rounded-lg px-4 py-2.5 text-sm focus:ring-1 focus:ring-primary placeholder:text-outline-variant">
+                                <button onclick="submitReply('${post.id}')" class="px-4 py-2.5 bg-primary text-on-primary font-bold text-xs rounded-lg active:scale-95 transition-all">Send</button>
+                            </div>
+                        </div>
+                    </div>`;
                 }).join('');
 
             } catch (err) {
@@ -316,7 +784,6 @@
             document.getElementById('post-modal').classList.remove('hidden');
             document.getElementById('post-content').focus();
         }
-
         function closePostModal() {
             document.getElementById('post-modal').classList.add('hidden');
             document.getElementById('post-content').value = '';
@@ -328,21 +795,14 @@
             const content = document.getElementById('post-content').value;
             const btn = document.getElementById('submit-post-btn');
             const errorDiv = document.getElementById('post-error');
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const circleId = urlParams.get('id');
-
             btn.disabled = true;
             btn.classList.add('opacity-70');
-            
             try {
                 const user = firebase.auth().currentUser;
                 if (!user) throw new Error("Not logged in");
-
-                await window.db.createCirclePost(circleId, user.uid, content);
-
+                await window.db.createCirclePost(currentCircleId, user.uid, content);
                 closePostModal();
-                loadFeed(circleId);
+                loadFeed(currentCircleId);
             } catch (err) {
                 console.error(err);
                 errorDiv.textContent = err.message;
@@ -361,7 +821,14 @@
             }
         });
 
-        document.addEventListener('DOMContentLoaded', loadCircleDetails);
+        document.addEventListener('DOMContentLoaded', () => {
+            firebase.auth().onAuthStateChanged((user) => {
+                if (user) {
+                    currentUser = user;
+                    loadCircleDetails();
+                }
+            });
+        });
     </script>
 </body>
 </html>

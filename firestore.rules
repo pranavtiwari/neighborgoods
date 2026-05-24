@@ -41,5 +41,10 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == request.resource.data.sender_id;
       allow update, delete: if request.auth != null && (request.auth.uid == resource.data.sender_id || request.auth.uid == resource.data.receiver_id);
     }
+
+    // Circle Join Requests: authenticated users can read, create, and delete requests
+    match /circle_join_requests/{requestId} {
+      allow read, write: if request.auth != null;
+    }
   }
 }

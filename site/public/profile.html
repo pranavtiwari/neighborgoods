@@ -77,6 +77,12 @@
 </div>
 <div>
 <h2 id="profile-name" class="text-3xl font-bold tracking-tight text-on-surface">...</h2>
+<div id="profile-nickname-row" class="hidden justify-center mt-1.5 mb-0.5">
+    <span id="profile-nickname" class="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-bold px-3 py-1 rounded-full lowercase tracking-widest">
+        <span class="material-symbols-outlined text-sm" style="font-size:14px">tag</span>
+        <span id="profile-nickname-text"></span>
+    </span>
+</div>
 <p id="profile-location" class="text-on-surface-variant/70 body-lg">...</p>
 </div>
 </section>
@@ -122,7 +128,7 @@
 </section>
 <!-- Actions -->
 <section class="flex flex-col gap-3">
-<button onclick="window.location.href='add-item'" class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
+<button onclick="window.location.href = window.location.pathname.endsWith('.html') ? 'add-item.html' : 'add-item'" class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
 <span class="material-symbols-outlined" data-icon="add">add</span>
                 Add New Item
             </button>
@@ -166,6 +172,12 @@
             } else if (metaAvatar) {
                 document.getElementById('profile-avatar').src = metaAvatar;
             }
+            // Show nickname if set
+            if (data.nickname) {
+                document.getElementById('profile-nickname-text').textContent = data.nickname;
+                document.getElementById('profile-nickname-row').classList.remove('hidden');
+                document.getElementById('profile-nickname-row').classList.add('flex');
+            }
         }
 
         // Fetch User Items
@@ -178,18 +190,21 @@
         if (!items || items.length === 0) {
             itemsList.innerHTML = `<div class="text-center py-6 text-stone-500 font-medium">You haven't shared any items yet.</div>`;
         } else {
-            itemsList.innerHTML = items.map(item => `
-            <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
-                <img alt="${item.name}" class="w-20 h-20 rounded-lg object-cover" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category)}"/>
-                <div class="flex-1">
-                    <h4 class="font-bold text-on-surface">${item.name}</h4>
-                    <p class="text-on-surface-variant font-medium text-sm mt-1">Ready to share</p>
-                </div>
-                <a href="add-item?id=${item.id}" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold active:scale-[0.98]">
-                    <span class="material-symbols-outlined text-[16px] font-bold" data-icon="edit">edit</span>
-                    <span>Edit</span>
-                </a>
-            </div>`).join('');
+            itemsList.innerHTML = items.map(item => {
+                const editUrl = window.location.pathname.endsWith('.html') ? `add-item.html?id=${item.id}` : `add-item?id=${item.id}`;
+                return `
+                <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
+                    <img alt="${item.name}" class="w-20 h-20 rounded-lg object-cover" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category)}"/>
+                    <div class="flex-1">
+                        <h4 class="font-bold text-on-surface">${item.name}</h4>
+                        <p class="text-on-surface-variant font-medium text-sm mt-1">Ready to share</p>
+                    </div>
+                    <a href="${editUrl}" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold active:scale-[0.98]">
+                        <span class="material-symbols-outlined text-[16px] font-bold" data-icon="edit">edit</span>
+                        <span>Edit</span>
+                    </a>
+                </div>`;
+            }).join('');
         }
     }
     
