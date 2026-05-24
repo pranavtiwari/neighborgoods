@@ -90,6 +90,26 @@
 <section class="space-y-4">
 <div class="flex flex-col gap-2">
 <label id="message-label" class="text-[0.75rem] font-bold uppercase tracking-[0.05em] text-on-surface-variant px-1">Message Owner (Optional)</label>
+
+<!-- Interactive Suggested Message Helper -->
+<div id="suggestion-card" class="bg-primary/5 dark:bg-stone-850/50 border border-primary/20 rounded-xl p-4 flex flex-col gap-3 relative overflow-hidden transition-all duration-300">
+    <div class="flex justify-between items-center">
+        <span class="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[14px]">auto_awesome</span>
+            Suggested Message (Press Tab or click below)
+        </span>
+    </div>
+    <p id="suggested-text-preview" class="text-xs text-stone-500 italic leading-relaxed select-all">Loading suggestion...</p>
+    <div class="flex gap-2 shrink-0">
+        <button type="button" id="use-suggestion-btn" class="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1">
+            <span class="material-symbols-outlined text-[14px]">check</span> Use Suggestion
+        </button>
+        <button type="button" id="clear-suggestion-btn" class="px-3 py-1.5 border border-outline-variant/50 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-400 rounded-lg text-xs font-bold transition-all active:scale-[0.98] flex items-center gap-1">
+            <span class="material-symbols-outlined text-[14px]">clear</span> Cancel / Clear
+        </button>
+    </div>
+</div>
+
 <textarea id="message-text" class="w-full bg-surface-container-low border-none rounded-xl p-4 focus:ring-0 focus:border-b-2 focus:border-primary text-body-lg placeholder:text-on-surface-variant/40 transition-all resize-none" placeholder="Hi, I'd love to borrow your item..." rows="4"></textarea>
 </div>
 </section>
@@ -229,6 +249,7 @@
     const urlParams = new URLSearchParams(window.location.search);
     const itemId = urlParams.get('id');
     let itemOwnerId = null;
+    let suggestedMessageStr = '';
 
     async function loadItem() {
         if (!itemId) return;
@@ -255,16 +276,41 @@
             if (isRental) {
                 priceNoticeText.innerHTML = `Rental Listing: <span class="text-secondary font-bold">Price and terms will be negotiated over chat.</span>`;
                 priceNoticeIcon.textContent = 'payments';
-                document.getElementById('message-text').placeholder = `Hi ${firstName}, I'd like to rent your ${item.name}. What are your rates and availability?`;
+                suggestedMessageStr = `Hi ${firstName}, I'd like to rent your ${item.name}. What are your rates and availability?`;
+                document.getElementById('message-text').placeholder = suggestedMessageStr;
             } else {
                 priceNoticeText.innerHTML = `You won't be charged. <span class="text-secondary font-bold">This is a free neighborhood share!</span>`;
                 priceNoticeIcon.textContent = 'volunteer_activism';
-                document.getElementById('message-text').placeholder = `Hi ${firstName}, I'd love to use the ${item.name} this week...`;
+                suggestedMessageStr = `Hi ${firstName}, I'd love to borrow your ${item.name} this week. Is it available?`;
+                document.getElementById('message-text').placeholder = suggestedMessageStr;
             }
+
+            document.getElementById('suggested-text-preview').textContent = suggestedMessageStr;
         } catch (err) {
             console.error("Error loading item:", err);
         }
     }
+
+    const textarea = document.getElementById('message-text');
+
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            if (textarea.value.trim() === '') {
+                e.preventDefault(); // Prevent focus shift
+                textarea.value = suggestedMessageStr;
+            }
+        }
+    });
+
+    document.getElementById('use-suggestion-btn').addEventListener('click', () => {
+        textarea.value = suggestedMessageStr;
+        textarea.focus();
+    });
+
+    document.getElementById('clear-suggestion-btn').addEventListener('click', () => {
+        textarea.value = '';
+        textarea.focus();
+    });
 
     document.getElementById('send-request-btn').addEventListener('click', async () => {
         const session = await requireAuth();
@@ -292,7 +338,7 @@
                 session.user.uid,
                 itemOwnerId,
                 itemId,
-                message || `Hi! I'd like to borrow your ${document.getElementById('item-name').textContent}.`
+                message || suggestedMessageStr || `Hi! I'd like to borrow your ${document.getElementById('item-name').textContent}.`
             );
 
             // 3. Redirect to success page

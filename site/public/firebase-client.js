@@ -247,6 +247,19 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
+        updateItem: async function(itemId, itemData) {
+            try {
+                await firebase.firestore().collection('items').doc(itemId).set({
+                    ...itemData,
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+                return { id: itemId };
+            } catch (err) {
+                console.error("Error updating item:", err);
+                throw err;
+            }
+        },
+
         // --- Circles ---
         createCircle: async function(circleData, creatorId) {
             try {

@@ -100,27 +100,8 @@
 <h2 class="text-2xl font-bold tracking-tight text-on-surface">Hot Near You</h2>
 <button class="text-primary font-semibold text-sm hover:underline">View all</button>
 </div>
-<div class="flex gap-6 overflow-x-auto px-6 hide-scrollbar">
-<!-- Kayak Card -->
-<div class="min-w-[300px] md:min-w-[450px] aspect-[4/3] rounded-xl relative overflow-hidden group">
-<img alt="Kayak" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" data-alt="Two bright orange kayaks floating on a crystal clear turquoise lake surrounded by pine trees and distant mountains" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAuBmHo9-my0DXvVslajND4Ie35xkl-O8c-jsTvYwFBNCPtQ3TmbC4a2ZDbcZqQeaPyKCdUVGLvdATx5S4onq1LPZdIfgOkXeBmglTYqak26JCFR35xnAN7N4yYjVBzHSLBuhr_PSFzdipRUskS1QW0xq02qK_n5PXFY9g7L2oWFEAmP7M5EejDLHeDH2fXWWztCRR33cHQOeV-LluGFUGU8I9dBZVolU31y0VhAIrmAaWK1f8Cr126LFzXrCtarwSuBuozPn09eUGb"/>
-<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-<div class="absolute bottom-6 left-6 right-6">
-<span class="bg-secondary-fixed text-on-secondary-fixed px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3 inline-block">Trending</span>
-<h3 class="text-white text-3xl font-bold mb-1">Tandem Kayaks</h3>
-<p class="text-white/80 text-sm">3 neighbors offering this week</p>
-</div>
-</div>
-<!-- Projector Card -->
-<div class="min-w-[300px] md:min-w-[450px] aspect-[4/3] rounded-xl relative overflow-hidden group">
-<img alt="Movie Projector" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" data-alt="Cinematic outdoor movie setup with a glowing projector lens and soft warm light illuminating a cozy backyard space" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzFj4UXahd3q5tcklD2w4xjGWI8stFXOy380TzYr6YFebU_pAxvy56LfHa1VQYse2mwGFLAe1J9tyMmaJCJpkMjMLLg6ecnUHcmEUDOxsDNf9YpfmiYldDZ-fW_gS8MDDQxs7BGx8KNe-stn-RhuBM8t0RFr8bCMDDBmreauidaraMaKfc75hh5ofW0-FKwQTt0OEphxMPF_erWbGrXbauhSqH5jfDaPtrPGf1p4Wj1Z24RBcRpexk_918vfVuJXd4wS2oD87QP3Lm"/>
-<div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-<div class="absolute bottom-6 left-6 right-6">
-<span class="bg-secondary-fixed text-on-secondary-fixed px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-3 inline-block">Movie Night</span>
-<h3 class="text-white text-3xl font-bold mb-1">4K Projectors</h3>
-<p class="text-white/80 text-sm">Perfect for garden screenings</p>
-</div>
-</div>
+<div id="hot-carousel" class="flex gap-6 overflow-x-auto px-6 hide-scrollbar">
+    <div class="text-stone-500 py-6 px-6 font-medium animate-pulse">Finding nearby items...</div>
 </div>
 </section>
 <!-- Main Discovery Feed -->
@@ -170,10 +151,38 @@
     
     let currentSearch = '';
     let currentCategory = 'all';
-    let allItemsHtml = ''; // Keep track of rendered cards
+
+    // Haversine distance calculator
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        if (lat1 === null || lon1 === null || lat2 === null || lon2 === null) return null;
+        const R = 3958.8; // Radius of the Earth in miles
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = 
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c; // distance in miles
+    }
+
+    function getCurrentPositionPromise() {
+        return new Promise((resolve) => {
+            if (!navigator.geolocation) {
+                resolve(null);
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                (err) => resolve(null),
+                { timeout: 5000 }
+            );
+        });
+    }
 
     async function fetchItems() {
         try {
+            const userPos = await getCurrentPositionPromise() || { lat: 37.7749, lng: -122.4194 }; // SF default
             const items = await window.db.getItems();
                 
             if (!items || items.length === 0) {
@@ -187,9 +196,49 @@
                 return;
             }
 
-            // Generate HTML for each item
+            // Compute distance for each item
+            items.forEach(item => {
+                if (item.latitude !== undefined && item.longitude !== undefined && item.latitude !== null && item.longitude !== null) {
+                    item.distanceVal = calculateDistance(userPos.lat, userPos.lng, item.latitude, item.longitude);
+                    item.distanceStr = item.distanceVal.toFixed(1) + " mi";
+                } else {
+                    // Fallback mock distance if item has no coordinates
+                    const mockDist = Math.random() * 5 + 0.1;
+                    item.distanceVal = mockDist;
+                    item.distanceStr = mockDist.toFixed(1) + " mi";
+                }
+            });
+
+            // Populate Hot Near You carousel (sort by distance ascending, show top 5)
+            const nearbyItems = [...items].sort((a, b) => a.distanceVal - b.distanceVal);
+            const carousel = document.getElementById('hot-carousel');
+            
+            if (nearbyItems.length === 0) {
+                carousel.innerHTML = `<div class="text-stone-500 py-6 px-6 font-medium">No nearby items available yet.</div>`;
+            } else {
+                carousel.innerHTML = nearbyItems.slice(0, 5).map(item => {
+                    const isRental = item.listing_type === 'rental';
+                    const badgeText = isRental ? 'Rental' : 'Free';
+                    const badgeClass = isRental 
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
+                        : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+
+                    return `
+                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="min-w-[280px] md:min-w-[360px] aspect-[4/3] rounded-xl relative overflow-hidden group cursor-pointer shadow-md shrink-0">
+                        <img alt="${item.name}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" src="${item.image_url || 'https://placehold.co/600x400?text=' + encodeURIComponent(item.name)}"/>
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                        <div class="absolute bottom-4 left-4 right-4">
+                            <span class="${badgeClass} px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest mb-2 inline-block shadow-sm">${badgeText}</span>
+                            <h3 class="text-white text-xl font-bold mb-0.5 truncate">${item.name}</h3>
+                            <p class="text-white/80 text-xs font-semibold">${item.distanceStr} away &bull; ${item.owner_name || 'Neighbor'}</p>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+
+            // Generate HTML for each item in Recently Added
             grid.innerHTML = items.map((item, index) => {
-                const distance = (Math.random() * 5 + 0.1).toFixed(1) + " mi"; // Mocking distance
+                const distance = item.distanceStr;
                 const ownerName = item.owner_name || 'Neighbor';
                 
                 // Skills have a distinct horizontal card style
@@ -203,7 +252,7 @@
                             <span class="text-[10px] font-black text-primary uppercase tracking-widest mb-1 block">Neighbor Skill</span>
                             <h4 class="font-bold text-xl leading-tight mb-1">${item.name}</h4>
                             <p class="text-sm text-on-surface-variant mb-2">${item.description || 'Available to help.'} ${distance} away.</p>
-                            <button onclick="window.location.href='chat.html'" class="text-primary font-bold text-sm flex items-center gap-1 group">
+                            <button onclick="event.stopPropagation(); window.location.href='chat.html?userId=${item.owner_id}&itemId=${item.id}'" class="text-primary font-bold text-sm flex items-center gap-1 group">
                                 Message Neighbor
                                 <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
                             </button>
@@ -249,7 +298,7 @@
                                      </div>
                                      <span class="text-xs text-on-surface-variant line-clamp-1">${ownerName}</span>
                                  </div>
-                                 <a href="chat.html?userId=${item.owner_id}&itemId=${item.id}" class="text-primary active:scale-90 transition-transform">
+                                 <a href="chat.html?userId=${item.owner_id}&itemId=${item.id}" onclick="event.stopPropagation()" class="text-primary active:scale-90 transition-transform">
                                      <span class="material-symbols-outlined text-xl bg-primary/10 rounded-full p-1.5" data-icon="chat_bubble">chat_bubble</span>
                                  </a>
                                </div>`
@@ -265,7 +314,6 @@
     }
 
     function filterItems() {
-        // Re-query cards since they are dynamically injected
         const currentCards = document.querySelectorAll('.item-card');
         currentCards.forEach(card => {
             const name = card.getAttribute('data-name').toLowerCase();
@@ -301,7 +349,6 @@
         });
     });
 
-    // Update header avatar
     async function updateHeaderAvatar(user) {
         if (user) {
             const profile = await window.db.getProfile(user.uid);
@@ -316,7 +363,6 @@
         }
     }
 
-    // Close dropdown on outside click
     document.addEventListener('pointerdown', (e) => {
         const dropdown = document.getElementById('profile-dropdown');
         if (dropdown && !dropdown.classList.contains('hidden') && !e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
@@ -324,7 +370,6 @@
         }
     });
 
-    // Initial fetch when page loads
     document.addEventListener('DOMContentLoaded', () => {
         fetchItems();
         firebase.auth().onAuthStateChanged((user) => {
