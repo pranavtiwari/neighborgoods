@@ -217,14 +217,20 @@
         }
     });
 
-    document.addEventListener('DOMContentLoaded', () => {
+    function initProfilePage() {
         firebase.auth().onAuthStateChanged((user) => {
             if (user) {
                 updateHeaderAvatar(user);
             }
         });
         fetchProfile();
-    });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initProfilePage);
+    } else {
+        initProfilePage();
+    }
 </script>
 </main>
 <!-- BottomNavBar -->

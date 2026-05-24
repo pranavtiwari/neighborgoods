@@ -429,7 +429,12 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', initPage);
+        // Prevent DOMContentLoaded race conditions by running immediately if ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initPage);
+        } else {
+            initPage();
+        }
 
         const showError = (msg) => {
             errorDiv.textContent = msg;
