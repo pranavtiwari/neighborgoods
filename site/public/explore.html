@@ -91,6 +91,7 @@
 <button data-category="electronics/computers" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Electronics/Computers</button>
 <button data-category="books" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Books</button>
 <button data-category="skills" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Experience/Skills</button>
+<button data-category="neighbour-helping-neighbour" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Neighbour helping Neighbour</button>
 <button data-category="outdoor" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Outdoor Adventure</button>
 </div>
 </section>
@@ -241,15 +242,18 @@
                 const distance = item.distanceStr;
                 const ownerName = item.owner_name || 'Neighbor';
                 
-                // Skills have a distinct horizontal card style
-                if (item.category === 'skills') {
+                // Skills and Neighbour Help have a distinct horizontal card style
+                if (item.category === 'skills' || item.category === 'neighbour-helping-neighbour') {
+                    const isSkill = item.category === 'skills';
+                    const tag = isSkill ? 'Neighbor Skill' : 'Neighbor Help';
+                    const fallbackText = isSkill ? 'Skill' : 'Help';
                     return `
-                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer" data-name="${item.name}" data-category="skills">
+                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer" data-name="${item.name}" data-category="${item.category}">
                         <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
-                            <img alt="${item.name}" class="w-full h-full object-cover mix-blend-multiply opacity-80" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x400?text=Skill'"/>
+                            <img alt="${item.name}" class="w-full h-full object-cover mix-blend-multiply opacity-80" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x400?text=${fallbackText}'"/>
                         </div>
                         <div class="flex-1">
-                            <span class="text-[10px] font-black text-primary uppercase tracking-widest mb-1 block">Neighbor Skill</span>
+                            <span class="text-[10px] font-black text-primary uppercase tracking-widest mb-1 block">${tag}</span>
                             <h4 class="font-bold text-xl leading-tight mb-1">${item.name}</h4>
                             <p class="text-sm text-on-surface-variant mb-2">${item.description || 'Available to help.'} ${distance} away.</p>
                             <button onclick="event.stopPropagation(); window.location.href='chat.html?userId=${item.owner_id}&itemId=${item.id}'" class="text-primary font-bold text-sm flex items-center gap-1 group">

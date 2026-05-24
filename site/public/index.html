@@ -271,6 +271,18 @@
                 const imageUrl = item.image_url || 'https://images.unsplash.com/photo-1581092160562-40aa08e78837?q=80&w=400&auto=format&fit=crop';
                 const actionText = item.status === 'available' ? 'Borrow' : 'Request';
                 
+                const catDisplay = {
+                    'garden': 'Garden',
+                    'power': 'Power Tools',
+                    'kitchen': 'Kitchen',
+                    'electronics/computers': 'Electronics',
+                    'books': 'Books',
+                    'skills': 'Skills',
+                    'neighbour-helping-neighbour': 'Neighbour Help',
+                    'outdoor': 'Outdoor',
+                    'other': 'Other'
+                }[item.category] || item.category || 'Item';
+                
                 return '<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group cursor-pointer" onclick="window.location.href=\'item-details.html?id=' + item.id + '\'">' +
                         '<div class="h-48 overflow-hidden">' +
                             '<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="' + imageUrl + '" alt="' + item.name + '" />' +
@@ -278,7 +290,7 @@
                         '<div class="p-5">' +
                             '<div class="flex justify-between items-start mb-2">' +
                                 '<h4 class="font-bold text-lg leading-tight">' + item.name + '</h4>' +
-                                '<span class="bg-secondary-fixed text-on-secondary-fixed px-2 py-1 rounded text-[10px] font-bold uppercase">' + item.category + '</span>' +
+                                '<span class="bg-secondary-fixed text-on-secondary-fixed px-2 py-1 rounded text-[10px] font-bold uppercase">' + catDisplay + '</span>' +
                             '</div>' +
                             '<p class="text-on-surface-variant text-sm mb-4 flex items-center gap-1">' +
                                 '<span class="material-symbols-outlined text-sm">location_on</span>' +
