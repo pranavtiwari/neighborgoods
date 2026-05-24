@@ -14,6 +14,7 @@ htmlFiles.forEach(file => {
 
 export default defineConfig({
   root: 'site/public',
+  publicDir: resolve(__dirname, 'site/public/static'),
   build: {
     outDir: resolve(__dirname, 'dist'),
     emptyOutDir: true,

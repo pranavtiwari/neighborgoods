@@ -29,6 +29,7 @@
     }
   </style>
     <link rel="stylesheet" href="/style.css">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 </head>
 <body class="text-on-surface">
 <!-- TopAppBar -->
@@ -51,12 +52,12 @@
     <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
         <img id="header-avatar" alt="User avatar" class="w-full h-full object-cover" src="https://i.pravatar.cc/150?u=me"/>
     </div>
-    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2">
-        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 bg-surface-container-high transition-colors">
+    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-surface rounded-xl shadow-xl border border-outline-variant z-[60] py-2" style="touch-action: manipulation;">
+        <a href="profile.html" class="flex items-center gap-3 px-4 py-3 min-h-[44px] bg-surface-container-high transition-colors">
             <span class="material-symbols-outlined text-[20px]">person</span>
             <span class="text-sm font-medium">My Profile</span>
         </a>
-        <button onclick="window.logout()" class="w-full flex items-center gap-3 px-4 py-2 hover:bg-error-container text-error transition-colors">
+        <button onclick="event.stopPropagation(); doLogout();" class="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-error-container text-error transition-colors cursor-pointer" style="touch-action: manipulation;">
             <span class="material-symbols-outlined text-[20px]">logout</span>
             <span class="text-sm font-bold text-left">Logout</span>
         </button>
@@ -64,7 +65,7 @@
 </div>
 </div>
 </header>
-<main class="pt-24 pb-32 px-6 max-w-2xl mx-auto space-y-8">
+<main class="pt-24 pb-40 px-6 max-w-2xl mx-auto space-y-8">
 <!-- Profile Hero -->
 <section class="flex flex-col items-center text-center space-y-4">
 <div class="relative">
@@ -128,14 +129,26 @@
 <button onclick="window.location.href='edit-profile.html'" class="w-full bg-surface-container text-on-surface-variant py-4 rounded-xl font-bold active:scale-95 transition-transform">
                 Edit Profile
             </button>
-<button id="logout-button" class="w-full border-2 border-error/50 text-error bg-error-container/20 py-4 rounded-xl font-bold active:scale-95 transition-transform mt-4">
+<button id="logout-button" onclick="doLogout()" class="w-full border-2 border-error/50 text-error bg-error-container/20 py-5 rounded-xl font-bold transition-transform mt-4 relative z-10 cursor-pointer min-h-[52px]" style="touch-action: manipulation; -webkit-tap-highlight-color: rgba(0,0,0,0.1);">
                 Log Out
             </button>
 </section>
 <script>
-    document.getElementById('logout-button').addEventListener('click', () => {
-        window.logout();
-    });
+    function doLogout() {
+        try {
+            firebase.auth().signOut().then(function() {
+                window.location.href = 'index.html';
+            }).catch(function(err) {
+                console.error('Logout error:', err);
+                // Force redirect anyway
+                window.location.href = 'index.html';
+            });
+        } catch(e) {
+            console.error('Logout exception:', e);
+            window.location.href = 'index.html';
+        }
+    }
+
 
     async function fetchProfile() {
         const session = await requireAuth();
@@ -192,11 +205,12 @@
         }
     }
 
-    // Close dropdown on outside click
-    window.addEventListener('click', (e) => {
+    // Close dropdown on outside click — use pointerdown to avoid race with button clicks
+    document.addEventListener('pointerdown', (e) => {
         const dropdown = document.getElementById('profile-dropdown');
-        if (dropdown && !e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
-            dropdown.classList.add('hidden');
+        if (dropdown && !dropdown.classList.contains('hidden') && !e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
+            // Delay hiding to let any button click inside fire first
+            setTimeout(() => dropdown.classList.add('hidden'), 150);
         }
     });
 

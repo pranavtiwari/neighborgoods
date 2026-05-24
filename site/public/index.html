@@ -27,6 +27,7 @@
     }
   </style>
     <link rel="stylesheet" href="/style.css">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 </head>
 <body class="bg-surface font-body text-on-surface">
 <!-- TopAppBar -->
@@ -46,7 +47,22 @@
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="activity.html">Activity</a>
 </div>
 <div class="flex items-center gap-4" id="header-actions">
-    <!-- Actions will be injected here by script -->
+    <div class="relative">
+        <div onclick="document.getElementById('profile-dropdown')?.classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20 flex items-center justify-center">
+            <span id="header-avatar-placeholder" class="material-symbols-outlined text-on-surface-variant text-2xl">account_circle</span>
+            <img id="header-avatar" alt="User avatar" class="w-full h-full object-cover absolute inset-0 hidden" src=""/>
+        </div>
+        <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-surface rounded-xl shadow-xl border border-outline-variant z-[60] py-2 text-left" style="touch-action: manipulation;">
+            <a href="profile.html" class="flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-surface-container-high transition-colors">
+                <span class="material-symbols-outlined text-[20px]">person</span>
+                <span class="text-sm font-medium">My Profile</span>
+            </a>
+            <button onclick="event.stopPropagation(); firebase.auth().signOut().then(function(){window.location.href='index.html'});" class="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-error-container text-error transition-colors cursor-pointer" style="touch-action: manipulation;">
+                <span class="material-symbols-outlined text-[20px]">logout</span>
+                <span class="text-sm font-bold">Logout</span>
+            </button>
+        </div>
+    </div>
 </div>
 </div>
 </header>
@@ -278,29 +294,21 @@
 
     async function updateHeader(user) {
         const headerActions = document.getElementById('header-actions');
+        const avatarImg = document.getElementById('header-avatar');
+        const avatarPlaceholder = document.getElementById('header-avatar-placeholder');
         
         if (user) {
-            // Logged in
+            // Logged in — show avatar image, hide placeholder icon
             const profile = await window.db.getProfile(user.uid);
             const avatarUrl = profile?.avatar_url || user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`;
             
-            headerActions.innerHTML = `
-                <div class="relative">
-                    <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
-                        <img id="header-avatar" alt="User avatar" class="w-full h-full object-cover" src="${avatarUrl}"/>
-                    </div>
-                    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2 text-left">
-                        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
-                            <span class="material-symbols-outlined text-[20px]">person</span>
-                            <span class="text-sm font-medium">My Profile</span>
-                        </a>
-                        <button onclick="window.logout()" class="w-full flex items-center gap-3 px-4 py-2 hover:bg-error-container text-error transition-colors">
-                            <span class="material-symbols-outlined text-[20px]">logout</span>
-                            <span class="text-sm font-bold">Logout</span>
-                        </button>
-                    </div>
-                </div>
-            `;
+            if (avatarImg) {
+                avatarImg.src = avatarUrl;
+                avatarImg.classList.remove('hidden');
+            }
+            if (avatarPlaceholder) {
+                avatarPlaceholder.classList.add('hidden');
+            }
 
             // Update main CTA buttons
             const heroCta = document.getElementById('hero-cta');
@@ -321,20 +329,20 @@
                 };
             }
         } else {
-            // Not logged in
+            // Not logged in — show login button on desktop, keep generic icon on mobile
             headerActions.innerHTML = `
-                <button onclick="window.loginWithGoogle()" class="hidden md:block bg-primary px-6 py-2.5 rounded-full text-on-primary font-semibold text-sm transition-all active:opacity-80">
+                <button onclick="window.loginWithGoogle()" class="bg-primary px-6 py-2.5 rounded-full text-on-primary font-semibold text-sm transition-all active:opacity-80">
                     Join Community
                 </button>
             `;
         }
     }
 
-    // Close dropdown on outside click
-    window.addEventListener('click', (e) => {
+    // Close dropdown on outside click — use pointerdown to avoid race with button clicks
+    document.addEventListener('pointerdown', (e) => {
         const dropdown = document.getElementById('profile-dropdown');
-        if (dropdown && !e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
-            dropdown.classList.add('hidden');
+        if (dropdown && !dropdown.classList.contains('hidden') && !e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
+            setTimeout(() => dropdown.classList.add('hidden'), 150);
         }
     });
 
