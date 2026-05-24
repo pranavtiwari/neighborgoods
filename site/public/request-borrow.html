@@ -89,8 +89,8 @@
 <!-- Message Field -->
 <section class="space-y-4">
 <div class="flex flex-col gap-2">
-<label class="text-[0.75rem] font-bold uppercase tracking-[0.05em] text-on-surface-variant px-1">Message Marcus (Optional)</label>
-<textarea class="w-full bg-surface-container-low border-none rounded-xl p-4 focus:ring-0 focus:border-b-2 focus:border-primary text-body-lg placeholder:text-on-surface-variant/40 transition-all resize-none" placeholder="Hi Marcus, I'd love to use the ladder for some tree trimming this weekend..." rows="4"></textarea>
+<label id="message-label" class="text-[0.75rem] font-bold uppercase tracking-[0.05em] text-on-surface-variant px-1">Message Owner (Optional)</label>
+<textarea id="message-text" class="w-full bg-surface-container-low border-none rounded-xl p-4 focus:ring-0 focus:border-b-2 focus:border-primary text-body-lg placeholder:text-on-surface-variant/40 transition-all resize-none" placeholder="Hi, I'd love to borrow your item..." rows="4"></textarea>
 </div>
 </section>
 <!-- Agreement -->
@@ -240,8 +240,14 @@
             itemOwnerId = item.owner_id;
             document.getElementById('item-name').textContent = item.name;
             document.getElementById('item-image').src = item.image_url || 'https://placehold.co/200x200';
-            document.getElementById('item-owner-text').textContent = `Lent by ${item.profiles?.full_name || 'Neighbor'}`;
+            
+            const ownerName = item.profiles?.full_name || 'Neighbor';
+            document.getElementById('item-owner-text').textContent = `Lent by ${ownerName}`;
             document.getElementById('owner-avatar-mini').src = item.profiles?.avatar_url || 'https://i.pravatar.cc/150?u=' + item.profiles?.id;
+            
+            const firstName = ownerName.split(' ')[0];
+            document.getElementById('message-label').textContent = `Message ${firstName} (Optional)`;
+            document.getElementById('message-text').placeholder = `Hi ${firstName}, I'd love to use the ${item.name} this week...`;
         } catch (err) {
             console.error("Error loading item:", err);
         }
@@ -256,7 +262,7 @@
             return;
         }
 
-        const message = document.querySelector('textarea').value;
+        const message = document.getElementById('message-text').value;
         
         try {
             // 1. Create the request
@@ -277,7 +283,7 @@
             );
 
             // 3. Redirect to success page
-            window.location.href = 'request-sent.html';
+            window.location.href = `request-sent.html?itemId=${itemId}`;
 
         } catch (err) {
             console.error("Error sending request:", err);

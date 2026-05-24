@@ -12,6 +12,8 @@
     <script>requireAuth();</script>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
     
     
     <style>
@@ -70,6 +72,8 @@
                     <select id="item-category" required class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base appearance-none">
                         <option value="garden">Garden Tools</option>
                         <option value="kitchen">Kitchen Gear</option>
+                        <option value="electronics/computers">Electronics / Computers</option>
+                        <option value="books">Books</option>
                         <option value="skills">Experience / Skills</option>
                         <option value="outdoor">Outdoor Adventure</option>
                         <option value="other">Other</option>
@@ -104,16 +108,68 @@
         const errorDiv = document.getElementById('error-message');
 
         let selectedFile = null;
+        let cropper = null;
 
-        // Image Preview Logic
+        const cropperModal = document.getElementById('cropper-modal');
+        const cropperImage = document.getElementById('cropper-image');
+
+        // Image Preview and Cropping Logic
         imageUpload.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                selectedFile = file;
                 const url = URL.createObjectURL(file);
-                imagePreview.src = url;
-                uploadPlaceholder.classList.add('hidden');
-                previewContainer.classList.remove('hidden');
+                cropperImage.src = url;
+                cropperModal.classList.remove('hidden');
+                
+                if (cropper) {
+                    cropper.destroy();
+                }
+                
+                cropper = new Cropper(cropperImage, {
+                    aspectRatio: 4 / 3,
+                    viewMode: 1,
+                    dragMode: 'move',
+                    autoCropArea: 0.9,
+                    responsive: true,
+                    checkOrientation: false
+                });
+            }
+        });
+
+        const closeCropperFunc = () => {
+            cropperModal.classList.add('hidden');
+            if (cropper) {
+                cropper.destroy();
+                cropper = null;
+            }
+            imageUpload.value = ''; // Reset file input
+        };
+
+        document.getElementById('close-cropper').addEventListener('click', closeCropperFunc);
+        document.getElementById('cancel-crop').addEventListener('click', closeCropperFunc);
+
+        document.getElementById('apply-crop').addEventListener('click', () => {
+            if (cropper) {
+                const canvas = cropper.getCroppedCanvas({
+                    width: 800,
+                    height: 600,
+                    imageSmoothingEnabled: true,
+                    imageSmoothingQuality: 'high'
+                });
+                
+                canvas.toBlob((blob) => {
+                    const originalName = imageUpload.files[0]?.name || 'photo.jpg';
+                    const fileExt = originalName.split('.').pop();
+                    selectedFile = new File([blob], `cropped-${Date.now()}.${fileExt}`, { type: 'image/jpeg' });
+                    
+                    imagePreview.src = canvas.toDataURL('image/jpeg', 0.9);
+                    uploadPlaceholder.classList.add('hidden');
+                    previewContainer.classList.remove('hidden');
+                    
+                    cropperModal.classList.add('hidden');
+                    cropper.destroy();
+                    cropper = null;
+                }, 'image/jpeg', 0.9);
             }
         });
 
@@ -172,5 +228,23 @@
             }
         });
     </script>
+    <!-- Cropper Modal -->
+    <div id="cropper-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex-col items-center justify-center p-4">
+        <div class="bg-surface dark:bg-stone-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-outline-variant/15 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg">Crop Item Photo</h3>
+                <button type="button" id="close-cropper" class="material-symbols-outlined hover:bg-stone-200 dark:hover:bg-stone-800 p-2 rounded-full">close</button>
+            </div>
+            <div class="flex-1 p-6 overflow-hidden flex items-center justify-center bg-stone-950/20">
+                <div class="max-w-full max-h-[50vh] overflow-hidden rounded-lg">
+                    <img id="cropper-image" src="" class="max-w-full block">
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-outline-variant/15 flex gap-4 shrink-0">
+                <button type="button" id="cancel-crop" class="flex-1 py-3 border border-outline/30 font-semibold rounded-xl active:scale-[0.98] transition-all">Cancel</button>
+                <button type="button" id="apply-crop" class="flex-1 py-3 bg-primary text-on-primary font-semibold rounded-xl active:scale-[0.98] transition-all">Apply Crop</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

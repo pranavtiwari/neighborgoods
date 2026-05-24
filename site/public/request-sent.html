@@ -54,8 +54,8 @@
 </div>
 </div>
 <h2 class="text-4xl font-extrabold text-on-surface tracking-tight mb-4">Request Sent!</h2>
-<p class="text-body-lg text-on-surface-variant leading-relaxed px-4">
-                Marcus G. has been notified. We'll let you know once they approve your request for the <span class="font-semibold text-primary">High-Reach Garden Ladder</span>.
+<p id="request-status-text" class="text-body-lg text-on-surface-variant leading-relaxed px-4">
+                Sending details to neighbor...
             </p>
 </div>
 <!-- Next Steps Card (Bento-style asymmetric card) -->
@@ -125,6 +125,29 @@
     <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="activity.html">
         <span class="material-symbols-outlined mb-0.5">notifications</span>
         <span class="text-[10px] font-bold uppercase tracking-wider">Activity</span>
-    </a>
-</nav>
+    </a></nav>
+    
+    <script>
+        async function loadRequestSentDetails() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const itemId = urlParams.get('itemId');
+            if (!itemId) {
+                document.getElementById('request-status-text').innerHTML = `Your neighbor has been notified. We'll let you know once they approve your request.`;
+                return;
+            }
+            try {
+                const item = await window.db.getItem(itemId);
+                if (!item) {
+                    document.getElementById('request-status-text').innerHTML = `Your neighbor has been notified. We'll let you know once they approve your request.`;
+                    return;
+                }
+                const ownerName = item.profiles?.full_name || 'Neighbor';
+                document.getElementById('request-status-text').innerHTML = `${ownerName} has been notified. We'll let you know once they approve your request for the <span class="font-semibold text-primary">${item.name}</span>.`;
+            } catch (err) {
+                console.error("Error loading request-sent details:", err);
+                document.getElementById('request-status-text').innerHTML = `Your neighbor has been notified. We'll let you know once they approve your request.`;
+            }
+        }
+        document.addEventListener('DOMContentLoaded', loadRequestSentDetails);
+    </script>
 </body></html>
