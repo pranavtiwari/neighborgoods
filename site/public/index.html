@@ -151,7 +151,19 @@
 </div>
 </div>
 </div>
+<!-- Activity & Updates Feed Section -->
+<section id="pending-actions-section" class="py-12 bg-stone-100 dark:bg-stone-850 hidden">
+    <div class="max-w-7xl mx-auto px-6">
+        <h2 class="text-3xl font-extrabold mb-8 flex items-center gap-2 text-on-surface tracking-tight">
+            <span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">dynamic_feed</span>
+            Activity & Updates Feed
+        </h2>
+        <div id="pending-actions-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Dynamic feed items go here -->
+        </div>
+    </div>
 </section>
+
 <!-- Gems Near You: Carousel -->
 <section class="py-20 overflow-hidden">
 <div class="max-w-7xl mx-auto px-6 mb-10 flex justify-between items-end">
@@ -254,8 +266,149 @@
     </a>
 </nav>
 <script>
+    async function getPendingRequestsMap(userId) {
+        const map = {};
+        if (!userId) return map;
+        try {
+            const lendingRequests = await window.db.getBorrowRequestsForUser(userId, 'lending');
+            lendingRequests.forEach(req => {
+                if (req.status === 'pending') {
+                    map[req.item_id] = (map[req.item_id] || 0) + 1;
+                }
+            });
+        } catch (e) {
+            console.error("Error building pending requests map:", e);
+        }
+        return map;
+    }
+
+    async function fetchPendingActions(user) {
+        const section = document.getElementById('pending-actions-section');
+        const list = document.getElementById('pending-actions-list');
+        if (!section || !list) return;
+
+        try {
+            const pendingActions = [];
+
+            // 1. Lending requests waiting for approval
+            const lendingRequests = await window.db.getBorrowRequestsForUser(user.uid, 'lending');
+            const pendingLending = lendingRequests.filter(r => r.status === 'pending');
+            pendingLending.forEach(req => {
+                pendingActions.push({
+                    type: 'request',
+                    title: `Borrow request for ${req.items?.name || 'your item'}`,
+                    desc: `${req.profiles?.full_name || 'A neighbor'} wants to borrow this from ${new Date(req.start_date).toLocaleDateString()} to ${new Date(req.end_date).toLocaleDateString()}.`,
+                    actionText: 'Manage Requests',
+                    actionUrl: 'activity.html',
+                    icon: 'handshake',
+                    created_at: req.created_at
+                });
+            });
+
+            // 2. Active returns (borrowed items that are approved/active)
+            const borrowingRequests = await window.db.getBorrowRequestsForUser(user.uid, 'borrowing');
+            const activeBorrowing = borrowingRequests.filter(r => r.status === 'approved');
+            activeBorrowing.forEach(req => {
+                pendingActions.push({
+                    type: 'return',
+                    title: `Return ${req.items?.name || 'borrowed item'}`,
+                    desc: `You are borrowing this item. Please coordinate return by ${new Date(req.end_date).toLocaleDateString()}.`,
+                    actionText: 'Message Owner',
+                    actionUrl: `chat.html?userId=${req.items?.owner_id}&itemId=${req.item_id}`,
+                    icon: 'keyboard_return',
+                    created_at: req.created_at
+                });
+            });
+
+            // 3. Unread messages
+            const messages = await window.db.getInboxMessages(user.uid);
+            const unreadSenderIds = new Set();
+            messages.forEach(msg => {
+                if (msg.receiver_id === user.uid && !msg.is_read) {
+                    unreadSenderIds.add(msg.sender_id);
+                }
+            });
+            
+            for (const senderId of unreadSenderIds) {
+                const profile = await window.db.getProfile(senderId);
+                // Find the latest unread message from this sender for description and timestamp
+                const threadMsgs = messages.filter(m => m.sender_id === senderId && m.receiver_id === user.uid && !m.is_read);
+                const latestMsg = threadMsgs[0]; // Messages are already sorted descending in getInboxMessages
+                
+                pendingActions.push({
+                    type: 'message',
+                    title: `New message from ${profile?.full_name || 'Neighbor'}`,
+                    desc: latestMsg ? `"${latestMsg.content}"` : `You have unread messages in your conversation thread.`,
+                    actionText: 'Reply',
+                    actionUrl: `chat.html?userId=${senderId}`,
+                    icon: 'chat_bubble',
+                    created_at: latestMsg?.created_at
+                });
+            }
+
+            // 4. Updates from circles
+            const memberships = await window.db.getMyMemberships(user.uid);
+            for (const m of memberships) {
+                const circle = await window.db.getCircle(m.circle_id);
+                if (circle) {
+                    const posts = await window.db.getCirclePosts(m.circle_id);
+                    posts.forEach(post => {
+                        pendingActions.push({
+                            type: 'circle',
+                            title: `Update in ${circle.name}`,
+                            desc: `${post.profiles?.full_name || 'Neighbor'}: "${post.content}"`,
+                            actionText: 'Open Circle',
+                            actionUrl: `circle-detail.html?id=${circle.id}`,
+                            icon: 'groups',
+                            created_at: post.created_at
+                        });
+                    });
+                }
+            }
+
+            // Sort all feed actions chronologically (newest first)
+            const getMs = (dateVal) => {
+                if (!dateVal) return 0;
+                if (dateVal.toDate) return dateVal.toDate().getTime();
+                return new Date(dateVal).getTime();
+            };
+            pendingActions.sort((a, b) => getMs(b.created_at) - getMs(a.created_at));
+
+            if (pendingActions.length > 0) {
+                section.classList.remove('hidden');
+                list.innerHTML = pendingActions.map(action => {
+                    const timeVal = action.created_at ? (action.created_at.toDate ? action.created_at.toDate() : new Date(action.created_at)) : new Date();
+                    const relativeTime = timeVal.toLocaleDateString() + ' ' + timeVal.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    
+                    return `
+                    <div class="bg-surface-container-lowest p-5 rounded-xl shadow-sm flex flex-col gap-4 border border-outline-variant/10 relative hover:shadow-md transition-shadow">
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                <span class="material-symbols-outlined">${action.icon}</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex justify-between items-start gap-2">
+                                    <h4 class="font-bold text-base text-on-surface leading-snug truncate">${action.title}</h4>
+                                </div>
+                                <p class="text-sm text-on-surface-variant mt-1 leading-relaxed break-words line-clamp-2">${action.desc}</p>
+                                <span class="text-[10px] text-stone-400 mt-2 block font-medium uppercase tracking-wider">${relativeTime}</span>
+                            </div>
+                        </div>
+                        <button onclick="window.location.href='${action.actionUrl}'" class="mt-auto w-full py-2.5 bg-primary-container hover:bg-primary text-on-primary font-bold rounded-lg text-sm transition-colors active:scale-95 duration-100">
+                            ${action.actionText}
+                        </button>
+                    </div>
+                    `;
+                }).join('');
+            } else {
+                section.classList.add('hidden');
+            }
+        } catch (err) {
+            console.error("Error fetching updates feed:", err);
+        }
+    }
     
-    async function fetchGems() {
+    async function fetchGems(user) {
         const carousel = document.getElementById('gems-carousel');
         try {
             const items = await window.db.getItems();
@@ -265,6 +418,8 @@
                 carousel.innerHTML = '<div class="text-center w-full py-8 text-stone-500">No items available yet.</div>';
                 return;
             }
+            
+            const pendingRequestsMap = user ? await getPendingRequestsMap(user.uid) : {};
             
             carousel.innerHTML = topGems.map(item => {
                 const distance = (Math.random() * 5 + 0.1).toFixed(1);
@@ -283,7 +438,13 @@
                     'other': 'Other'
                 }[item.category] || item.category || 'Item';
                 
-                return '<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group cursor-pointer" onclick="window.location.href=\'item-details.html?id=' + item.id + '\'">' +
+                const pendingCount = (user && item.owner_id === user.uid && pendingRequestsMap[item.id]) || 0;
+                const badgeHtml = pendingCount > 0 
+                    ? `<span class="absolute top-3 right-3 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md z-10 animate-bounce" title="${pendingCount} borrow request(s) waiting for approval">${pendingCount}</span>` 
+                    : '';
+                
+                return '<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group cursor-pointer relative" onclick="window.location.href=\'item-details.html?id=' + item.id + '\'">' +
+                        badgeHtml +
                         '<div class="h-48 overflow-hidden">' +
                             '<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="' + imageUrl + '" alt="' + item.name + '" />' +
                         '</div>' +
@@ -363,10 +524,13 @@
     });
 
     document.addEventListener('DOMContentLoaded', () => {
-        firebase.auth().onAuthStateChanged((user) => {
+        firebase.auth().onAuthStateChanged(async (user) => {
             updateHeader(user);
+            await fetchGems(user);
+            if (user) {
+                fetchPendingActions(user);
+            }
         });
-        fetchGems();
     });
 </script>
 </body></html>

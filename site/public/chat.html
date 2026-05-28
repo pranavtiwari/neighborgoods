@@ -14,25 +14,27 @@
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
     <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: "#0d631b",
-                        "primary-container": "#2e7d32",
-                        surface: "#fbf9f6",
-                        "on-surface": "#1b1c1a",
-                        "on-surface-variant": "#40493d",
-                        "surface-container": "#efeeeb",
-                        "surface-container-low": "#f5f3f0",
-                        "surface-container-lowest": "#ffffff",
-                    },
-                    fontFamily: {
-                        body: ["Lexend"],
+        if (window.tailwind) {
+            tailwind.config = {
+                darkMode: "class",
+                theme: {
+                    extend: {
+                        colors: {
+                            primary: "#0d631b",
+                            "primary-container": "#2e7d32",
+                            surface: "#fbf9f6",
+                            "on-surface": "#1b1c1a",
+                            "on-surface-variant": "#40493d",
+                            "surface-container": "#efeeeb",
+                            "surface-container-low": "#f5f3f0",
+                            "surface-container-lowest": "#ffffff",
+                        },
+                        fontFamily: {
+                            body: ["Lexend"],
+                        }
                     }
                 }
-            }
+            };
         }
     </script>
     <style>

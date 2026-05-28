@@ -180,7 +180,23 @@
         });
     }
 
-    async function fetchItems() {
+    async function getPendingRequestsMap(userId) {
+        const map = {};
+        if (!userId) return map;
+        try {
+            const lendingRequests = await window.db.getBorrowRequestsForUser(userId, 'lending');
+            lendingRequests.forEach(req => {
+                if (req.status === 'pending') {
+                    map[req.item_id] = (map[req.item_id] || 0) + 1;
+                }
+            });
+        } catch (e) {
+            console.error("Error building pending requests map:", e);
+        }
+        return map;
+    }
+
+    async function fetchItems(user) {
         try {
             const userPos = await getCurrentPositionPromise() || { lat: 37.7749, lng: -122.4194 }; // SF default
             const items = await window.db.getItems();
@@ -209,6 +225,9 @@
                 }
             });
 
+            // Get pending requests map
+            const pendingRequestsMap = user ? await getPendingRequestsMap(user.uid) : {};
+
             // Populate Hot Near You carousel (sort by distance ascending, show top 5)
             const nearbyItems = [...items].sort((a, b) => a.distanceVal - b.distanceVal);
             const carousel = document.getElementById('hot-carousel');
@@ -223,8 +242,14 @@
                         ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
                         : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
 
+                    const pendingCount = (user && item.owner_id === user.uid && pendingRequestsMap[item.id]) || 0;
+                    const badgeHtml = pendingCount > 0 
+                        ? `<span class="absolute top-3 right-3 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md z-10 animate-bounce" title="${pendingCount} borrow request(s) waiting">${pendingCount}</span>` 
+                        : '';
+
                     return `
                     <div onclick="window.location.href='item-details.html?id=${item.id}'" class="min-w-[280px] md:min-w-[360px] aspect-[4/3] rounded-xl relative overflow-hidden group cursor-pointer shadow-md shrink-0">
+                        ${badgeHtml}
                         <img alt="${item.name}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" src="${item.image_url || 'https://placehold.co/600x400?text=' + encodeURIComponent(item.name)}"/>
                         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                         <div class="absolute bottom-4 left-4 right-4">
@@ -240,6 +265,10 @@
             grid.innerHTML = items.map((item, index) => {
                 const distance = item.distanceStr;
                 const ownerName = item.owner_name || 'Neighbor';
+                const pendingCount = (user && item.owner_id === user.uid && pendingRequestsMap[item.id]) || 0;
+                const badgeHtml = pendingCount > 0 
+                    ? `<span class="absolute top-3 right-3 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md z-10 animate-bounce" title="${pendingCount} borrow request(s) waiting">${pendingCount}</span>` 
+                    : '';
                 
                 // Skills and Neighbour Help have a distinct horizontal card style
                 if (item.category === 'skills' || item.category === 'neighbour-helping-neighbour') {
@@ -247,7 +276,8 @@
                     const tag = isSkill ? 'Neighbor Skill' : 'Neighbor Help';
                     const fallbackText = isSkill ? 'Skill' : 'Help';
                     return `
-                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer" data-name="${item.name}" data-category="${item.category}">
+                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${item.name}" data-category="${item.category}">
+                        ${badgeHtml}
                         <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
                             <img alt="${item.name}" class="w-full h-full object-cover mix-blend-multiply opacity-80" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x400?text=${fallbackText}'"/>
                         </div>
@@ -276,6 +306,7 @@
                 return `
                 <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${item.name}" data-category="${item.category}">
                     <div class="${imgAspect} rounded-lg overflow-hidden ${index === 0 ? 'bg-surface-container-low' : ''} relative">
+                        ${badgeHtml}
                         <img alt="${item.name}" class="w-full h-full object-cover" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
                         <div class="absolute top-3 left-3">
                             ${typeBadge}
@@ -374,11 +405,11 @@
     });
 
     function initExplorePage() {
-        fetchItems();
         firebase.auth().onAuthStateChanged((user) => {
             if (user) {
                 updateHeaderAvatar(user);
             }
+            fetchItems(user);
         });
     }
 

@@ -260,6 +260,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
+        deleteItem: async function(itemId) {
+            try {
+                await firebase.firestore().collection('items').doc(itemId).delete();
+            } catch (err) {
+                console.error("Error deleting item:", err);
+                throw err;
+            }
+        },
+
         // --- Circles ---
         createCircle: async function(circleData, creatorId) {
             try {
