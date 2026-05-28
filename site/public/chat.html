@@ -251,7 +251,11 @@
             });
         }
 
-        document.addEventListener('DOMContentLoaded', initChat);
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initChat);
+        } else {
+            initChat();
+        }
     </script>
 </body>
 </html>
