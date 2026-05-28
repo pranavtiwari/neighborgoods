@@ -4,6 +4,43 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Share, Instead. - Chat</title>
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            const errDiv = document.createElement('div');
+            errDiv.style.position = 'fixed';
+            errDiv.style.bottom = '0';
+            errDiv.style.left = '0';
+            errDiv.style.width = '100%';
+            errDiv.style.background = '#fee2e2';
+            errDiv.style.color = '#991b1b';
+            errDiv.style.padding = '20px';
+            errDiv.style.zIndex = '9999';
+            errDiv.style.fontFamily = 'monospace';
+            errDiv.style.fontSize = '14px';
+            errDiv.style.borderTop = '3px solid #ef4444';
+            errDiv.style.whiteSpace = 'pre-wrap';
+            errDiv.innerHTML = '<strong>JS Error:</strong> ' + message + '<br>at ' + source + ':' + lineno + ':' + colno + (error ? '<br>Stack: ' + error.stack : '');
+            document.body.appendChild(errDiv);
+            return false;
+        };
+        window.addEventListener('unhandledrejection', function(event) {
+            const errDiv = document.createElement('div');
+            errDiv.style.position = 'fixed';
+            errDiv.style.bottom = '0';
+            errDiv.style.left = '0';
+            errDiv.style.width = '100%';
+            errDiv.style.background = '#fee2e2';
+            errDiv.style.color = '#991b1b';
+            errDiv.style.padding = '20px';
+            errDiv.style.zIndex = '9999';
+            errDiv.style.fontFamily = 'monospace';
+            errDiv.style.fontSize = '14px';
+            errDiv.style.borderTop = '3px solid #ef4444';
+            errDiv.style.whiteSpace = 'pre-wrap';
+            errDiv.innerHTML = '<strong>Promise Rejection:</strong> ' + event.reason + (event.reason && event.reason.stack ? '<br>Stack: ' + event.reason.stack : '');
+            document.body.appendChild(errDiv);
+        });
+    </script>
 <script src="config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
