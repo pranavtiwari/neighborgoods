@@ -200,9 +200,9 @@
                 
                 cropper = new Cropper(cropperImage, {
                     aspectRatio: 4 / 3,
-                    viewMode: 1,
+                    viewMode: 0, // No boundaries restriction, allowing zoom out and placement anywhere
                     dragMode: 'move',
-                    autoCropArea: 0.9,
+                    autoCropArea: 1.0,
                     responsive: true,
                     checkOrientation: false
                 });
@@ -226,6 +226,7 @@
                 const canvas = cropper.getCroppedCanvas({
                     width: 800,
                     height: 600,
+                    fillColor: '#ffffff', // Solid white background for extended areas
                     imageSmoothingEnabled: true,
                     imageSmoothingQuality: 'high'
                 });
