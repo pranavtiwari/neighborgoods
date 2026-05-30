@@ -107,7 +107,7 @@
 </div>
 </section>
 <!-- Featured Carousel: Hot Near You -->
-<section class="mb-12">
+<section id="hot-carousel-section" class="mb-12">
 <div class="px-6 mb-6 flex justify-between items-end">
 <h2 class="text-2xl font-bold tracking-tight text-on-surface">Hot Near You</h2>
 <button class="text-primary font-semibold text-sm hover:underline">View all</button>
@@ -118,7 +118,7 @@
 </section>
 <!-- Main Discovery Feed -->
 <section class="px-6">
-<h2 class="text-2xl font-bold tracking-tight text-on-surface mb-8">Recently Added</h2>
+<h2 id="feed-title" class="text-2xl font-bold tracking-tight text-on-surface mb-8">Recently Added</h2>
 <!-- Asymmetric Staggered Grid -->
     <div id="items-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         <!-- Loading State -->
@@ -307,7 +307,7 @@
                     const fallbackText = isSkill ? 'Skill' : 'Help';
                     const itemCategories = (item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).map(escapeHtml).join(',');
                     return `
-                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${escapeHtml(item.name)}" data-categories="${itemCategories}">
+                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${escapeHtml(item.name)}" data-description="${escapeHtml(item.description || '')}" data-categories="${itemCategories}">
                         ${badgeHtml}
                         <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
                             <img alt="${escapeHtml(item.name)}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 mix-blend-multiply opacity-80" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x400?text=${encodeURIComponent(fallbackText)}'"/>
@@ -339,7 +339,7 @@
 
                 const itemCategories = (item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).map(escapeHtml).join(',');
                 return `
-                <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${escapeHtml(item.name)}" data-categories="${itemCategories}">
+                <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${escapeHtml(item.name)}" data-description="${escapeHtml(item.description || '')}" data-categories="${itemCategories}">
                     <div class="${imgAspect} rounded-lg overflow-hidden ${index === 0 ? 'bg-surface-container-low' : ''} relative">
                         ${badgeHtml}
                         <img alt="${escapeHtml(item.name)}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
@@ -374,7 +374,12 @@
                         }
                     </div>
                 </div>`;
-            }).join('');
+            }).join('') + `
+            <div id="no-results" class="col-span-1 sm:col-span-2 md:col-span-3 flex flex-col items-center justify-center py-12 hidden">
+                <span class="material-symbols-outlined text-outline text-4xl mb-4" style="font-variation-settings: 'FILL' 0;">search_off</span>
+                <p class="text-on-surface-variant font-medium">No matching items found.</p>
+                <p class="text-sm text-outline mt-1">Try adjusting your search or category filters.</p>
+            </div>`;
             
         } catch (err) {
             console.error("Error fetching items:", err);
@@ -384,22 +389,57 @@
 
     function filterItems() {
         const currentCards = document.querySelectorAll('.item-card');
+        let visibleCount = 0;
+
         currentCards.forEach(card => {
             const nameAttr = card.getAttribute('data-name');
+            const descAttr = card.getAttribute('data-description');
             const categoriesAttr = card.getAttribute('data-categories');
             
             const name = (nameAttr || '').toLowerCase();
+            const desc = (descAttr || '').toLowerCase();
             const categories = (categoriesAttr || '').split(',').map(c => c.trim().toLowerCase());
             
-            const matchesSearch = name.includes(currentSearch.toLowerCase());
+            const searchPattern = currentSearch.toLowerCase();
+            const matchesSearch = name.includes(searchPattern) || 
+                                  desc.includes(searchPattern) || 
+                                  categories.some(cat => cat.includes(searchPattern));
             const matchesCategory = currentCategory === 'all' || categories.includes(currentCategory.toLowerCase());
 
             if (matchesSearch && matchesCategory) {
                 card.style.display = 'flex';
+                visibleCount++;
             } else {
                 card.style.display = 'none';
             }
         });
+
+        const noResults = document.getElementById('no-results');
+        if (noResults) {
+            if (visibleCount === 0) {
+                noResults.classList.remove('hidden');
+            } else {
+                noResults.classList.add('hidden');
+            }
+        }
+
+        const carouselSection = document.getElementById('hot-carousel-section');
+        if (carouselSection) {
+            if (currentSearch !== '' || currentCategory !== 'all') {
+                carouselSection.style.display = 'none';
+            } else {
+                carouselSection.style.display = 'block';
+            }
+        }
+
+        const feedTitle = document.getElementById('feed-title');
+        if (feedTitle) {
+            if (currentSearch !== '' || currentCategory !== 'all') {
+                feedTitle.textContent = 'Search Results';
+            } else {
+                feedTitle.textContent = 'Recently Added';
+            }
+        }
     }
 
     searchInput.addEventListener('input', (e) => {
