@@ -282,63 +282,12 @@
                 }
                 
                 cropper = new Cropper(cropperImage, {
-                    aspectRatio: 4 / 3,
-                    viewMode: 0, // No boundaries restriction, allowing zoom out and placement anywhere
+                    aspectRatio: NaN, // Allow freeform/any aspect ratio cropping
+                    viewMode: 0,
                     dragMode: 'move',
                     autoCropArea: 1.0,
                     responsive: true,
-                    checkOrientation: false,
-                    ready() {
-                        const containerData = cropper.getContainerData();
-                        const containerWidth = containerData.width;
-                        const containerHeight = containerData.height;
-                        const targetAspectRatio = 4 / 3;
-
-                        let cropBoxWidth, cropBoxHeight;
-                        if (containerWidth / containerHeight > targetAspectRatio) {
-                            cropBoxHeight = containerHeight;
-                            cropBoxWidth = containerHeight * targetAspectRatio;
-                        } else {
-                            cropBoxWidth = containerWidth;
-                            cropBoxHeight = cropBoxWidth / targetAspectRatio;
-                        }
-
-                        const cropBoxLeft = (containerWidth - cropBoxWidth) / 2;
-                        const cropBoxTop = (containerHeight - cropBoxHeight) / 2;
-
-                        // Maximize and center the crop box relative to container
-                        cropper.setCropBoxData({
-                            left: cropBoxLeft,
-                            top: cropBoxTop,
-                            width: cropBoxWidth,
-                            height: cropBoxHeight
-                        });
-
-                        // Contain the image fully inside the crop box
-                        const canvasData = cropper.getCanvasData();
-                        const imageAspectRatio = canvasData.naturalWidth / canvasData.naturalHeight;
-
-                        let newWidth, newHeight;
-                        if (imageAspectRatio < targetAspectRatio) {
-                            // Portrait: fit height to cropBoxHeight
-                            newHeight = cropBoxHeight;
-                            newWidth = cropBoxHeight * imageAspectRatio;
-                        } else {
-                            // Landscape: fit width to cropBoxWidth
-                            newWidth = cropBoxWidth;
-                            newHeight = cropBoxWidth / imageAspectRatio;
-                        }
-
-                        const newLeft = cropBoxLeft + (cropBoxWidth - newWidth) / 2;
-                        const newTop = cropBoxTop + (cropBoxHeight - newHeight) / 2;
-
-                        cropper.setCanvasData({
-                            left: newLeft,
-                            top: newTop,
-                            width: newWidth,
-                            height: newHeight
-                        });
-                    }
+                    checkOrientation: false
                 });
             }
         });
@@ -370,8 +319,8 @@
         document.getElementById('apply-crop').addEventListener('click', () => {
             if (cropper) {
                 const canvas = cropper.getCroppedCanvas({
-                    width: 800,
-                    height: 600,
+                    maxWidth: 1200,
+                    maxHeight: 1200,
                     fillColor: '#ffffff', // Solid white background for extended areas
                     imageSmoothingEnabled: true,
                     imageSmoothingQuality: 'high'
