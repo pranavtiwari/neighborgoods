@@ -270,7 +270,7 @@
                     return `
                     <div onclick="window.location.href='item-details.html?id=${item.id}'" class="min-w-[280px] md:min-w-[360px] aspect-[4/3] rounded-xl relative overflow-hidden group cursor-pointer shadow-md shrink-0">
                         ${badgeHtml}
-                        <img alt="${item.name}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" src="${item.image_url || 'https://placehold.co/600x400?text=' + encodeURIComponent(item.name)}"/>
+                        <img alt="${item.name}" class="absolute inset-0 w-full h-full object-contain bg-stone-900 dark:bg-stone-950 group-hover:scale-105 transition-transform duration-700" src="${item.image_url || 'https://placehold.co/600x400?text=' + encodeURIComponent(item.name)}"/>
                         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                         <div class="absolute bottom-4 left-4 right-4">
                             <span class="${badgeClass} px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest mb-2 inline-block shadow-sm">${badgeText}</span>
@@ -299,7 +299,7 @@
                     <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${item.name}" data-categories="${(item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).join(',')}">
                         ${badgeHtml}
                         <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
-                            <img alt="${item.name}" class="w-full h-full object-cover mix-blend-multiply opacity-80" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x400?text=${fallbackText}'"/>
+                            <img alt="${item.name}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 mix-blend-multiply opacity-80" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x400?text=${fallbackText}'"/>
                         </div>
                         <div class="flex-1">
                             <span class="text-[10px] font-black text-primary uppercase tracking-widest mb-1 block">${tag}</span>
@@ -330,7 +330,7 @@
                 <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${item.name}" data-categories="${(item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).join(',')}">
                     <div class="${imgAspect} rounded-lg overflow-hidden ${index === 0 ? 'bg-surface-container-low' : ''} relative">
                         ${badgeHtml}
-                        <img alt="${item.name}" class="w-full h-full object-cover" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
+                        <img alt="${item.name}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
                         <div class="absolute top-3 left-3">
                             ${typeBadge}
                         </div>

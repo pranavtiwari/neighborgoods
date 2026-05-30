@@ -226,7 +226,7 @@
                 const editUrl = window.location.pathname.endsWith('.html') ? `add-item.html?id=${item.id}` : `add-item?id=${item.id}`;
                 return `
                 <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
-                    <img alt="${item.name}" class="w-20 h-20 rounded-lg object-cover" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category)}"/>
+                    <img alt="${item.name}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category)}"/>
                     <div class="flex-1">
                         <h4 class="font-bold text-on-surface">${item.name}</h4>
                         <p class="text-on-surface-variant font-medium text-sm mt-1">Ready to share</p>

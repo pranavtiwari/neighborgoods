@@ -360,7 +360,7 @@
                 return `
                 <div onclick="window.location.href='item-details.html?id=${item.id}'" class="group flex items-center gap-4 cursor-pointer bg-surface p-2 rounded-xl border border-transparent hover:border-outline-variant/30 transition-all shadow-sm">
                     <div class="w-14 h-14 rounded-lg overflow-hidden bg-surface-container flex-shrink-0">
-                        <img src="${item.image_url || 'https://placehold.co/100x100?text=Item'}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                        <img src="${item.image_url || 'https://placehold.co/100x100?text=Item'}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 group-hover:scale-110 transition-transform duration-500">
                     </div>
                     <div class="flex-1 min-w-0">
                         <h4 class="font-bold text-sm truncate">${item.name}</h4>
