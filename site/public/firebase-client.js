@@ -81,6 +81,26 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             window.location.pathname !== '/' && 
             !window.location.pathname.includes('index.html')) {
             window.location.href = 'join-community.html';
+        } else if (user) {
+            const updateBadges = async () => {
+                try {
+                    const count = await window.db.getUnreadCount(user.uid);
+                    const badges = document.querySelectorAll('.unread-badge-el');
+                    badges.forEach(badge => {
+                        if (count > 0) {
+                            badge.textContent = count;
+                            badge.classList.remove('hidden');
+                        } else {
+                            badge.classList.add('hidden');
+                        }
+                    });
+                } catch (err) {
+                    console.error("Error updating unread count badge:", err);
+                }
+            };
+            updateBadges();
+            // Update every 30 seconds
+            setInterval(updateBadges, 30000);
         }
     });
 
@@ -162,15 +182,25 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         },
 
         // --- Items ---
-        getItems: async function(category = 'all') {
+        getItems: async function(category = 'all', userId = null) {
             try {
                 let query = firebase.firestore().collection('items');
                 if (category !== 'all') {
                     query = query.where('category', '==', category);
                 }
                 const snapshot = await query.get();
-                const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
+                // Circle-scoped visibility filtering
+                if (userId) {
+                    const memberships = await this.getMyMemberships(userId);
+                    const myCircleIds = new Set(memberships.map(m => m.circle_id));
+                    items = items.filter(item => !item.circle_id || myCircleIds.has(item.circle_id));
+                } else {
+                    // Unauthenticated: only show items with no circle_id
+                    items = items.filter(item => !item.circle_id);
+                }
+
                 // Sort in memory by created_at descending
                 items.sort((a, b) => {
                     const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
@@ -531,6 +561,35 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
+        // Confirm (approve) a borrow request.
+        // For giveaway listings, the item is automatically deleted after approval.
+        confirmBorrowRequest: async function(requestId, itemId, listingType) {
+            try {
+                await firebase.firestore().collection('requests').doc(requestId).update({
+                    status: 'approved',
+                    confirmed_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                if (listingType === 'giveaway') {
+                    await this.deleteItem(itemId);
+                }
+            } catch (err) {
+                console.error("Error confirming borrow request:", err);
+                throw err;
+            }
+        },
+
+        declineBorrowRequest: async function(requestId) {
+            try {
+                await firebase.firestore().collection('requests').doc(requestId).update({
+                    status: 'declined',
+                    declined_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (err) {
+                console.error("Error declining borrow request:", err);
+                throw err;
+            }
+        },
+
         // --- Messaging ---
         getInboxMessages: async function(userId) {
             try {
@@ -592,26 +651,41 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         },
 
         subscribeToChatMessages: function(currentUserId, targetUserId, callback) {
-            return firebase.firestore().collection('messages')
-                .where('participants', 'array-contains', currentUserId)
-                .onSnapshot((snapshot) => {
-                    snapshot.docChanges().forEach((change) => {
-                        if (change.type === 'added') {
-                            const data = { id: change.doc.id, ...change.doc.data() };
-                            // Convert Firestore Timestamp to string or date for page consumption
-                            if (data.created_at && data.created_at.toDate) {
-                                data.created_at = data.created_at.toDate().toISOString();
-                            }
-                            // Only process messages between currentUserId and targetUserId
-                            const otherId = data.sender_id === currentUserId ? data.receiver_id : data.sender_id;
-                            if (otherId === targetUserId) {
-                                callback(data);
-                            }
+            const db = firebase.firestore();
+            const seenIds = new Set();
+
+            const handleSnapshot = (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === 'added') {
+                        if (seenIds.has(change.doc.id)) return;
+                        seenIds.add(change.doc.id);
+                        const data = { id: change.doc.id, ...change.doc.data() };
+                        if (data.created_at && data.created_at.toDate) {
+                            data.created_at = data.created_at.toDate().toISOString();
                         }
-                    });
-                }, (error) => {
-                    console.error("Realtime listener error:", error);
+                        callback(data);
+                    }
                 });
+            };
+
+            const handleError = (error) => {
+                console.error("Realtime listener error:", error);
+            };
+
+            // Query 1: messages sent by currentUser to targetUser
+            const unsub1 = db.collection('messages')
+                .where('sender_id', '==', currentUserId)
+                .where('receiver_id', '==', targetUserId)
+                .onSnapshot(handleSnapshot, handleError);
+
+            // Query 2: messages sent by targetUser to currentUser
+            const unsub2 = db.collection('messages')
+                .where('sender_id', '==', targetUserId)
+                .where('receiver_id', '==', currentUserId)
+                .onSnapshot(handleSnapshot, handleError);
+
+            // Return a combined unsubscribe function
+            return () => { unsub1(); unsub2(); };
         },
 
         getCirclePosts: async function(circleId) {
@@ -651,6 +725,196 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             } catch (err) {
                 console.error("Error creating circle post:", err);
                 throw err;
+            }
+        },
+
+        markReturned: async function(requestId) {
+            try {
+                await firebase.firestore().collection('requests').doc(requestId).update({
+                    status: 'returned',
+                    returned_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (err) {
+                console.error("Error marking as returned:", err);
+                throw err;
+            }
+        },
+
+        confirmReturn: async function(requestId) {
+            try {
+                const reqDoc = await firebase.firestore().collection('requests').doc(requestId).get();
+                if (!reqDoc.exists) throw new Error("Request not found");
+                const reqData = reqDoc.data();
+                
+                // Set request completed
+                await firebase.firestore().collection('requests').doc(requestId).update({
+                    status: 'completed',
+                    completed_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                // Fetch item to know the owner (lender)
+                const itemDoc = await firebase.firestore().collection('items').doc(reqData.item_id).get();
+                if (itemDoc.exists) {
+                    const itemData = itemDoc.data();
+                    const lenderId = itemData.owner_id;
+                    const borrowerId = reqData.borrower_id;
+
+                    // Increment carbon_saved_kg by 2 on lender profile
+                    const lenderProfileRef = firebase.firestore().collection('profiles').doc(lenderId);
+                    await firebase.firestore().runTransaction(async (transaction) => {
+                        const lenderDoc = await transaction.get(lenderProfileRef);
+                        const currentLenderCarbon = lenderDoc.exists ? (lenderDoc.data().carbon_saved_kg || 0) : 0;
+                        transaction.update(lenderProfileRef, { carbon_saved_kg: currentLenderCarbon + 2 });
+                    });
+
+                    // Increment carbon_saved_kg by 2 on borrower profile as well
+                    const borrowerProfileRef = firebase.firestore().collection('profiles').doc(borrowerId);
+                    await firebase.firestore().runTransaction(async (transaction) => {
+                        const borrowerDoc = await transaction.get(borrowerProfileRef);
+                        const currentBorrowerCarbon = borrowerDoc.exists ? (borrowerDoc.data().carbon_saved_kg || 0) : 0;
+                        transaction.update(borrowerProfileRef, { carbon_saved_kg: currentBorrowerCarbon + 2 });
+                    });
+                }
+            } catch (err) {
+                console.error("Error confirming return:", err);
+                throw err;
+            }
+        },
+
+        getUnreadCount: async function(userId) {
+            try {
+                const snap = await firebase.firestore().collection('messages')
+                    .where('receiver_id', '==', userId)
+                    .where('is_read', '==', false)
+                    .get();
+                return snap.size;
+            } catch (err) {
+                console.error("Error getting unread count:", err);
+                return 0;
+            }
+        },
+
+        markMessagesAsRead: async function(currentUserId, targetUserId) {
+            try {
+                const snap = await firebase.firestore().collection('messages')
+                    .where('sender_id', '==', targetUserId)
+                    .where('receiver_id', '==', currentUserId)
+                    .where('is_read', '==', false)
+                    .get();
+                
+                const batch = firebase.firestore().batch();
+                snap.docs.forEach(doc => {
+                    batch.update(doc.ref, { is_read: true });
+                });
+                await batch.commit();
+            } catch (err) {
+                console.error("Error marking messages as read:", err);
+            }
+        },
+
+        createRating: async function(ratingData) {
+            try {
+                const ref = await firebase.firestore().collection('ratings').add({
+                    ...ratingData,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Update ratee's reputation_score on their profile
+                const rateeId = ratingData.ratee_id;
+                const ratingsSnap = await firebase.firestore().collection('ratings')
+                    .where('ratee_id', '==', rateeId)
+                    .get();
+                
+                const ratings = ratingsSnap.docs.map(d => d.data());
+                let totalScore = ratingData.score;
+                let count = 1;
+                let foundNew = false;
+                
+                ratings.forEach(r => {
+                    if (r.request_id === ratingData.request_id && r.rater_id === ratingData.rater_id) {
+                        foundNew = true;
+                    }
+                    totalScore += r.score;
+                    count++;
+                });
+                
+                if (foundNew) {
+                    totalScore -= ratingData.score;
+                    count--;
+                }
+
+                const avgScore = Number((totalScore / count).toFixed(1));
+                
+                await firebase.firestore().collection('profiles').doc(rateeId).update({
+                    reputation_score: avgScore
+                });
+
+                return { id: ref.id };
+            } catch (err) {
+                console.error("Error creating rating:", err);
+                throw err;
+            }
+        },
+
+        getUserRatings: async function(userId) {
+            try {
+                const snap = await firebase.firestore().collection('ratings')
+                    .where('ratee_id', '==', userId)
+                    .get();
+                const ratings = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // Populate rater profiles
+                for (const r of ratings) {
+                    r.rater_profile = await this.getProfile(r.rater_id);
+                }
+                
+                // Sort descending by created_at
+                ratings.sort((a, b) => {
+                    const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
+                    const dateB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
+                    return dateB - dateA;
+                });
+                
+                return ratings;
+            } catch (err) {
+                console.error("Error getting user ratings:", err);
+                return [];
+            }
+        },
+
+        checkIfRated: async function(requestId, raterId) {
+            try {
+                const snap = await firebase.firestore().collection('ratings')
+                    .where('request_id', '==', requestId)
+                    .where('rater_id', '==', raterId)
+                    .get();
+                return !snap.empty;
+            } catch (err) {
+                console.error("Error checking rating status:", err);
+                return false;
+            }
+        },
+
+        checkExistingRequest: async function(itemId, borrowerId) {
+            try {
+                const snap1 = await firebase.firestore().collection('requests')
+                    .where('item_id', '==', itemId)
+                    .where('borrower_id', '==', borrowerId)
+                    .where('status', '==', 'pending')
+                    .get();
+                if (!snap1.empty) return true;
+
+                const snap2 = await firebase.firestore().collection('requests')
+                    .where('item_id', '==', itemId)
+                    .where('borrower_id', '==', borrowerId)
+                    .where('status', '==', 'approved')
+                    .get();
+                if (!snap2.empty) return true;
+
+                return false;
+            } catch (err) {
+                console.error("Error checking existing requests:", err);
+                return false;
             }
         }
     };

@@ -1,0 +1,584 @@
+commit 2dc2fb091ed55162afcab586be79dcd44fe1da95
+Author: Pranav K Tiwari <pranavtiwari@gmail.com>
+Date:   Thu May 28 13:07:39 2026 +0530
+
+    Allow listing owner to delete, fix chat blank page, implement homepage feed and listing badges
+
+diff --git a/site/public/chat.html b/site/public/chat.html
+index b8c92a4..8103188 100644
+--- a/site/public/chat.html
++++ b/site/public/chat.html
+@@ -14,25 +14,27 @@
+     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
+     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+     <script>
+-        tailwind.config = {
+-            darkMode: "class",
+-            theme: {
+-                extend: {
+-                    colors: {
+-                        primary: "#0d631b",
+-                        "primary-container": "#2e7d32",
+-                        surface: "#fbf9f6",
+-                        "on-surface": "#1b1c1a",
+-                        "on-surface-variant": "#40493d",
+-                        "surface-container": "#efeeeb",
+-                        "surface-container-low": "#f5f3f0",
+-                        "surface-container-lowest": "#ffffff",
+-                    },
+-                    fontFamily: {
+-                        body: ["Lexend"],
++        if (window.tailwind) {
++            tailwind.config = {
++                darkMode: "class",
++                theme: {
++                    extend: {
++                        colors: {
++                            primary: "#0d631b",
++                            "primary-container": "#2e7d32",
++                            surface: "#fbf9f6",
++                            "on-surface": "#1b1c1a",
++                            "on-surface-variant": "#40493d",
++                            "surface-container": "#efeeeb",
++                            "surface-container-low": "#f5f3f0",
++                            "surface-container-lowest": "#ffffff",
++                        },
++                        fontFamily: {
++                            body: ["Lexend"],
++                        }
+                     }
+                 }
+-            }
++            };
+         }
+     </script>
+     <style>
+diff --git a/site/public/explore.html b/site/public/explore.html
+index fe74e9e..5aae12b 100644
+--- a/site/public/explore.html
++++ b/site/public/explore.html
+@@ -169,7 +169,23 @@
+     let currentCategory = 'all';
+     let allItemsHtml = ''; // Keep track of rendered cards
+ 
+-    async function fetchItems() {
++    async function getPendingRequestsMap(userId) {
++        const map = {};
++        if (!userId) return map;
++        try {
++            const lendingRequests = await window.db.getBorrowRequestsForUser(userId, 'lending');
++            lendingRequests.forEach(req => {
++                if (req.status === 'pending') {
++                    map[req.item_id] = (map[req.item_id] || 0) + 1;
++                }
++            });
++        } catch (e) {
++            console.error("Error building pending requests map:", e);
++        }
++        return map;
++    }
++
++    async function fetchItems(user) {
+         try {
+             const items = await window.db.getItems();
+                 
+diff --git a/site/public/firebase-client.js b/site/public/firebase-client.js
+index 6594095..64671f6 100644
+--- a/site/public/firebase-client.js
++++ b/site/public/firebase-client.js
+@@ -247,6 +247,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
+             }
+         },
+ 
++        deleteItem: async function(itemId) {
++            try {
++                await firebase.firestore().collection('items').doc(itemId).delete();
++            } catch (err) {
++                console.error("Error deleting item:", err);
++                throw err;
++            }
++        },
++
+         // --- Circles ---
+         createCircle: async function(circleData, creatorId) {
+             try {
+diff --git a/site/public/index.html b/site/public/index.html
+index 6036cf0..01b738b 100644
+--- a/site/public/index.html
++++ b/site/public/index.html
+@@ -135,7 +135,19 @@
+ </div>
+ </div>
+ </div>
++<!-- Activity & Updates Feed Section -->
++<section id="pending-actions-section" class="py-12 bg-stone-100 dark:bg-stone-850 hidden">
++    <div class="max-w-7xl mx-auto px-6">
++        <h2 class="text-3xl font-extrabold mb-8 flex items-center gap-2 text-on-surface tracking-tight">
++            <span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">dynamic_feed</span>
++            Activity & Updates Feed
++        </h2>
++        <div id="pending-actions-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
++            <!-- Dynamic feed items go here -->
++        </div>
++    </div>
+ </section>
++
+ <!-- Gems Near You: Carousel -->
+ <section class="py-20 overflow-hidden">
+ <div class="max-w-7xl mx-auto px-6 mb-10 flex justify-between items-end">
+@@ -239,7 +251,149 @@
+ </nav>
+ <script>
+     
+-    async function fetchGems() {
++    async function getPendingRequestsMap(userId) {
++        const map = {};
++        if (!userId) return map;
++        try {
++            const lendingRequests = await window.db.getBorrowRequestsForUser(userId, 'lending');
++            lendingRequests.forEach(req => {
++                if (req.status === 'pending') {
++                    map[req.item_id] = (map[req.item_id] || 0) + 1;
++                }
++            });
++        } catch (e) {
++            console.error("Error building pending requests map:", e);
++        }
++        return map;
++    }
++
++    async function fetchPendingActions(user) {
++        const section = document.getElementById('pending-actions-section');
++        const list = document.getElementById('pending-actions-list');
++        if (!section || !list) return;
++
++        try {
++            const pendingActions = [];
++
++            // 1. Lending requests waiting for approval
++            const lendingRequests = await window.db.getBorrowRequestsForUser(user.uid, 'lending');
++            const pendingLending = lendingRequests.filter(r => r.status === 'pending');
++            pendingLending.forEach(req => {
++                pendingActions.push({
++                    type: 'request',
++                    title: `Borrow request for ${req.items?.name || 'your item'}`,
++                    desc: `${req.profiles?.full_name || 'A neighbor'} wants to borrow this from ${new Date(req.start_date).toLocaleDateString()} to ${new Date(req.end_date).toLocaleDateString()}.`,
++                    actionText: 'Manage Requests',
++                    actionUrl: 'activity.html',
++                    icon: 'handshake',
++                    created_at: req.created_at
++                });
++            });
++
++            // 2. Active returns (borrowed items that are approved/active)
++            const borrowingRequests = await window.db.getBorrowRequestsForUser(user.uid, 'borrowing');
++            const activeBorrowing = borrowingRequests.filter(r => r.status === 'approved');
++            activeBorrowing.forEach(req => {
++                pendingActions.push({
++                    type: 'return',
++                    title: `Return ${req.items?.name || 'borrowed item'}`,
++                    desc: `You are borrowing this item. Please coordinate return by ${new Date(req.end_date).toLocaleDateString()}.`,
++                    actionText: 'Message Owner',
++                    actionUrl: `chat.html?userId=${req.items?.owner_id}&itemId=${req.item_id}`,
++                    icon: 'keyboard_return',
++                    created_at: req.created_at
++                });
++            });
++
++            // 3. Unread messages
++            const messages = await window.db.getInboxMessages(user.uid);
++            const unreadSenderIds = new Set();
++            messages.forEach(msg => {
++                if (msg.receiver_id === user.uid && !msg.is_read) {
++                    unreadSenderIds.add(msg.sender_id);
++                }
++            });
++            
++            for (const senderId of unreadSenderIds) {
++                const profile = await window.db.getProfile(senderId);
++                // Find the latest unread message from this sender for description and timestamp
++                const threadMsgs = messages.filter(m => m.sender_id === senderId && m.receiver_id === user.uid && !m.is_read);
++                const latestMsg = threadMsgs[0]; // Messages are already sorted descending in getInboxMessages
++                
++                pendingActions.push({
++                    type: 'message',
++                    title: `New message from ${profile?.full_name || 'Neighbor'}`,
++                    desc: latestMsg ? `"${latestMsg.content}"` : `You have unread messages in your conversation thread.`,
++                    actionText: 'Reply',
++                    actionUrl: `chat.html?userId=${senderId}`,
++                    icon: 'chat_bubble',
++                    created_at: latestMsg?.created_at
++                });
++            }
++
++            // 4. Updates from circles
++            const memberships = await window.db.getMyMemberships(user.uid);
++            for (const m of memberships) {
++                const circle = await window.db.getCircle(m.circle_id);
++                if (circle) {
++                    const posts = await window.db.getCirclePosts(m.circle_id);
++                    posts.forEach(post => {
++                        pendingActions.push({
++                            type: 'circle',
++                            title: `Update in ${circle.name}`,
++                            desc: `${post.profiles?.full_name || 'Neighbor'}: "${post.content}"`,
++                            actionText: 'Open Circle',
++                            actionUrl: `circle-detail.html?id=${circle.id}`,
++                            icon: 'groups',
++                            created_at: post.created_at
++                        });
++                    });
++                }
++            }
++
++            // Sort all feed actions chronologically (newest first)
++            const getMs = (dateVal) => {
++                if (!dateVal) return 0;
++                if (dateVal.toDate) return dateVal.toDate().getTime();
++                return new Date(dateVal).getTime();
++            };
++            pendingActions.sort((a, b) => getMs(b.created_at) - getMs(a.created_at));
++
++            if (pendingActions.length > 0) {
++                section.classList.remove('hidden');
++                list.innerHTML = pendingActions.map(action => {
++                    const timeVal = action.created_at ? (action.created_at.toDate ? action.created_at.toDate() : new Date(action.created_at)) : new Date();
++                    const relativeTime = timeVal.toLocaleDateString() + ' ' + timeVal.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
++                    
++                    return `
++                    <div class="bg-surface-container-lowest p-5 rounded-xl shadow-sm flex flex-col gap-4 border border-outline-variant/10 relative hover:shadow-md transition-shadow">
++                        <div class="flex items-start gap-3">
++                            <div class="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
++                                <span class="material-symbols-outlined">${action.icon}</span>
++                            </div>
++                            <div class="flex-1 min-w-0">
++                                <div class="flex justify-between items-start gap-2">
++                                    <h4 class="font-bold text-base text-on-surface leading-snug truncate">${action.title}</h4>
++                                </div>
++                                <p class="text-sm text-on-surface-variant mt-1 leading-relaxed break-words line-clamp-2">${action.desc}</p>
++                                <span class="text-[10px] text-stone-400 mt-2 block font-medium uppercase tracking-wider">${relativeTime}</span>
++                            </div>
++                        </div>
++                        <button onclick="window.location.href='${action.actionUrl}'" class="mt-auto w-full py-2.5 bg-primary-container hover:bg-primary text-on-primary font-bold rounded-lg text-sm transition-colors active:scale-95 duration-100">
++                            ${action.actionText}
++                        </button>
++                    </div>
++                    `;
++                }).join('');
++            } else {
++                section.classList.add('hidden');
++            }
++        } catch (err) {
++            console.error("Error fetching updates feed:", err);
++        }
++    }
++    
++    async function fetchGems(user) {
+         const carousel = document.getElementById('gems-carousel');
+         try {
+             const items = await window.db.getItems();
+@@ -250,12 +404,20 @@
+                 return;
+             }
+             
++            const pendingRequestsMap = user ? await getPendingRequestsMap(user.uid) : {};
++            
+             carousel.innerHTML = topGems.map(item => {
+                 const distance = (Math.random() * 5 + 0.1).toFixed(1);
+                 const imageUrl = item.image_url || 'https://images.unsplash.com/photo-1581092160562-40aa08e78837?q=80&w=400&auto=format&fit=crop';
+                 const actionText = item.status === 'available' ? 'Borrow' : 'Request';
+                 
+-                return '<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group cursor-pointer" onclick="window.location.href=\'item-details.html?id=' + item.id + '\'">' +
++                const pendingCount = (user && item.owner_id === user.uid && pendingRequestsMap[item.id]) || 0;
++                const badgeHtml = pendingCount > 0 
++                    ? `<span class="absolute top-3 right-3 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md z-10 animate-bounce" title="${pendingCount} borrow request(s) waiting for approval">${pendingCount}</span>` 
++                    : '';
++                
++                return '<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group cursor-pointer relative" onclick="window.location.href=\'item-details.html?id=' + item.id + '\'">' +
++                        badgeHtml +
+                         '<div class="h-48 overflow-hidden">' +
+                             '<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="' + imageUrl + '" alt="' + item.name + '" />' +
+                         '</div>' +
+@@ -343,10 +505,13 @@
+     });
+ 
+     document.addEventListener('DOMContentLoaded', () => {
+-        firebase.auth().onAuthStateChanged((user) => {
++        firebase.auth().onAuthStateChanged(async (user) => {
+             updateHeader(user);
++            await fetchGems(user);
++            if (user) {
++                fetchPendingActions(user);
++            }
+         });
+-        fetchGems();
+     });
+ </script>
+ </body></html>
+diff --git a/site/public/item-details.html b/site/public/item-details.html
+index 5e05027..287690a 100644
+--- a/site/public/item-details.html
++++ b/site/public/item-details.html
+@@ -82,7 +82,7 @@
+ </div>
+ <div class="bg-surface-container-low p-3 rounded-lg flex items-center gap-3">
+ <span class="material-symbols-outlined text-secondary">volunteer_activism</span>
+-<p class="text-sm font-medium text-on-surface-variant">Marcus has shared this 14 times with neighbors.</p>
++<p id="owner-shares-text" class="text-sm font-medium text-on-surface-variant">Shared with neighbors</p>
+ </div>
+ </div>
+ <!-- Description -->
+@@ -144,7 +144,7 @@
+ <div class="flex items-center justify-between max-w-screen-xl mx-auto">
+ <div class="hidden md:block">
+ <p class="text-xs font-medium text-stone-800 dark:text-stone-200 uppercase tracking-widest">Available Now</p>
+-<p class="text-lg font-bold text-primary">Reserve High-Reach Ladder</p>
++<p id="footer-item-name" class="text-lg font-bold text-primary">Reserve High-Reach Ladder</p>
+ </div>
+     <button id="request-button" class="w-full md:w-auto bg-gradient-to-br from-green-800 to-green-600 text-white font-bold rounded-lg px-12 py-4 active:scale-[0.98] transform transition-all shadow-lg hover:opacity-90">
+                 Request to Borrow
+@@ -172,12 +172,22 @@
+             document.querySelector('img.w-full.h-full.object-cover').src = item.image_url || 'https://placehold.co/800x600?text=' + encodeURIComponent(item.name);
+             document.querySelector('p.text-on-surface-variant.leading-relaxed').textContent = item.description || 'No description provided.';
+             
++            const footerItemName = document.getElementById('footer-item-name');
++            if (footerItemName) footerItemName.textContent = `Reserve ${item.name}`;
++
+             // Owner Info
+             const owner = item.profiles;
+             if (owner) {
+-                document.querySelector('h3.font-bold.text-lg').textContent = owner.full_name || 'Anonymous Neighbor';
++                const ownerName = owner.full_name || 'Anonymous Neighbor';
++                const firstName = ownerName.split(' ')[0];
++                document.querySelector('h3.font-bold.text-lg').textContent = ownerName;
+                 document.querySelector('img.w-14.h-14').src = owner.avatar_url || 'https://i.pravatar.cc/150?u=' + owner.id;
+                 document.querySelector('p.text-on-surface-variant').innerHTML = `<span class="material-symbols-outlined text-sm">location_on</span> ${owner.location || 'Nearby'} Neighborhood`;
++                
++                const sharesText = document.getElementById('owner-shares-text');
++                if (sharesText) {
++                    sharesText.textContent = `${firstName} has shared this listing with neighbors.`;
++                }
+             }
+ 
+             // Update condition and other details if available
+@@ -191,9 +201,40 @@
+             }
+ 
+             const chatBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Message'));
+-            if (chatBtn) {
+-                chatBtn.onclick = () => window.location.href = `chat.html?userId=${item.owner_id}&itemId=${itemId}`;
+-            }
++            
++            firebase.auth().onAuthStateChanged((user) => {
++                if (user && user.uid === item.owner_id) {
++                    if (chatBtn) {
++                        chatBtn.textContent = 'Delete Listing';
++                        chatBtn.classList.remove('text-primary', 'border-primary/20', 'hover:bg-primary/5');
++                        chatBtn.classList.add('text-red-500', 'border-red-200', 'hover:bg-red-50');
++                        chatBtn.onclick = async () => {
++                            if (confirm('Are you sure you want to delete this listing?')) {
++                                chatBtn.textContent = 'Deleting...';
++                                chatBtn.disabled = true;
++                                try {
++                                    await window.db.deleteItem(itemId);
++                                    window.location.href = 'explore.html';
++                                } catch (e) {
++                                    alert('Error deleting item');
++                                    chatBtn.textContent = 'Delete Listing';
++                                    chatBtn.disabled = false;
++                                }
++                            }
++                        };
++                    }
++                    if (borrowBtn) {
++                        // Hide borrow button since owner can't borrow their own item
++                        borrowBtn.style.display = 'none';
++                        const ctaText = document.querySelector('footer p.text-primary');
++                        if (ctaText) ctaText.textContent = 'This is your listing';
++                    }
++                } else {
++                    if (chatBtn) {
++                        chatBtn.onclick = () => window.location.href = `chat.html?userId=${item.owner_id}&itemId=${itemId}`;
++                    }
++                }
++            });
+             
+         } catch (err) {
+             console.error("Error loading item details:", err);
+diff --git a/site/public/messages.html b/site/public/messages.html
+index 15b7c1d..000e5aa 100644
+--- a/site/public/messages.html
++++ b/site/public/messages.html
+@@ -14,27 +14,29 @@
+     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
+     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+     <script>
+-        tailwind.config = {
+-            darkMode: "class",
+-            theme: {
+-                extend: {
+-                    colors: {
+-                        primary: "#0d631b",
+-                        "primary-container": "#2e7d32",
+-                        surface: "#fbf9f6",
+-                        "on-surface": "#1b1c1a",
+-                        "on-surface-variant": "#40493d",
+-                        "surface-container": "#efeeeb",
+-                        "surface-container-low": "#f5f3f0",
+-                        "surface-container-lowest": "#ffffff",
+-                        "outline-variant": "#bfcaba",
+-                    },
+-                    fontFamily: {
+-                        body: ["Lexend"],
+-                        display: ["Lexend"],
++        if (window.tailwind) {
++            tailwind.config = {
++                darkMode: "class",
++                theme: {
++                    extend: {
++                        colors: {
++                            primary: "#0d631b",
++                            "primary-container": "#2e7d32",
++                            surface: "#fbf9f6",
++                            "on-surface": "#1b1c1a",
++                            "on-surface-variant": "#40493d",
++                            "surface-container": "#efeeeb",
++                            "surface-container-low": "#f5f3f0",
++                            "surface-container-lowest": "#ffffff",
++                            "outline-variant": "#bfcaba",
++                        },
++                        fontFamily: {
++                            body: ["Lexend"],
++                            display: ["Lexend"],
++                        }
+                     }
+                 }
+-            }
++            };
+         }
+     </script>
+     <style>
+diff --git a/site/public/request-borrow.html b/site/public/request-borrow.html
+index 2a46deb..1653aee 100644
+--- a/site/public/request-borrow.html
++++ b/site/public/request-borrow.html
+@@ -88,8 +88,8 @@
+ <!-- Message Field -->
+ <section class="space-y-4">
+ <div class="flex flex-col gap-2">
+-<label class="text-[0.75rem] font-bold uppercase tracking-[0.05em] text-on-surface-variant px-1">Message Marcus (Optional)</label>
+-<textarea class="w-full bg-surface-container-low border-none rounded-xl p-4 focus:ring-0 focus:border-b-2 focus:border-primary text-body-lg placeholder:text-on-surface-variant/40 transition-all resize-none" placeholder="Hi Marcus, I'd love to use the ladder for some tree trimming this weekend..." rows="4"></textarea>
++<label id="message-label" class="text-[0.75rem] font-bold uppercase tracking-[0.05em] text-on-surface-variant px-1">Message (Optional)</label>
++<textarea id="message-input" class="w-full bg-surface-container-low border-none rounded-xl p-4 focus:ring-0 focus:border-b-2 focus:border-primary text-body-lg placeholder:text-on-surface-variant/40 transition-all resize-none" placeholder="Write a message to the owner..." rows="4"></textarea>
+ </div>
+ </section>
+ <!-- Agreement -->
+@@ -237,10 +237,16 @@
+             if (!item) return;
+ 
+             itemOwnerId = item.owner_id;
++            const ownerName = item.profiles?.full_name || 'Neighbor';
++            const firstName = ownerName.split(' ')[0];
++            
+             document.getElementById('item-name').textContent = item.name;
+             document.getElementById('item-image').src = item.image_url || 'https://placehold.co/200x200';
+-            document.getElementById('item-owner-text').textContent = `Lent by ${item.profiles?.full_name || 'Neighbor'}`;
++            document.getElementById('item-owner-text').textContent = `Lent by ${ownerName}`;
+             document.getElementById('owner-avatar-mini').src = item.profiles?.avatar_url || 'https://i.pravatar.cc/150?u=' + item.profiles?.id;
++            
++            document.getElementById('message-label').textContent = `Message ${firstName} (Optional)`;
++            document.getElementById('message-input').placeholder = `Hi ${firstName}, I'd love to use the ${item.name}...`;
+         } catch (err) {
+             console.error("Error loading item:", err);
+         }
+@@ -276,7 +282,7 @@
+             );
+ 
+             // 3. Redirect to success page
+-            window.location.href = 'request-sent.html';
++            window.location.href = `request-sent.html?itemId=${itemId}`;
+ 
+         } catch (err) {
+             console.error("Error sending request:", err);
+diff --git a/site/public/request-sent.html b/site/public/request-sent.html
+index 55d5c95..34866fd 100644
+--- a/site/public/request-sent.html
++++ b/site/public/request-sent.html
+@@ -32,14 +32,11 @@
+ <body class="bg-surface text-on-surface min-h-screen flex flex-col">
+ <!-- TopAppBar -->
+ <header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
+-<div class="flex items-center gap-4">
+-<button class="text-stone-500 dark:text-stone-200 hover:opacity-80 transition-opacity active:scale-95 duration-200">
++<div class="flex items-center justify-between px-6 h-16 w-full">
++<button onclick="window.location.href='explore.html'" class="text-stone-500 dark:text-stone-200 hover:opacity-80 transition-opacity active:scale-95 duration-200">
+ <span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+ </button>
+ <h1 class="font-lexend text-stone-800 dark:text-stone-100 font-bold tracking-tight text-xl">Request Sent</h1>
+-</div>
+-<div class="flex items-center">
+-<!-- Space for trailing icon if needed -->
+ <div class="w-6"></div>
+ </div>
+ </header>
+@@ -53,8 +50,8 @@
+ </div>
+ </div>
+ <h2 class="text-4xl font-extrabold text-on-surface tracking-tight mb-4">Request Sent!</h2>
+-<p class="text-body-lg text-on-surface-variant leading-relaxed px-4">
+-                Marcus G. has been notified. We'll let you know once they approve your request for the <span class="font-semibold text-primary">High-Reach Garden Ladder</span>.
++<p id="success-message" class="text-body-lg text-on-surface-variant leading-relaxed px-4">
++                The owner has been notified. We'll let you know once they approve your request.
+             </p>
+ </div>
+ <!-- Next Steps Card (Bento-style asymmetric card) -->
+@@ -68,14 +65,14 @@
+ <div class="bg-surface-container-lowest rounded-full w-8 h-8 flex items-center justify-center flex-shrink-0 text-sm font-bold text-primary">1</div>
+ <div>
+ <p class="font-semibold text-on-surface">Approved</p>
+-<p class="text-sm text-on-surface-variant">Marcus confirms the dates and availability of the item.</p>
++<p id="step-1-desc" class="text-sm text-on-surface-variant">The owner confirms the dates and availability of the item.</p>
+ </div>
+ </div>
+ <div class="flex items-start gap-4">
+ <div class="bg-surface-container-lowest rounded-full w-8 h-8 flex items-center justify-center flex-shrink-0 text-sm font-bold text-primary">2</div>
+ <div>
+ <p class="font-semibold text-on-surface">Chat</p>
+-<p class="text-sm text-on-surface-variant">You'll be able to message Marcus to coordinate the handoff and pickup location.</p>
++<p id="step-2-desc" class="text-sm text-on-surface-variant">You'll be able to message the owner to coordinate the handoff and pickup location.</p>
+ </div>
+ </div>
+ <div class="flex items-start gap-4">
+@@ -130,4 +127,32 @@
+ <span class="material-symbols-outlined">group</span>
+ <span class="font-lexend text-[11px] font-medium tracking-wide uppercase mt-1">Circles</span>
+ </a></nav>
++<script src="config.js"></script>
++<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
++<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
++<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
++<script src="firebase-client.js"></script>
++<script>
++    async function loadRequestData() {
++        const urlParams = new URLSearchParams(window.location.search);
++        const itemId = urlParams.get('itemId');
++        
++        if (!itemId) return;
++        
++        try {
++            const item = await window.db.getItem(itemId);
++            if (!item) return;
++            
++            const ownerName = item.profiles?.full_name || 'The owner';
++            const firstName = ownerName.split(' ')[0];
++            
++            document.getElementById('success-message').innerHTML = `${ownerName} has been notified. We'll let you know once they approve your request for the <span class="font-semibold text-primary">${item.name}</span>.`;
++            document.getElementById('step-1-desc').textContent = `${firstName} confirms the dates and availability of the item.`;
++            document.getElementById('step-2-desc').textContent = `You'll be able to message ${firstName} to coordinate the handoff and pickup location.`;
++        } catch (err) {
++            console.error("Error loading item for request success:", err);
++        }
++    }
++    document.addEventListener('DOMContentLoaded', loadRequestData);
++</script>
+ </body></html>

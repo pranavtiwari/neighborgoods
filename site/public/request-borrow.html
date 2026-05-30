@@ -36,7 +36,7 @@
 <!-- TopAppBar -->
 <header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
 <div class="flex items-center justify-between px-6 h-16 w-full">
-<button onclick="window.location.href='item-details.html'" class="text-on-surface hover:bg-surface-container transition-all p-2 rounded-full active:scale-95 duration-200">
+<button id="back-btn" class="text-on-surface hover:bg-surface-container transition-all p-2 rounded-full active:scale-95 duration-200">
 <span class="material-symbols-outlined" data-icon="close">close</span>
 </button>
 <h1 class="text-[1.125rem] font-bold tracking-tight text-[#333333]">Check Availability</h1>
@@ -60,7 +60,7 @@
 </div>
 </section>
 <!-- Date Selection (Custom Minimal Calendar) -->
-<section class="space-y-4">
+<section id="date-selection-section" class="space-y-4">
 <h3 class="text-headline-md text-lg font-bold text-on-surface">Select Dates</h3>
 <div class="bg-surface-container-low rounded-xl p-6">
 <div class="flex justify-between items-center mb-6">
@@ -84,6 +84,20 @@
 <span id="end-date-text" class="text-sm font-medium">Select a date</span>
 </div>
 </div>
+</div>
+</section>
+
+<!-- Claim Item Section (Giveaways) -->
+<section id="claim-confirmation-section" class="space-y-4 hidden">
+<h3 class="text-headline-md text-lg font-bold text-on-surface">Claim Item</h3>
+<div class="bg-surface-container-low rounded-xl p-6 flex flex-col gap-3">
+    <div class="flex items-center gap-3 text-primary">
+        <span class="material-symbols-outlined text-[24px]">redeem</span>
+        <span class="font-bold">Permanent Gift</span>
+    </div>
+    <p class="text-sm text-on-surface-variant leading-relaxed">
+        You are requesting to claim this item permanently. There are no return dates because the owner is giving it away for free!
+    </p>
 </div>
 </section>
 <!-- Message Field -->
@@ -250,8 +264,14 @@
     const itemId = urlParams.get('id');
     let itemOwnerId = null;
     let suggestedMessageStr = '';
+    let itemListingType = null;
 
-    async function loadItem() {
+    // Back button setup
+    document.getElementById('back-btn').onclick = () => {
+        window.location.href = 'item-details.html?id=' + itemId;
+    };
+
+    async function loadItem(user) {
         if (!itemId) return;
 
         try {
@@ -259,26 +279,42 @@
             if (!item) return;
 
             itemOwnerId = item.owner_id;
+            itemListingType = item.listing_type;
             document.getElementById('item-name').textContent = item.name;
             document.getElementById('item-image').src = item.image_url || 'https://placehold.co/200x200';
             
             const ownerName = item.profiles?.full_name || 'Neighbor';
-            document.getElementById('item-owner-text').textContent = `Lent by ${ownerName}`;
+            document.getElementById('item-owner-text').textContent = `Shared by ${ownerName}`;
             document.getElementById('owner-avatar-mini').src = item.profiles?.avatar_url || 'https://i.pravatar.cc/150?u=' + item.profiles?.id;
             
             const firstName = ownerName.split(' ')[0];
             document.getElementById('message-label').textContent = `Message ${firstName} (Optional)`;
             
             const isRental = item.listing_type === 'rental';
+            const isGiveaway = item.listing_type === 'giveaway';
             const priceNoticeText = document.getElementById('price-notice-text');
             const priceNoticeIcon = document.getElementById('price-notice-icon');
             
-            if (isRental) {
+            const dateSelection = document.getElementById('date-selection-section');
+            const claimSelection = document.getElementById('claim-confirmation-section');
+            
+            if (isGiveaway) {
+                dateSelection.classList.add('hidden');
+                claimSelection.classList.remove('hidden');
+                priceNoticeText.innerHTML = `Giveaway Listing: <span class="text-secondary font-bold">This is a free gift! You can keep it forever.</span>`;
+                priceNoticeIcon.textContent = 'redeem';
+                suggestedMessageStr = `Hi ${firstName}, I'd love to claim your giveaway item ${item.name}. When would be a good time to pick it up?`;
+                document.getElementById('message-text').placeholder = suggestedMessageStr;
+            } else if (isRental) {
+                dateSelection.classList.remove('hidden');
+                claimSelection.classList.add('hidden');
                 priceNoticeText.innerHTML = `Rental Listing: <span class="text-secondary font-bold">Price and terms will be negotiated over chat.</span>`;
                 priceNoticeIcon.textContent = 'payments';
                 suggestedMessageStr = `Hi ${firstName}, I'd like to rent your ${item.name}. What are your rates and availability?`;
                 document.getElementById('message-text').placeholder = suggestedMessageStr;
             } else {
+                dateSelection.classList.remove('hidden');
+                claimSelection.classList.add('hidden');
                 priceNoticeText.innerHTML = `You won't be charged. <span class="text-secondary font-bold">This is a free neighborhood share!</span>`;
                 priceNoticeIcon.textContent = 'volunteer_activism';
                 suggestedMessageStr = `Hi ${firstName}, I'd love to borrow your ${item.name} this week. Is it available?`;
@@ -286,6 +322,28 @@
             }
 
             document.getElementById('suggested-text-preview').textContent = suggestedMessageStr;
+
+            // Duplicate request guard
+            const hasExisting = await window.db.checkExistingRequest(itemId, user.uid);
+            if (hasExisting) {
+                document.getElementById('send-request-btn').disabled = true;
+                document.getElementById('send-request-btn').classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('send-request-btn').innerText = "Already Requested";
+                
+                if (!document.getElementById('duplicate-warning-banner')) {
+                    const alertBanner = document.createElement('div');
+                    alertBanner.id = 'duplicate-warning-banner';
+                    alertBanner.className = 'bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300 p-4 rounded-xl text-sm font-medium flex items-start gap-3 mt-4';
+                    alertBanner.innerHTML = `
+                        <span class="material-symbols-outlined text-[20px] text-red-600 mt-0.5">warning</span>
+                        <div>
+                            <p class="font-bold">Request already in progress</p>
+                            <p class="text-xs mt-1">You have already requested this item. You can track this request on your <a href="activity.html" class="underline font-bold font-semibold">Activity</a> page.</p>
+                        </div>
+                    `;
+                    document.getElementById('send-request-btn').parentNode.insertBefore(alertBanner, document.getElementById('send-request-btn'));
+                }
+            }
         } catch (err) {
             console.error("Error loading item:", err);
         }
@@ -316,7 +374,8 @@
         const session = await requireAuth();
         if (!session) return;
 
-        if (!startDate || !endDate) {
+        const isGiveaway = (itemListingType === 'giveaway');
+        if (!isGiveaway && (!startDate || !endDate)) {
             alert("Please select both start and end dates.");
             return;
         }
@@ -328,8 +387,8 @@
             await window.db.createBorrowRequest({
                 item_id: itemId,
                 borrower_id: session.user.uid,
-                start_date: startDate.toISOString(),
-                end_date: endDate.toISOString(),
+                start_date: isGiveaway ? null : startDate.toISOString(),
+                end_date: isGiveaway ? null : endDate.toISOString(),
                 status: 'pending'
             });
 
@@ -350,6 +409,14 @@
         }
     });
 
-    document.addEventListener('DOMContentLoaded', loadItem);
+    function initPage() {
+        firebase.auth().onAuthStateChanged(async (user) => {
+            if (user) {
+                await loadItem(user);
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', initPage);
 </script>
 </body></html>

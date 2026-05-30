@@ -91,18 +91,24 @@
             <!-- Listing Type Selector -->
             <div>
                 <label class="block text-sm font-bold mb-2">Listing Type</label>
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-3 gap-3">
                     <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 cursor-pointer transition-all active:scale-[0.98]" id="type-free-label">
                         <input type="radio" name="listing-type" value="free" checked class="hidden">
                         <span class="material-symbols-outlined text-primary text-2xl mb-1" style="font-variation-settings: 'FILL' 1;">volunteer_activism</span>
-                        <span class="text-sm font-bold text-on-surface">Free to Borrow</span>
-                        <span class="text-[10px] text-stone-500 text-center mt-1">Shared with neighbors at no charge</span>
+                        <span class="text-sm font-bold text-on-surface text-center">Free to Borrow</span>
+                        <span class="text-[10px] text-stone-500 text-center mt-1">Shared with neighbors</span>
                     </label>
                     <label class="flex flex-col items-center justify-center p-4 rounded-xl border border-outline-variant/30 hover:bg-stone-50 cursor-pointer transition-all active:scale-[0.98]" id="type-rental-label">
                         <input type="radio" name="listing-type" value="rental" class="hidden">
                         <span class="material-symbols-outlined text-stone-500 text-2xl mb-1">payments</span>
-                        <span class="text-sm font-bold text-on-surface">Rental</span>
-                        <span class="text-[10px] text-stone-500 text-center mt-1">Price negotiated over messages</span>
+                        <span class="text-sm font-bold text-on-surface text-center">Rental</span>
+                        <span class="text-[10px] text-stone-500 text-center mt-1">Price via messages</span>
+                    </label>
+                    <label class="flex flex-col items-center justify-center p-4 rounded-xl border border-outline-variant/30 hover:bg-stone-50 cursor-pointer transition-all active:scale-[0.98]" id="type-giveaway-label">
+                        <input type="radio" name="listing-type" value="giveaway" class="hidden">
+                        <span class="material-symbols-outlined text-stone-500 text-2xl mb-1">card_giftcard</span>
+                        <span class="text-sm font-bold text-on-surface text-center">Give Away</span>
+                        <span class="text-[10px] text-stone-500 text-center mt-1">Item is theirs to keep</span>
                     </label>
                 </div>
             </div>
@@ -146,9 +152,18 @@
                 <h3 class="font-bold text-lg">Crop Item Photo</h3>
                 <button type="button" id="close-cropper" class="material-symbols-outlined hover:bg-stone-200 dark:hover:bg-stone-800 p-2 rounded-full">close</button>
             </div>
-            <div class="flex-1 p-6 overflow-hidden flex items-center justify-center bg-stone-950/20">
+            <div class="flex-1 p-6 overflow-hidden flex flex-col items-center justify-center bg-stone-950/20 gap-4">
                 <div class="max-w-full max-h-[50vh] overflow-hidden rounded-lg">
                     <img id="cropper-image" src="" class="max-w-full block">
+                </div>
+                <!-- Zoom Controls -->
+                <div class="flex gap-4 justify-center items-center">
+                    <button type="button" id="zoom-out-btn" class="bg-surface-container-high hover:bg-stone-200 dark:hover:bg-stone-800 p-3 rounded-full flex items-center justify-center text-on-surface active:scale-90 transition-transform">
+                        <span class="material-symbols-outlined">zoom_out</span>
+                    </button>
+                    <button type="button" id="zoom-in-btn" class="bg-surface-container-high hover:bg-stone-200 dark:hover:bg-stone-800 p-3 rounded-full flex items-center justify-center text-on-surface active:scale-90 transition-transform">
+                        <span class="material-symbols-outlined">zoom_in</span>
+                    </button>
                 </div>
             </div>
             <div class="px-6 py-4 border-t border-outline-variant/15 flex gap-4 shrink-0">
@@ -204,8 +219,53 @@
                     dragMode: 'move',
                     autoCropArea: 1.0,
                     responsive: true,
-                    checkOrientation: false
+                    checkOrientation: false,
+                    ready() {
+                        const imageData = cropper.getImageData();
+                        const imageAspectRatio = imageData.width / imageData.height;
+                        const targetAspectRatio = 4 / 3;
+
+                        if (imageAspectRatio < targetAspectRatio) {
+                            // Portrait: fit full height, pad sides
+                            const cropBoxHeight = imageData.height;
+                            const cropBoxWidth = cropBoxHeight * targetAspectRatio;
+                            const cropBoxLeft = imageData.left + (imageData.width - cropBoxWidth) / 2;
+                            const cropBoxTop = imageData.top;
+                            
+                            cropper.setCropBoxData({
+                                left: cropBoxLeft,
+                                top: cropBoxTop,
+                                width: cropBoxWidth,
+                                height: cropBoxHeight
+                            });
+                        } else if (imageAspectRatio > targetAspectRatio) {
+                            // Extra-wide: fit full width, pad top/bottom
+                            const cropBoxWidth = imageData.width;
+                            const cropBoxHeight = cropBoxWidth / targetAspectRatio;
+                            const cropBoxLeft = imageData.left;
+                            const cropBoxTop = imageData.top + (imageData.height - cropBoxHeight) / 2;
+                            
+                            cropper.setCropBoxData({
+                                left: cropBoxLeft,
+                                top: cropBoxTop,
+                                width: cropBoxWidth,
+                                height: cropBoxHeight
+                            });
+                        }
+                    }
                 });
+            }
+        });
+
+        // Wire zoom buttons
+        document.getElementById('zoom-in-btn').addEventListener('click', () => {
+            if (cropper) {
+                cropper.zoom(0.1);
+            }
+        });
+        document.getElementById('zoom-out-btn').addEventListener('click', () => {
+            if (cropper) {
+                cropper.zoom(-0.1);
             }
         });
 
@@ -248,43 +308,38 @@
         });
 
         // Listing Type Interactive Highlighting
-        const typeFreeLabel = document.getElementById('type-free-label');
-        const typeRentalLabel = document.getElementById('type-rental-label');
-        const typeFreeRadio = typeFreeLabel.querySelector('input');
-        const typeRentalRadio = typeRentalLabel.querySelector('input');
+        const typeLabels = [
+            { label: document.getElementById('type-free-label'),     radio: null },
+            { label: document.getElementById('type-rental-label'),   radio: null },
+            { label: document.getElementById('type-giveaway-label'), radio: null },
+        ];
+        typeLabels.forEach(t => t.radio = t.label.querySelector('input'));
+
+        const ACTIVE_CLS   = 'flex flex-col items-center justify-center p-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 cursor-pointer transition-all active:scale-[0.98]';
+        const INACTIVE_CLS = 'flex flex-col items-center justify-center p-4 rounded-xl border border-outline-variant/30 hover:bg-stone-50 cursor-pointer transition-all active:scale-[0.98]';
 
         function updateTypeSelection() {
-            if (typeFreeRadio.checked) {
-                typeFreeLabel.className = "flex flex-col items-center justify-center p-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 cursor-pointer transition-all active:scale-[0.98]";
-                typeFreeLabel.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 1";
-                typeFreeLabel.querySelector('.material-symbols-outlined').classList.add('text-primary');
-                typeFreeLabel.querySelector('.material-symbols-outlined').classList.remove('text-stone-500');
-
-                typeRentalLabel.className = "flex flex-col items-center justify-center p-4 rounded-xl border border-outline-variant/30 hover:bg-stone-50 cursor-pointer transition-all active:scale-[0.98]";
-                typeRentalLabel.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 0";
-                typeRentalLabel.querySelector('.material-symbols-outlined').classList.remove('text-primary');
-                typeRentalLabel.querySelector('.material-symbols-outlined').classList.add('text-stone-500');
-            } else {
-                typeRentalLabel.className = "flex flex-col items-center justify-center p-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 cursor-pointer transition-all active:scale-[0.98]";
-                typeRentalLabel.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 1";
-                typeRentalLabel.querySelector('.material-symbols-outlined').classList.add('text-primary');
-                typeRentalLabel.querySelector('.material-symbols-outlined').classList.remove('text-stone-500');
-
-                typeFreeLabel.className = "flex flex-col items-center justify-center p-4 rounded-xl border border-outline-variant/30 hover:bg-stone-50 cursor-pointer transition-all active:scale-[0.98]";
-                typeFreeLabel.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 0";
-                typeFreeLabel.querySelector('.material-symbols-outlined').classList.remove('text-primary');
-                typeFreeLabel.querySelector('.material-symbols-outlined').classList.add('text-stone-500');
-            }
+            typeLabels.forEach(({ label, radio }) => {
+                const icon = label.querySelector('.material-symbols-outlined');
+                if (radio.checked) {
+                    label.className = ACTIVE_CLS;
+                    icon.style.fontVariationSettings = "'FILL' 1";
+                    icon.classList.add('text-primary');
+                    icon.classList.remove('text-stone-500');
+                } else {
+                    label.className = INACTIVE_CLS;
+                    icon.style.fontVariationSettings = "'FILL' 0";
+                    icon.classList.remove('text-primary');
+                    icon.classList.add('text-stone-500');
+                }
+            });
         }
 
-        typeFreeLabel.addEventListener('click', () => {
-            typeFreeRadio.checked = true;
-            updateTypeSelection();
-        });
-
-        typeRentalLabel.addEventListener('click', () => {
-            typeRentalRadio.checked = true;
-            updateTypeSelection();
+        typeLabels.forEach(({ label, radio }) => {
+            label.addEventListener('click', () => {
+                radio.checked = true;
+                updateTypeSelection();
+            });
         });
 
         // --- Geolocation & Nominatim Map Logic ---
@@ -420,11 +475,11 @@
                 document.getElementById('item-category').value = item.category || 'other';
                 document.getElementById('item-description').value = item.description || '';
                 
-                if (item.listing_type === 'rental') {
-                    typeRentalRadio.checked = true;
-                } else {
-                    typeFreeRadio.checked = true;
-                }
+                // Pre-select the correct listing type in edit mode
+                const savedType = item.listing_type || 'free';
+                typeLabels.forEach(({ radio }) => {
+                    radio.checked = radio.value === savedType;
+                });
                 updateTypeSelection();
 
                 if (item.image_url) {

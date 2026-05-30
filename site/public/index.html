@@ -43,7 +43,10 @@
 <a class="text-primary dark:text-primary-fixed-dim font-semibold border-b-2 border-primary dark:border-primary-fixed-dim pb-1 font-['Lexend'] tracking-tight" href="index.html">Home</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="explore.html">Explore</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="circles.html">Circles</a>
-<a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="messages.html">Inbox</a>
+<a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded flex items-center gap-1.5" href="messages.html">
+    Inbox
+    <span class="unread-badge-el bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full hidden">0</span>
+</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 font-['Lexend'] tracking-tight px-2 py-1 rounded" href="activity.html">Activity</a>
 </div>
 <div class="flex items-center gap-4" id="header-actions">
@@ -93,7 +96,7 @@
 </div>
 </div>
 <div class="relative aspect-[4/5] md:aspect-square rounded-3xl overflow-hidden shadow-2xl">
-<img class="w-full h-full object-cover" data-alt="warm neighborhood community gathering in a sunny park with people sharing food and gardening tools in golden hour lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLnXCHB4qzXj1XM6fuhRUipFfAodYSNUD8LfcAsN8OZlvt9N15Oqz7MJ9yDE5AhPWkVSesqLJ7zhHknczIiFh0vz0U1QCVLYSVkpmkqbBklETcX38hbeaYmwVgTihIEAZcE-teU3RjQ9zMAuf1hTDY3mWgwMUa57cDE4_VEwj9poyfoCpkI0njQl7PerLqap3EnrX3fk4ZuAl4z9GtoR539CxR3aQaDZhuD6S3xi6vrTTIhPjBf5dq2j_cVb5Z6EXomlZlx9q4gzgz"/>
+<img class="w-full h-full object-cover" alt="warm neighborhood community gathering in a sunny park with people sharing food and gardening tools in golden hour lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLnXCHB4qzXj1XM6fuhRUipFfAodYSNUD8LfcAsN8OZlvt9N15Oqz7MJ9yDE5AhPWkVSesqLJ7zhHknczIiFh0vz0U1QCVLYSVkpmkqbBklETcX38hbeaYmwVgTihIEAZcE-teU3RjQ9zMAuf1hTDY3mWgwMUa57cDE4_VEwj9poyfoCpkI0njQl7PerLqap3EnrX3fk4ZuAl4z9GtoR539CxR3aQaDZhuD6S3xi6vrTTIhPjBf5dq2j_cVb5Z6EXomlZlx9q4gzgz"/>
 <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
 </div>
 </div>
@@ -185,7 +188,7 @@
 <div class="max-w-5xl mx-auto bg-primary rounded-[2rem] p-10 md:p-20 text-center relative overflow-hidden">
 <div class="z-10 relative">
 <h2 class="text-on-primary text-3xl md:text-5xl font-bold mb-8 max-w-2xl mx-auto">Better neighborhoods are built by sharing.</h2>
-<p class="text-on-primary-container/80 text-lg md:text-xl mb-10 max-w-xl mx-auto">Join 12,000+ neighbors already saving money and reducing waste by sharing what they own.</p>
+<p class="text-on-primary-container/80 text-lg md:text-xl mb-10 max-w-xl mx-auto">Join your neighbors already saving money and reducing waste by sharing what they own.</p>
 <button id="trust-cta" onclick="window.loginWithGoogle()" class="bg-surface text-primary px-10 py-5 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all">
                     Find My Neighborhood
                 </button>
@@ -198,48 +201,24 @@
 </section>
 <!-- Footer -->
 <footer class="w-full mt-24 tonal-nesting bg-[#efeeeb] dark:bg-stone-950">
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 px-8 py-16 max-w-7xl mx-auto font-['Lexend'] text-body-lg leading-relaxed">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-12 px-8 py-16 max-w-7xl mx-auto font-['Lexend'] text-body-lg leading-relaxed">
 <div class="flex flex-col gap-4">
 <span class="text-xl font-bold text-primary">Share, Instead.</span>
 <p class="text-stone-500 max-w-xs">Built for your neighborhood. A modern commons project dedicated to local sustainability and connection.</p>
-<div class="flex gap-4 mt-2">
-<a class="text-stone-500 hover:text-primary" href="#"><span class="material-symbols-outlined">public</span></a>
-<a class="text-stone-500 hover:text-primary" href="#"><span class="material-symbols-outlined">chat</span></a>
-<a class="text-stone-500 hover:text-primary" href="#"><span class="material-symbols-outlined">link</span></a>
-</div>
 </div>
 <div class="flex flex-col gap-4">
-<h4 class="font-bold text-on-surface">Discover</h4>
-<nav class="flex flex-col gap-2">
-<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">The Library</a>
-<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">Journal</a>
-<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">Borrowing Rules</a>
+<h4 class="font-bold text-on-surface">Quick Links</h4>
+<nav class="flex flex-wrap gap-x-6 gap-y-2">
+<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-primary decoration-2 underline-offset-4" href="index.html">Home</a>
+<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-primary decoration-2 underline-offset-4" href="explore.html">Explore</a>
+<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-primary decoration-2 underline-offset-4" href="circles.html">Circles</a>
+<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-primary decoration-2 underline-offset-4" href="messages.html">Inbox</a>
+<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-primary decoration-2 underline-offset-4" href="activity.html">Activity</a>
 </nav>
-</div>
-<div class="flex flex-col gap-4">
-<h4 class="font-bold text-on-surface">Community</h4>
-<nav class="flex flex-col gap-2">
-<a class="text-stone-800 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="index.html">Home</a>
-<a class="text-primary font-semibold border-b-2 border-primary pb-1 tracking-tight" href="explore.html">Explore</a>
-<a class="text-stone-800 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="circles.html">Circles</a>
-<a class="text-stone-800 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="messages.html">Inbox</a>
-<a class="text-stone-800 font-medium hover:bg-stone-100 transition-colors px-2 py-1 rounded tracking-tight" href="activity.html">Activity</a>
-<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">About</a>
-<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">Neighborhood Safety</a>
-<a class="text-stone-500 hover:text-stone-800 transition-colors hover:underline decoration-[#ffdcbe] decoration-2 underline-offset-4" href="#">Privacy</a>
-</nav>
-</div>
-<div class="flex flex-col gap-4">
-<h4 class="font-bold text-on-surface">Stay Connected</h4>
-<p class="text-stone-500 text-sm">Join our newsletter for neighborhood highlights and sharing tips.</p>
-<div class="flex flex-col gap-2 mt-2">
-<input class="bg-surface border-none rounded-lg p-3 text-sm focus:ring-primary" placeholder="Email address" type="email"/>
-<button class="bg-primary text-on-primary py-3 rounded-lg font-bold text-sm">Subscribe</button>
-</div>
 </div>
 </div>
 <div class="border-t border-stone-200/50 py-8 px-8 text-center text-stone-400 text-sm">
-            © 2024 The Hearthside Digital. A Modern Commons Project.
+            © 2026 The Hearthside Digital. A Modern Commons Project.
         </div>
 </footer>
 <!-- BottomNavBar -->
@@ -256,8 +235,11 @@
         <span class="material-symbols-outlined mb-0.5">groups</span>
         <span class="text-[10px] font-bold uppercase tracking-wider">Circles</span>
     </a>
-    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="messages.html">
-        <span class="material-symbols-outlined mb-0.5">chat_bubble</span>
+    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400 relative" href="messages.html">
+        <div class="relative">
+            <span class="material-symbols-outlined mb-0.5">chat_bubble</span>
+            <span class="unread-badge-el absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
+        </div>
         <span class="text-[10px] font-bold uppercase tracking-wider">Inbox</span>
     </a>
     <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="activity.html">

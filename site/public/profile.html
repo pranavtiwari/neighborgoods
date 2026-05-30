@@ -45,7 +45,10 @@
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="index.html">Home</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="explore.html">Explore</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="circles.html">Circles</a>
-<a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="messages.html">Inbox</a>
+<a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight flex items-center gap-1.5" href="messages.html">
+    Inbox
+    <span class="unread-badge-el bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full hidden">0</span>
+</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="activity.html">Activity</a>
 </div>
 <div class="relative">
@@ -70,7 +73,7 @@
 <section class="flex flex-col items-center text-center space-y-4">
 <div class="relative">
 <img id="profile-avatar" alt="Profile Picture" class="w-32 h-32 rounded-full object-cover border-4 border-surface-container-lowest shadow-lg" src="https://placehold.co/400x400?text=Avatar"/>
-<div class="absolute -bottom-2 -right-2 bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full flex items-center gap-1.5 shadow-md">
+<div id="contributor-badge" class="absolute -bottom-2 -right-2 bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full flex items-center gap-1.5 shadow-md hidden">
 <span class="material-symbols-outlined text-[18px]" data-icon="workspace_premium" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
 <span class="text-[10px] font-bold uppercase tracking-wider">Top Contributor</span>
 </div>
@@ -89,18 +92,18 @@
 <!-- Impact Dashboard -->
 <section class="grid grid-cols-3 gap-4">
 <div class="bg-surface-container-low p-4 rounded-xl text-center flex flex-col items-center justify-center space-y-1">
-<span class="text-2xl font-bold text-primary">14</span>
+<span id="profile-items-shared" class="text-2xl font-bold text-primary">0</span>
 <span class="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">Items Shared</span>
 </div>
 <div class="bg-surface-container-low p-4 rounded-xl text-center flex flex-col items-center justify-center space-y-1">
 <div class="flex items-center gap-1">
-<span class="text-2xl font-bold text-primary">4.9</span>
+<span id="profile-rating" class="text-2xl font-bold text-primary">New</span>
 <span class="material-symbols-outlined text-secondary text-[20px]" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
 </div>
-<span class="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">Rating</span>
+<span id="profile-rating-label" class="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest text-center">Rating</span>
 </div>
 <div class="bg-surface-container-low p-4 rounded-xl text-center flex flex-col items-center justify-center space-y-1">
-<span class="text-2xl font-bold text-primary">215</span>
+<span id="profile-neighbors-helped" class="text-2xl font-bold text-primary">0</span>
 <span class="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest">Neighbors Helped</span>
 </div>
 </section>
@@ -108,7 +111,7 @@
 <section class="bg-primary-fixed/30 p-6 rounded-xl relative overflow-hidden flex items-center gap-4">
 <div class="z-10">
 <p class="text-on-primary-fixed-variant text-lg font-medium leading-snug">
-                    You've helped the community save <span class="font-black text-primary">85kg of carbon</span> by sharing! 🌿
+                    You've helped the community save <span id="profile-carbon-saved" class="font-black text-primary">0kg</span> of carbon by sharing! 🌿
                 </p>
 </div>
 <div class="absolute -right-4 -bottom-4 opacity-10">
@@ -119,7 +122,7 @@
 <section class="space-y-4">
 <div class="flex justify-between items-end px-2">
 <h3 class="text-xl font-bold tracking-tight">My Active Inventory</h3>
-<button class="text-primary font-bold text-sm">View All</button>
+<button onclick="window.location.href='explore.html'" class="text-primary font-bold text-sm">View All</button>
 </div>
 <div class="space-y-4" id="my-items-list">
     <!-- Loading State -->
@@ -162,6 +165,7 @@
         
         // Fetch Profile Data
         const data = await window.db.getProfile(session.user.uid);
+        let carbonSaved = 0;
             
         if (data) {
             document.getElementById('profile-name').textContent = data.full_name || 'Anonymous User';
@@ -178,13 +182,41 @@
                 document.getElementById('profile-nickname-row').classList.remove('hidden');
                 document.getElementById('profile-nickname-row').classList.add('flex');
             }
+            carbonSaved = data.carbon_saved_kg || 0;
         }
 
         // Fetch User Items
         const items = await window.db.getMyItems(session.user.uid);
         const count = items.length;
 
-        document.querySelector('.grid.grid-cols-3.gap-4 .text-2xl.font-bold.text-primary').textContent = count;
+        document.getElementById('profile-items-shared').textContent = count;
+
+        // Toggle contributor badge
+        const badge = document.getElementById('contributor-badge');
+        if (count >= 5) {
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+
+        // Fetch Ratings and calculate average
+        const ratings = await window.db.getUserRatings(session.user.uid);
+        if (ratings.length > 0) {
+            const avg = (ratings.reduce((acc, r) => acc + r.score, 0) / ratings.length).toFixed(1);
+            document.getElementById('profile-rating').textContent = avg;
+            document.getElementById('profile-rating-label').textContent = `Rating (${ratings.length})`;
+        } else {
+            document.getElementById('profile-rating').textContent = 'New';
+            document.getElementById('profile-rating-label').textContent = 'Rating';
+        }
+
+        // Fetch Lending Requests to count helped neighbors
+        const lendingRequests = await window.db.getBorrowRequestsForUser(session.user.uid, 'lending');
+        const completedLending = lendingRequests.filter(req => req.status === 'completed');
+        document.getElementById('profile-neighbors-helped').textContent = completedLending.length;
+
+        // Set carbon saved
+        document.getElementById('profile-carbon-saved').textContent = `${carbonSaved}kg`;
 
         const itemsList = document.getElementById('my-items-list');
         if (!items || items.length === 0) {
@@ -262,8 +294,11 @@
         <span class="material-symbols-outlined mb-0.5">groups</span>
         <span class="text-[10px] font-bold uppercase tracking-wider">Circles</span>
     </a>
-    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="messages.html">
-        <span class="material-symbols-outlined mb-0.5">chat_bubble</span>
+    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400 relative" href="messages.html">
+        <div class="relative">
+            <span class="material-symbols-outlined mb-0.5">chat_bubble</span>
+            <span class="unread-badge-el absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
+        </div>
         <span class="text-[10px] font-bold uppercase tracking-wider">Inbox</span>
     </a>
     <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="activity.html">

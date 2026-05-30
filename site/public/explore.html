@@ -48,7 +48,10 @@
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="index.html">Home</a>
 <a class="text-primary dark:text-primary-fixed-dim font-semibold border-b-2 border-primary dark:border-primary-fixed-dim pb-1 tracking-tight" href="explore.html">Explore</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="circles.html">Circles</a>
-<a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="messages.html">Inbox</a>
+<a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight flex items-center gap-1.5" href="messages.html">
+    Inbox
+    <span class="unread-badge-el bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full hidden">0</span>
+</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="activity.html">Activity</a>
 </div>
 <div class="relative">
@@ -132,8 +135,11 @@
         <span class="material-symbols-outlined mb-0.5">groups</span>
         <span class="text-[10px] font-bold uppercase tracking-wider">Circles</span>
     </a>
-    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="messages.html">
-        <span class="material-symbols-outlined mb-0.5">chat_bubble</span>
+    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400 relative" href="messages.html">
+        <div class="relative">
+            <span class="material-symbols-outlined mb-0.5">chat_bubble</span>
+            <span class="unread-badge-el absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
+        </div>
         <span class="text-[10px] font-bold uppercase tracking-wider">Inbox</span>
     </a>
     <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="activity.html">
@@ -199,7 +205,10 @@
     async function fetchItems(user) {
         try {
             const userPos = await getCurrentPositionPromise() || { lat: 37.7749, lng: -122.4194 }; // SF default
-            const items = await window.db.getItems();
+            let items = await window.db.getItems('all', user ? user.uid : null);
+            if (user) {
+                items = items.filter(item => item.owner_id !== user.uid);
+            }
                 
             if (!items || items.length === 0) {
                 grid.innerHTML = `
@@ -237,10 +246,13 @@
             } else {
                 carousel.innerHTML = nearbyItems.slice(0, 5).map(item => {
                     const isRental = item.listing_type === 'rental';
-                    const badgeText = isRental ? 'Rental' : 'Free';
-                    const badgeClass = isRental 
-                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
-                        : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+                    const isGiveaway = item.listing_type === 'giveaway';
+                    const badgeText = isGiveaway ? 'Give Away' : (isRental ? 'Rental' : 'Free');
+                    const badgeClass = isGiveaway
+                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
+                        : (isRental 
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
+                            : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300');
 
                     const pendingCount = (user && item.owner_id === user.uid && pendingRequestsMap[item.id]) || 0;
                     const badgeHtml = pendingCount > 0 
@@ -299,9 +311,12 @@
                 const imgAspect = index === 0 ? "aspect-square" : "aspect-[3/4]";
                 
                 const isRental = item.listing_type === 'rental';
-                const typeBadge = isRental 
-                    ? `<span class="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Rental</span>`
-                    : `<span class="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Free</span>`;
+                const isGiveaway = item.listing_type === 'giveaway';
+                const typeBadge = isGiveaway
+                    ? `<span class="bg-teal-100 dark:bg-teal-900/40 text-teal-800 dark:text-teal-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Give Away</span>`
+                    : (isRental 
+                        ? `<span class="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Rental</span>`
+                        : `<span class="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Free</span>`);
 
                 return `
                 <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${item.name}" data-category="${item.category}">

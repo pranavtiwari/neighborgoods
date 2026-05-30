@@ -4,43 +4,6 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Share, Instead. - Chat</title>
-    <script>
-        window.onerror = function(message, source, lineno, colno, error) {
-            const errDiv = document.createElement('div');
-            errDiv.style.position = 'fixed';
-            errDiv.style.bottom = '0';
-            errDiv.style.left = '0';
-            errDiv.style.width = '100%';
-            errDiv.style.background = '#fee2e2';
-            errDiv.style.color = '#991b1b';
-            errDiv.style.padding = '20px';
-            errDiv.style.zIndex = '9999';
-            errDiv.style.fontFamily = 'monospace';
-            errDiv.style.fontSize = '14px';
-            errDiv.style.borderTop = '3px solid #ef4444';
-            errDiv.style.whiteSpace = 'pre-wrap';
-            errDiv.innerHTML = '<strong>JS Error:</strong> ' + message + '<br>at ' + source + ':' + lineno + ':' + colno + (error ? '<br>Stack: ' + error.stack : '');
-            document.body.appendChild(errDiv);
-            return false;
-        };
-        window.addEventListener('unhandledrejection', function(event) {
-            const errDiv = document.createElement('div');
-            errDiv.style.position = 'fixed';
-            errDiv.style.bottom = '0';
-            errDiv.style.left = '0';
-            errDiv.style.width = '100%';
-            errDiv.style.background = '#fee2e2';
-            errDiv.style.color = '#991b1b';
-            errDiv.style.padding = '20px';
-            errDiv.style.zIndex = '9999';
-            errDiv.style.fontFamily = 'monospace';
-            errDiv.style.fontSize = '14px';
-            errDiv.style.borderTop = '3px solid #ef4444';
-            errDiv.style.whiteSpace = 'pre-wrap';
-            errDiv.innerHTML = '<strong>Promise Rejection:</strong> ' + event.reason + (event.reason && event.reason.stack ? '<br>Stack: ' + event.reason.stack : '');
-            document.body.appendChild(errDiv);
-        });
-    </script>
 <script src="config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -129,7 +92,7 @@
 
     <!-- Message List -->
     <main id="chat-messages" class="flex-1 overflow-y-auto px-6 py-8 space-y-6 flex flex-col hide-scrollbar">
-        <div class="text-center text-sm font-medium text-stone-400 mt-10">Starting secure chat...</div>
+        <div id="chat-loading" class="text-center text-sm font-medium text-stone-400 mt-10 animate-pulse">Starting secure chat...</div>
     </main>
 
     <!-- Sticky Input -->
@@ -215,6 +178,18 @@
                 <span class="text-[10px] uppercase font-black text-on-surface-variant/40 tracking-[0.2em] bg-stone-100 px-4 py-1 rounded-full">Message History</span>
             </div>`;
 
+            // Mark messages as read on entry
+            await window.db.markMessagesAsRead(currentUser.uid, targetUserId);
+
+            // Empty state placeholder (removed once messages arrive)
+            chatMessages.innerHTML += `
+            <div id="empty-state" class="flex flex-col items-center justify-center flex-1 py-12 text-center">
+                <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <span class="material-symbols-outlined text-primary text-3xl">chat_bubble</span>
+                </div>
+                <p class="text-sm font-medium text-stone-400">No messages yet.<br>Send the first one!</p>
+            </div>`;
+
             subscribeToMessages();
         }
 
@@ -285,6 +260,9 @@
                 if (renderedMessageIds.has(msg.id)) return;
                 renderedMessageIds.add(msg.id);
                 appendMessage(msg);
+                if (msg.receiver_id === currentUser.uid && !msg.is_read) {
+                    window.db.markMessagesAsRead(currentUser.uid, targetUserId);
+                }
             });
         }
 

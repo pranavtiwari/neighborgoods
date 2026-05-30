@@ -46,7 +46,10 @@
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="index.html">Home</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="explore.html">Explore</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="circles.html">Circles</a>
-<a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="messages.html">Inbox</a>
+<a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight flex items-center gap-1.5" href="messages.html">
+    Inbox
+    <span class="unread-badge-el bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full hidden">0</span>
+</a>
 <a class="text-primary dark:text-primary-fixed-dim font-semibold border-b-2 border-primary dark:border-primary-fixed-dim pb-1 tracking-tight" href="activity.html">Activity</a>
 </div>
 <div class="relative">
@@ -87,26 +90,7 @@
     <!-- Items will be injected here -->
 </div>
 </section>
-<section class="mb-12">
-<h3 class="text-1.75rem font-headline font-bold text-on-surface mb-6">Pending Requests</h3>
-<div class="bg-surface-container-low rounded-xl p-6">
-<div class="flex flex-col md:flex-row md:items-center gap-6">
-<div class="w-full md:w-24 h-24 rounded-lg overflow-hidden flex-shrink-0">
-<img class="w-full h-full object-cover" data-alt="Heavy-duty professional power drill on a wooden workbench, industrial aesthetic, warm incandescent workshop light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJxzM7cGLaZZ0nOazvLy7qGAY4t4NcarfTBR1HyZiC4UnJPnXmKXmSNKqqc9xAoshRYTjUk16xzOxlio95mHaNcX7xAxqfMUasGK6LbU9QyooHp7hb_xy483oteTEYx3WKKlr3F0EKyaDiHboAc1Dw4tRkdmn1zxg3wWSqoZXhmxdO5baMDlxJXKt72K1rsbgYFVRMb5sVZR1dhSksS1c1MhRlqGmXyDcDceOPHEGCejpRT_eS8TUuW5XEERmK85z9bnmnOci32FP5"/>
-</div>
-<div class="flex-1">
-<div class="flex flex-col md:flex-row md:justify-between md:items-center mb-2">
-<h4 class="font-bold text-xl">Heavy-Duty Drill</h4>
-<span class="text-xs font-semibold uppercase tracking-widest text-on-surface-variant bg-surface-container-highest px-3 py-1 rounded-full w-fit mt-2 md:mt-0">Pending</span>
-</div>
-<p class="text-on-surface-variant mb-4">Requested 2 hours ago from <span class="font-semibold text-on-surface">Sarah L.</span></p>
-<div class="flex gap-3">
-<button class="bg-surface-container-highest text-on-surface px-5 py-2 rounded-lg text-sm font-bold hover:bg-surface-dim transition-colors">Cancel Request</button>
-</div>
-</div>
-</div>
-</div>
-</section>
+
 <section class="mb-8">
 <h3 class="text-1.75rem font-headline font-bold text-on-surface mb-6">Past Activity</h3>
 <div class="space-y-3">
@@ -151,8 +135,11 @@
         <span class="material-symbols-outlined mb-0.5">groups</span>
         <span class="text-[10px] font-bold uppercase tracking-wider">Circles</span>
     </a>
-    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="messages.html">
-        <span class="material-symbols-outlined mb-0.5">chat_bubble</span>
+    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400 relative" href="messages.html">
+        <div class="relative">
+            <span class="material-symbols-outlined mb-0.5">chat_bubble</span>
+            <span class="unread-badge-el absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
+        </div>
         <span class="text-[10px] font-bold uppercase tracking-wider">Inbox</span>
     </a>
     <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-primary dark:text-green-400 bg-primary/10 dark:bg-green-900/30" href="activity.html">
@@ -160,9 +147,84 @@
         <span class="text-[10px] font-bold uppercase tracking-wider">Activity</span>
     </a>
 </nav>
+
+<!-- Rating Modal -->
+<div id="rating-modal" class="fixed inset-0 z-[100] flex items-center justify-center hidden bg-black/60 backdrop-blur-sm transition-opacity duration-300">
+    <div class="bg-surface-container-lowest rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl border border-outline-variant/15 transform transition-all scale-95 duration-300">
+        <h3 class="text-xl font-bold mb-2">Rate Your Experience</h3>
+        <p id="rating-modal-subtitle" class="text-sm text-on-surface-variant mb-6">How was your interaction with Neighbor?</p>
+        
+        <!-- Stars -->
+        <div class="flex justify-center gap-2 mb-6">
+            <span data-val="1" class="star-btn material-symbols-outlined text-4xl cursor-pointer text-outline hover:text-amber-400 transition-colors">star</span>
+            <span data-val="2" class="star-btn material-symbols-outlined text-4xl cursor-pointer text-outline hover:text-amber-400 transition-colors">star</span>
+            <span data-val="3" class="star-btn material-symbols-outlined text-4xl cursor-pointer text-outline hover:text-amber-400 transition-colors">star</span>
+            <span data-val="4" class="star-btn material-symbols-outlined text-4xl cursor-pointer text-outline hover:text-amber-400 transition-colors">star</span>
+            <span data-val="5" class="star-btn material-symbols-outlined text-4xl cursor-pointer text-outline hover:text-amber-400 transition-colors">star</span>
+        </div>
+        
+        <textarea id="rating-comment" class="w-full bg-surface-container-low border-none rounded-xl p-4 focus:ring-0 focus:border-b-2 focus:border-primary text-sm placeholder:text-on-surface-variant/40 transition-all resize-none mb-6" placeholder="Leave a nice note about the exchange (optional)..." rows="3"></textarea>
+        
+        <div class="flex gap-3">
+            <button id="cancel-rating-btn" class="flex-1 py-3 bg-surface-container text-on-surface-variant font-bold rounded-xl active:scale-95 transition-transform text-sm">Cancel</button>
+            <button id="submit-rating-btn" class="flex-1 py-3 bg-primary text-white font-bold rounded-xl active:scale-95 transition-transform text-sm" disabled>Submit Rating</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let currentView = 'borrowing';
     let userSession = null;
+
+    // --- Approve / Decline handlers (called from inline onclick) ---
+    async function handleApprove(requestId, itemId, listingType, btnEl) {
+        const card = document.getElementById(`req-card-${requestId}`);
+        const isGiveaway = listingType === 'giveaway';
+        const confirmMsg = isGiveaway
+            ? 'Confirm this give away? The listing will be permanently removed after.'
+            : 'Approve this borrow request?';
+        if (!confirm(confirmMsg)) return;
+
+        btnEl.disabled = true;
+        btnEl.textContent = 'Confirming...';
+        try {
+            await window.db.confirmBorrowRequest(requestId, itemId, listingType);
+            if (card) {
+                card.style.transition = 'opacity 0.4s, transform 0.4s';
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+                setTimeout(() => { card.remove(); updateCount(); }, 420);
+            }
+        } catch (e) {
+            alert('Failed to approve request: ' + e.message);
+            btnEl.disabled = false;
+            btnEl.textContent = isGiveaway ? '🎁 Confirm Give Away' : '✓ Approve';
+        }
+    }
+
+    async function handleDecline(requestId, btnEl) {
+        const card = document.getElementById(`req-card-${requestId}`);
+        btnEl.disabled = true;
+        btnEl.textContent = 'Declining...';
+        try {
+            await window.db.declineBorrowRequest(requestId);
+            if (card) {
+                card.style.transition = 'opacity 0.4s, transform 0.4s';
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+                setTimeout(() => { card.remove(); updateCount(); }, 420);
+            }
+        } catch (e) {
+            alert('Failed to decline request: ' + e.message);
+            btnEl.disabled = false;
+            btnEl.textContent = '✕ Decline';
+        }
+    }
+
+    function updateCount() {
+        const remaining = document.querySelectorAll('[id^="req-card-"]').length;
+        document.getElementById('item-count').textContent = `${remaining} Item${remaining !== 1 ? 's' : ''}`;
+    }
 
     async function switchView(view) {
         currentView = view;
@@ -180,6 +242,112 @@
         await fetchActivity();
     }
 
+    // --- Return Flow handlers ---
+    async function handleMarkReturned(requestId, btnEl) {
+        if (!confirm("Are you sure you want to mark this item as returned?")) return;
+        btnEl.disabled = true;
+        btnEl.textContent = 'Updating...';
+        try {
+            await window.db.markReturned(requestId);
+            await fetchActivity();
+        } catch (e) {
+            alert('Failed to mark as returned: ' + e.message);
+            btnEl.disabled = false;
+            btnEl.textContent = '↩ Mark as Returned';
+        }
+    }
+
+    async function handleConfirmReturn(requestId, btnEl) {
+        if (!confirm("Confirm that this item has been returned to you in good condition?")) return;
+        btnEl.disabled = true;
+        btnEl.textContent = 'Confirming...';
+        try {
+            await window.db.confirmReturn(requestId);
+            await fetchActivity();
+        } catch (e) {
+            alert('Failed to confirm return: ' + e.message);
+            btnEl.disabled = false;
+            btnEl.textContent = '✓ Confirm Return Received';
+        }
+    }
+
+    // --- Rating modal variables & events ---
+    let ratingScore = 0;
+    let activeRatingRequestId = null;
+    let activeRatingRateeId = null;
+
+    function openRatingModal(requestId, rateeId, rateeName) {
+        activeRatingRequestId = requestId;
+        activeRatingRateeId = rateeId;
+        document.getElementById('rating-modal-subtitle').textContent = `How was your interaction with ${rateeName}?`;
+        document.getElementById('rating-comment').value = '';
+        resetStars();
+        document.getElementById('submit-rating-btn').disabled = true;
+        document.getElementById('rating-modal').classList.remove('hidden');
+    }
+
+    function closeRatingModal() {
+        document.getElementById('rating-modal').classList.add('hidden');
+    }
+
+    function resetStars() {
+        ratingScore = 0;
+        document.querySelectorAll('.star-btn').forEach(btn => {
+            btn.classList.remove('text-amber-400');
+            btn.classList.add('text-outline');
+            btn.textContent = 'star';
+            btn.style.fontVariationSettings = "'FILL' 0, 'wght' 400";
+        });
+    }
+
+    document.querySelectorAll('.star-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const val = parseInt(btn.getAttribute('data-val'));
+            ratingScore = val;
+            
+            document.querySelectorAll('.star-btn').forEach(b => {
+                const bVal = parseInt(b.getAttribute('data-val'));
+                if (bVal <= val) {
+                    b.classList.remove('text-outline');
+                    b.classList.add('text-amber-400');
+                    b.style.fontVariationSettings = "'FILL' 1, 'wght' 400";
+                } else {
+                    b.classList.remove('text-amber-400');
+                    b.classList.add('text-outline');
+                    b.style.fontVariationSettings = "'FILL' 0, 'wght' 400";
+                }
+            });
+            
+            document.getElementById('submit-rating-btn').disabled = false;
+        });
+    });
+
+    document.getElementById('cancel-rating-btn').addEventListener('click', closeRatingModal);
+
+    document.getElementById('submit-rating-btn').addEventListener('click', async () => {
+        if (ratingScore === 0 || !activeRatingRequestId || !activeRatingRateeId) return;
+        
+        const btn = document.getElementById('submit-rating-btn');
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+        
+        try {
+            await window.db.createRating({
+                request_id: activeRatingRequestId,
+                rater_id: userSession.user.uid,
+                ratee_id: activeRatingRateeId,
+                score: ratingScore,
+                comment: document.getElementById('rating-comment').value.trim()
+            });
+            closeRatingModal();
+            await fetchActivity();
+        } catch (e) {
+            alert('Failed to submit rating: ' + e.message);
+            btn.disabled = false;
+            btn.textContent = 'Submit Rating';
+        }
+    });
+
     async function fetchActivity() {
         if (!userSession) return;
         
@@ -189,20 +357,127 @@
         try {
             const requests = await window.db.getBorrowRequestsForUser(userSession.user.uid, currentView);
 
-            document.getElementById('item-count').textContent = `${requests.length} Item${requests.length !== 1 ? 's' : ''}`;
+            // Fetch detail rating checks
+            const requestsWithDetails = await Promise.all(requests.map(async req => {
+                let isRated = false;
+                if (req.status === 'completed') {
+                    isRated = await window.db.checkIfRated(req.id, userSession.user.uid);
+                }
+                return { ...req, isRated };
+            }));
 
-            if (requests.length === 0) {
+            document.getElementById('item-count').textContent = `${requestsWithDetails.length} Item${requestsWithDetails.length !== 1 ? 's' : ''}`;
+
+            if (requestsWithDetails.length === 0) {
                 grid.innerHTML = `<div class="col-span-2 text-center py-12 text-stone-400">No ${currentView} activity yet.</div>`;
                 return;
             }
 
-            grid.innerHTML = requests.map(req => {
+            grid.innerHTML = requestsWithDetails.map(req => {
                 const item = req.items;
                 const otherParty = currentView === 'borrowing' ? item.profiles : req.profiles;
-                const statusColor = req.status === 'approved' ? 'bg-primary/10 text-primary' : 'bg-surface-container-highest text-on-surface-variant';
                 
+                // Color codes
+                let statusColor = 'bg-surface-container-highest text-on-surface-variant';
+                if (req.status === 'approved') {
+                    statusColor = 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300';
+                } else if (req.status === 'returned') {
+                    statusColor = 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
+                } else if (req.status === 'completed') {
+                    statusColor = 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300';
+                } else if (req.status === 'declined') {
+                    statusColor = 'bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300';
+                }
+
+                const isGiveaway = item.listing_type === 'giveaway';
+                const isOwnerView = currentView === 'lending';
+                const isPending  = req.status === 'pending';
+
+                // Date calculation & UI styling
+                let dateInfoHtml = '';
+                if (!isGiveaway && req.end_date) {
+                    const endDate = new Date(req.end_date);
+                    const dueDateStr = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                    
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const endDay = new Date(endDate);
+                    endDay.setHours(0, 0, 0, 0);
+
+                    let dateColorClass = 'text-on-surface-variant';
+                    let dateTextPrefix = 'Due back by';
+
+                    if (req.status === 'completed') {
+                        dateColorClass = 'text-stone-400';
+                        dateTextPrefix = 'Borrowed until';
+                    } else if (endDay < today) {
+                        dateColorClass = 'text-red-600 dark:text-red-400 font-semibold';
+                        dateTextPrefix = '⚠️ Overdue since';
+                    } else if (endDay.getTime() === today.getTime()) {
+                        dateColorClass = 'text-amber-600 dark:text-amber-400 font-semibold';
+                        dateTextPrefix = '⏳ Due TODAY';
+                    } else {
+                        dateColorClass = 'text-green-600 dark:text-green-400';
+                    }
+                    dateInfoHtml = `<p class="text-xs ${dateColorClass} mt-2 flex items-center gap-1">
+                        <span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                        ${dateTextPrefix} ${dueDateStr}
+                    </p>`;
+                }
+
+                // Action buttons logic
+                let actionButtons = '';
+                if (isOwnerView && isPending) {
+                    const approveLabel = isGiveaway ? '🎁 Confirm Give Away' : '✓ Approve';
+                    actionButtons = `
+                        <button
+                            onclick="handleApprove('${req.id}', '${item.id}', '${item.listing_type || 'free'}', this)"
+                            class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95">
+                            ${approveLabel}
+                        </button>
+                        <button
+                            onclick="handleDecline('${req.id}', this)"
+                            class="bg-surface-container text-on-surface-variant px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-200 transition-colors active:scale-95">
+                            ✕ Decline
+                        </button>`;
+                } else if (!isOwnerView && isPending) {
+                    actionButtons = `
+                        <button
+                            onclick="handleDecline('${req.id}', this)"
+                            class="bg-surface-container text-on-surface-variant px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-200 transition-colors active:scale-95">
+                            ✕ Cancel Request
+                        </button>`;
+                } else if (!isOwnerView && req.status === 'approved') {
+                    actionButtons = `
+                        <button
+                            onclick="handleMarkReturned('${req.id}', this)"
+                            class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[16px]">keyboard_return</span> Mark as Returned
+                        </button>`;
+                } else if (isOwnerView && req.status === 'returned') {
+                    actionButtons = `
+                        <button
+                            onclick="handleConfirmReturn('${req.id}', this)"
+                            class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95">
+                            ✓ Confirm Return Received
+                        </button>`;
+                } else if (req.status === 'completed') {
+                    if (!req.isRated) {
+                        const targetId = isOwnerView ? req.borrower_id : item.owner_id;
+                        const targetName = otherParty?.full_name || 'Neighbor';
+                        actionButtons = `
+                            <button
+                                onclick="openRatingModal('${req.id}', '${targetId}', '${targetName}')"
+                                class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors active:scale-95 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span> Rate Exchange
+                            </button>`;
+                    } else {
+                        actionButtons = `<span class="text-xs text-stone-400 font-semibold italic flex items-center gap-1"><span class="material-symbols-outlined text-[16px] text-green-500">check_circle</span> Rated</span>`;
+                    }
+                }
+
                 return `
-                <div class="bg-surface-container-lowest rounded-xl p-5 group hover:shadow-lg transition-shadow">
+                <div id="req-card-${req.id}" class="bg-surface-container-lowest rounded-xl p-5 group hover:shadow-lg transition-shadow">
                     <div class="flex gap-4 mb-4">
                         <div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
                             <img class="w-full h-full object-cover" src="${item.image_url || 'https://placehold.co/200x200'}" />
@@ -212,14 +487,21 @@
                                 <h4 class="font-bold text-lg leading-tight mb-1">${item.name}</h4>
                                 <span class="${statusColor} px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">${req.status}</span>
                             </div>
-                            <p class="text-on-surface-variant text-sm flex items-center gap-1">
+                            <p class="text-on-surface-variant text-sm flex items-center gap-1 mt-1">
                                 <span class="material-symbols-outlined text-sm">person</span> ${otherParty?.full_name || 'Neighbor'}
                             </p>
+                            ${isGiveaway ? '<span class="inline-block mt-2 text-[10px] font-bold uppercase tracking-widest text-teal-600 bg-teal-50 dark:bg-teal-950/40 dark:text-teal-300 px-2 py-0.5 rounded-full">Give Away</span>' : ''}
+                            ${dateInfoHtml}
                         </div>
                     </div>
-                    <div class="flex justify-between items-center pt-4 border-t border-surface-container-low">
-                        <span class="text-sm font-medium text-on-surface-variant">${req.status === 'approved' ? 'Due soon' : 'Pending response'}</span>
-                        <button onclick="window.location.href='chat.html?userId=${currentView === 'borrowing' ? item.owner_id : req.borrower_id}&itemId=${item.id}'" class="text-primary font-semibold text-sm hover:underline">Message</button>
+                    <div class="flex justify-between items-center pt-4 border-t border-surface-container-low gap-3 flex-wrap">
+                        <button onclick="window.location.href='chat.html?userId=${currentView === 'borrowing' ? item.owner_id : req.borrower_id}&itemId=${item.id}'"
+                            class="text-primary font-semibold text-sm hover:underline">
+                            Message
+                        </button>
+                        <div class="flex gap-2 flex-wrap">
+                            ${actionButtons}
+                        </div>
                     </div>
                 </div>
                 `;

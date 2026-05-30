@@ -64,7 +64,10 @@
                 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="index.html">Home</a>
                 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="explore.html">Explore</a>
                 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="circles.html">Circles</a>
-                <a class="text-primary dark:text-primary-fixed-dim font-semibold border-b-2 border-primary dark:border-primary-fixed-dim pb-1 tracking-tight" href="messages.html">Inbox</a>
+                <a class="text-primary dark:text-primary-fixed-dim font-semibold border-b-2 border-primary dark:border-primary-fixed-dim pb-1 tracking-tight flex items-center gap-1.5" href="messages.html">
+    Inbox
+    <span class="unread-badge-el bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full hidden">0</span>
+</a>
                 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="activity.html">Activity</a>
             </div>
             <div class="relative">
@@ -114,8 +117,11 @@
         <span class="material-symbols-outlined mb-0.5">groups</span>
         <span class="text-[10px] font-bold uppercase tracking-wider">Circles</span>
     </a>
-    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-primary dark:text-green-400 bg-primary/10 dark:bg-green-900/30" href="messages.html">
-        <span class="material-symbols-outlined mb-0.5" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+    <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-primary dark:text-green-400 bg-primary/10 dark:bg-green-900/30 relative" href="messages.html">
+        <div class="relative">
+            <span class="material-symbols-outlined mb-0.5" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+            <span class="unread-badge-el absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
+        </div>
         <span class="text-[10px] font-bold uppercase tracking-wider">Inbox</span>
     </a>
     <a class="flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all duration-200 active:scale-90 text-stone-500 hover:text-primary dark:text-stone-400 dark:hover:text-green-400" href="activity.html">
@@ -168,7 +174,8 @@
                     const profile = thread.partner;
                     const lastMsg = thread.latestMessage;
                     
-                    const timeString = new Date(lastMsg.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    const rawTime = lastMsg.created_at?.toDate ? lastMsg.created_at.toDate() : new Date(lastMsg.created_at || 0);
+                    const timeString = rawTime.toLocaleDateString([], { month: 'short', day: 'numeric' });
                     const snippet = lastMsg.sender_id === currentUser.id ? `You: ${lastMsg.content}` : lastMsg.content;
 
                     const avatarUrl = profile?.avatar_url || 'https://placehold.co/100x100?text=U';

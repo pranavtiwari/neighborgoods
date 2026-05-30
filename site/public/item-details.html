@@ -49,7 +49,7 @@
 <div class="relative overflow-hidden rounded-xl shadow-lg aspect-[4/5] md:aspect-auto md:h-[600px]">
 <img id="item-photo" class="w-full h-full object-cover" data-alt="Item photo" src=""/>
 <div class="absolute top-4 left-4">
-<span class="bg-secondary-fixed text-on-secondary-fixed px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase">Borrowing</span>
+<span id="item-badge" class="bg-secondary-fixed text-on-secondary-fixed px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase">Borrowing</span>
 </div>
 </div>
 </div>
@@ -111,6 +111,13 @@
         <strong>Rental Listing:</strong> The borrowing price/terms for this item will be negotiated with the owner over messages.
     </p>
 </div>
+<!-- Giveaway Notice Banner -->
+<div id="giveaway-notice" class="hidden bg-teal-50 dark:bg-teal-950/20 border border-teal-200/50 dark:border-teal-900/30 text-teal-800 dark:text-teal-300 p-4 rounded-xl flex items-start gap-3 mt-4">
+    <span class="material-symbols-outlined shrink-0 text-xl">card_giftcard</span>
+    <p class="text-xs font-semibold leading-normal">
+        <strong>Give Away:</strong> This item is free and yours to keep permanently. Once the owner confirms your request, the listing will be removed.
+    </p>
+</div>
 </div>
 </div>
 </main>
@@ -162,17 +169,20 @@
             const conditionEl = document.getElementById('item-condition');
             if (conditionEl) conditionEl.textContent = item.condition || 'Good';
 
-            // Update listing type and notice
+            // Update listing type label and notices
             const isRental = item.listing_type === 'rental';
+            const isGiveaway = item.listing_type === 'giveaway';
             const itemTypeEl = document.getElementById('item-type');
             const rentalNoticeEl = document.getElementById('rental-notice');
+            const giveawayNoticeEl = document.getElementById('giveaway-notice');
             
             if (itemTypeEl) {
-                itemTypeEl.textContent = isRental ? 'Rental' : 'Free to Borrow';
+                if (isRental) itemTypeEl.textContent = 'Rental';
+                else if (isGiveaway) itemTypeEl.textContent = 'Give Away 🎁';
+                else itemTypeEl.textContent = 'Free to Borrow';
             }
-            if (isRental && rentalNoticeEl) {
-                rentalNoticeEl.classList.remove('hidden');
-            }
+            if (isRental && rentalNoticeEl) rentalNoticeEl.classList.remove('hidden');
+            if (isGiveaway && giveawayNoticeEl) giveawayNoticeEl.classList.remove('hidden');
 
             // Update Reserve Title
             const reserveTitleEl = document.getElementById('reserve-title');
@@ -214,10 +224,28 @@
                     if (reserveTitleEl) {
                         reserveTitleEl.textContent = "Your Listing";
                     }
+                    const badge = document.getElementById('item-badge');
+                    if (badge) {
+                        badge.textContent = 'Your Listing';
+                        badge.className = 'px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-stone-500 text-white';
+                    }
                 } else {
-                    // Borrower view
+                    // Borrower view — text depends on listing type
+                    const isGiveaway = item.listing_type === 'giveaway';
+
+                    // Update badge on photo
+                    const badge = document.getElementById('item-badge');
+                    if (badge) {
+                        if (isGiveaway) {
+                            badge.textContent = 'Free — Yours to Keep!';
+                            badge.className = 'px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-teal-500 text-white';
+                        } else {
+                            badge.textContent = 'Borrowing';
+                        }
+                    }
+
                     if (borrowBtn) {
-                        borrowBtn.textContent = "Request to Borrow";
+                        borrowBtn.textContent = isGiveaway ? 'Request to Claim' : 'Request to Borrow';
                         borrowBtn.className = "w-full md:w-auto bg-gradient-to-br from-green-800 to-green-600 text-white font-bold rounded-lg px-12 py-4 active:scale-[0.98] transform transition-all shadow-lg hover:opacity-90";
                         borrowBtn.onclick = () => window.location.href = `request-borrow.html?id=${itemId}`;
                     }
@@ -226,7 +254,7 @@
                         chatBtn.onclick = () => window.location.href = `chat.html?userId=${item.owner_id}&itemId=${itemId}`;
                     }
                     if (reserveTitleEl) {
-                        reserveTitleEl.textContent = `Reserve ${item.name}`;
+                        reserveTitleEl.textContent = isGiveaway ? `Claim ${item.name}` : `Reserve ${item.name}`;
                     }
                 }
             });
