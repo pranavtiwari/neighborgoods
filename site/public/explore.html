@@ -159,6 +159,16 @@
 <span class="material-symbols-outlined" data-icon="add">add</span>
 </button>
 <script>
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     const searchInput = document.getElementById('search-input');
     const categoryChips = document.querySelectorAll('.category-chip');
     const grid = document.getElementById('items-grid');
@@ -270,11 +280,11 @@
                     return `
                     <div onclick="window.location.href='item-details.html?id=${item.id}'" class="min-w-[280px] md:min-w-[360px] aspect-[4/3] rounded-xl relative overflow-hidden group cursor-pointer shadow-md shrink-0">
                         ${badgeHtml}
-                        <img alt="${item.name}" class="absolute inset-0 w-full h-full object-contain bg-stone-900 dark:bg-stone-950 group-hover:scale-105 transition-transform duration-700" src="${item.image_url || 'https://placehold.co/600x400?text=' + encodeURIComponent(item.name)}"/>
+                        <img alt="${escapeHtml(item.name)}" class="absolute inset-0 w-full h-full object-contain bg-stone-900 dark:bg-stone-950 group-hover:scale-105 transition-transform duration-700" src="${item.image_url || 'https://placehold.co/600x400?text=' + encodeURIComponent(item.name)}"/>
                         <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                         <div class="absolute bottom-4 left-4 right-4">
                             <span class="${badgeClass} px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest mb-2 inline-block shadow-sm">${badgeText}</span>
-                            <h3 class="text-white text-xl font-bold mb-0.5 truncate">${item.name}</h3>
+                            <h3 class="text-white text-xl font-bold mb-0.5 truncate">${escapeHtml(item.name)}</h3>
                             <p class="text-white/80 text-xs font-semibold">${item.distanceStr} away &bull; ${item.owner_name || 'Neighbor'}</p>
                         </div>
                     </div>`;
@@ -295,16 +305,17 @@
                     const isSkill = item.category === 'skills';
                     const tag = isSkill ? 'Neighbor Skill' : 'Neighbor Help';
                     const fallbackText = isSkill ? 'Skill' : 'Help';
+                    const itemCategories = (item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).map(escapeHtml).join(',');
                     return `
-                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${item.name}" data-categories="${(item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).join(',')}">
+                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${escapeHtml(item.name)}" data-categories="${itemCategories}">
                         ${badgeHtml}
                         <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
-                            <img alt="${item.name}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 mix-blend-multiply opacity-80" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x400?text=${fallbackText}'"/>
+                            <img alt="${escapeHtml(item.name)}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 mix-blend-multiply opacity-80" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x400?text=${encodeURIComponent(fallbackText)}'"/>
                         </div>
                         <div class="flex-1">
                             <span class="text-[10px] font-black text-primary uppercase tracking-widest mb-1 block">${tag}</span>
-                            <h4 class="font-bold text-xl leading-tight mb-1">${item.name}</h4>
-                            <p class="text-sm text-on-surface-variant mb-2">${item.description || 'Available to help.'} ${distance} away.</p>
+                            <h4 class="font-bold text-xl leading-tight mb-1">${escapeHtml(item.name)}</h4>
+                            <p class="text-sm text-on-surface-variant mb-2">${escapeHtml(item.description || 'Available to help.')} ${distance} away.</p>
                             <button onclick="event.stopPropagation(); window.location.href='chat.html?userId=${item.owner_id}&itemId=${item.id}'" class="text-primary font-bold text-sm flex items-center gap-1 group">
                                 Message Neighbor
                                 <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
@@ -326,22 +337,23 @@
                         ? `<span class="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Rental</span>`
                         : `<span class="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Free</span>`);
 
+                const itemCategories = (item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).map(escapeHtml).join(',');
                 return `
-                <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${item.name}" data-categories="${(item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).join(',')}">
+                <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${escapeHtml(item.name)}" data-categories="${itemCategories}">
                     <div class="${imgAspect} rounded-lg overflow-hidden ${index === 0 ? 'bg-surface-container-low' : ''} relative">
                         ${badgeHtml}
-                        <img alt="${item.name}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
+                        <img alt="${escapeHtml(item.name)}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
                         <div class="absolute top-3 left-3">
                             ${typeBadge}
                         </div>
                     </div>
                     <div class="flex flex-col gap-1">
                         <div class="flex justify-between items-start">
-                            <h4 class="font-bold ${index === 0 ? 'text-lg' : 'text-md'} leading-tight">${item.name}</h4>
+                            <h4 class="font-bold ${index === 0 ? 'text-lg' : 'text-md'} leading-tight">${escapeHtml(item.name)}</h4>
                             <span class="text-[10px] font-bold text-outline uppercase tracking-wider">${distance}</span>
                         </div>
                         ${index === 0 
-                            ? `<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">${item.description}</p>
+                            ? `<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">${escapeHtml(item.description)}</p>
                                <div class="flex gap-2">
                                    <button onclick="event.stopPropagation(); window.location.href='item-details.html?id=${item.id}'" class="flex-1 py-3 bg-primary-container text-on-primary font-bold rounded-xl active:scale-95 transition-transform">View Details</button>
                                    <a href="chat.html?userId=${item.owner_id}&itemId=${item.id}" onclick="event.stopPropagation()" class="w-12 h-12 bg-surface-container-highest flex items-center justify-center rounded-xl text-on-surface active:scale-95 transition-transform">
@@ -353,12 +365,12 @@
                                      <div class="w-6 h-6 rounded-full overflow-hidden bg-secondary-fixed flex items-center justify-center">
                                          <img src="${item.owner_avatar || 'https://placehold.co/100x100?text=A'}" class="w-full h-full object-cover">
                                      </div>
-                                     <span class="text-xs text-on-surface-variant line-clamp-1">${ownerName}</span>
+                                     <span class="text-xs text-on-surface-variant line-clamp-1">${escapeHtml(ownerName)}</span>
                                  </div>
                                  <a href="chat.html?userId=${item.owner_id}&itemId=${item.id}" onclick="event.stopPropagation()" class="text-primary active:scale-90 transition-transform">
                                      <span class="material-symbols-outlined text-xl bg-primary/10 rounded-full p-1.5" data-icon="chat_bubble">chat_bubble</span>
                                  </a>
-                               </div>`
+                                </div>`
                         }
                     </div>
                 </div>`;
@@ -373,11 +385,14 @@
     function filterItems() {
         const currentCards = document.querySelectorAll('.item-card');
         currentCards.forEach(card => {
-            const name = card.getAttribute('data-name').toLowerCase();
-            const categories = (card.getAttribute('data-categories') || '').split(',');
+            const nameAttr = card.getAttribute('data-name');
+            const categoriesAttr = card.getAttribute('data-categories');
+            
+            const name = (nameAttr || '').toLowerCase();
+            const categories = (categoriesAttr || '').split(',').map(c => c.trim().toLowerCase());
             
             const matchesSearch = name.includes(currentSearch.toLowerCase());
-            const matchesCategory = currentCategory === 'all' || categories.includes(currentCategory);
+            const matchesCategory = currentCategory === 'all' || categories.includes(currentCategory.toLowerCase());
 
             if (matchesSearch && matchesCategory) {
                 card.style.display = 'flex';
