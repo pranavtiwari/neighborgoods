@@ -50,7 +50,7 @@
             <div>
                 <label class="block text-sm font-bold mb-2">Item Photo</label>
                 <div id="image-preview-container" class="hidden relative w-full aspect-square md:aspect-video rounded-xl overflow-hidden bg-stone-100 border-2 border-stone-200 shadow-sm mb-3 group cursor-pointer" onclick="document.getElementById('image-upload').click()">
-                    <img id="image-preview" src="" class="w-full h-full object-cover">
+                    <img id="image-preview" src="" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900">
                     <div class="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center transition-all">
                         <span class="material-symbols-outlined text-white text-3xl">edit</span>
                     </div>
@@ -69,22 +69,78 @@
                 <input type="text" id="item-name" required placeholder="e.g. Lawn Aerator" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
             </div>
 
-            <!-- Category Dropdown -->
+            <!-- Categories Selection -->
             <div>
-                <label class="block text-sm font-bold mb-2">Category</label>
-                <div class="relative">
-                    <select id="item-category" required class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base appearance-none">
-                        <option value="garden">Garden Tools</option>
-                        <option value="power">Power Tools</option>
-                        <option value="kitchen">Kitchen Gear</option>
-                        <option value="electronics/computers">Electronics / Computers</option>
-                        <option value="books">Books</option>
-                        <option value="skills">Experience / Skills</option>
-                        <option value="neighbour-helping-neighbour">Neighbour helping Neighbour</option>
-                        <option value="outdoor">Outdoor Adventure</option>
-                        <option value="other">Other</option>
-                    </select>
-                    <span class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-stone-500">expand_more</span>
+                <label class="block text-sm font-bold mb-2">Categories (Select one or more)</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-3 bg-surface-container rounded-xl border border-outline-variant/10 shadow-inner" id="categories-checkbox-list">
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="garden" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Garden Tools</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="power" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Power Tools</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="kitchen" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Kitchen Gear</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="electronics/computers" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Electronics & Computers</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="books" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Books</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="skills" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Experience & Skills</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="neighbour-helping-neighbour" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Neighbour helping Neighbour</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="outdoor" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Outdoor Adventure</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="party" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Party & Event Supplies</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="baby" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Baby & Kids Gear</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="sports" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Sports & Recreation</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="camping" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Camping & Travel</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="games" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Board Games, Toys & Puzzles</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="crafts" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Arts, Crafts & Sewing</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="automotive" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Automotive Tools & Care</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="music" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Music & Instruments</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
+                        <input type="checkbox" name="item-categories" value="other" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                        <span class="text-sm font-medium text-on-surface">Other</span>
+                    </label>
                 </div>
             </div>
             
@@ -133,6 +189,18 @@
             <div>
                 <label class="block text-sm font-bold mb-2">Description</label>
                 <textarea id="item-description" rows="3" placeholder="Condition, details, when it's available..." class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base resize-none"></textarea>
+            </div>
+
+            <!-- Circles Selection -->
+            <div>
+                <label class="block text-sm font-bold mb-2">List in Circles (Optional)</label>
+                <p class="text-xs text-stone-500 mb-3">If selected, your item will only be visible to members of the chosen circles. If none are selected, it will be public.</p>
+                <div id="circles-checkbox-list" class="space-y-2 max-h-48 overflow-y-auto p-3 bg-surface-container rounded-xl border border-outline-variant/10 shadow-inner">
+                    <div class="text-stone-500 text-sm p-4 flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined animate-spin text-primary">progress_activity</span>
+                        <span>Loading your circles...</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Error Banner -->
@@ -221,37 +289,55 @@
                     responsive: true,
                     checkOrientation: false,
                     ready() {
-                        const imageData = cropper.getImageData();
-                        const imageAspectRatio = imageData.width / imageData.height;
+                        const containerData = cropper.getContainerData();
+                        const containerWidth = containerData.width;
+                        const containerHeight = containerData.height;
                         const targetAspectRatio = 4 / 3;
 
-                        if (imageAspectRatio < targetAspectRatio) {
-                            // Portrait: fit full height, pad sides
-                            const cropBoxHeight = imageData.height;
-                            const cropBoxWidth = cropBoxHeight * targetAspectRatio;
-                            const cropBoxLeft = imageData.left + (imageData.width - cropBoxWidth) / 2;
-                            const cropBoxTop = imageData.top;
-                            
-                            cropper.setCropBoxData({
-                                left: cropBoxLeft,
-                                top: cropBoxTop,
-                                width: cropBoxWidth,
-                                height: cropBoxHeight
-                            });
-                        } else if (imageAspectRatio > targetAspectRatio) {
-                            // Extra-wide: fit full width, pad top/bottom
-                            const cropBoxWidth = imageData.width;
-                            const cropBoxHeight = cropBoxWidth / targetAspectRatio;
-                            const cropBoxLeft = imageData.left;
-                            const cropBoxTop = imageData.top + (imageData.height - cropBoxHeight) / 2;
-                            
-                            cropper.setCropBoxData({
-                                left: cropBoxLeft,
-                                top: cropBoxTop,
-                                width: cropBoxWidth,
-                                height: cropBoxHeight
-                            });
+                        let cropBoxWidth, cropBoxHeight;
+                        if (containerWidth / containerHeight > targetAspectRatio) {
+                            cropBoxHeight = containerHeight;
+                            cropBoxWidth = containerHeight * targetAspectRatio;
+                        } else {
+                            cropBoxWidth = containerWidth;
+                            cropBoxHeight = cropBoxWidth / targetAspectRatio;
                         }
+
+                        const cropBoxLeft = (containerWidth - cropBoxWidth) / 2;
+                        const cropBoxTop = (containerHeight - cropBoxHeight) / 2;
+
+                        // Maximize and center the crop box relative to container
+                        cropper.setCropBoxData({
+                            left: cropBoxLeft,
+                            top: cropBoxTop,
+                            width: cropBoxWidth,
+                            height: cropBoxHeight
+                        });
+
+                        // Contain the image fully inside the crop box
+                        const canvasData = cropper.getCanvasData();
+                        const imageAspectRatio = canvasData.naturalWidth / canvasData.naturalHeight;
+
+                        let newWidth, newHeight;
+                        if (imageAspectRatio < targetAspectRatio) {
+                            // Portrait: fit height to cropBoxHeight
+                            newHeight = cropBoxHeight;
+                            newWidth = cropBoxHeight * imageAspectRatio;
+                        } else {
+                            // Landscape: fit width to cropBoxWidth
+                            newWidth = cropBoxWidth;
+                            newHeight = cropBoxWidth / imageAspectRatio;
+                        }
+
+                        const newLeft = cropBoxLeft + (cropBoxWidth - newWidth) / 2;
+                        const newTop = cropBoxTop + (cropBoxHeight - newHeight) / 2;
+
+                        cropper.setCanvasData({
+                            left: newLeft,
+                            top: newTop,
+                            width: newWidth,
+                            height: newHeight
+                        });
                     }
                 });
             }
@@ -433,8 +519,68 @@
 
         document.getElementById('gps-btn').addEventListener('click', requestGPSLocation);
 
+        async function loadUserCirclesForSelection(userId, preSelectedCircleIds = []) {
+            const listContainer = document.getElementById('circles-checkbox-list');
+            try {
+                const memberships = await window.db.getMyMemberships(userId);
+                if (!memberships || memberships.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="text-stone-500 text-sm py-4 text-center">
+                            You haven't joined any circles yet.<br>
+                            <a href="circles.html" class="text-primary font-semibold hover:underline mt-1 inline-block">Explore Circles</a>
+                        </div>`;
+                    return;
+                }
+
+                const circles = await Promise.all(memberships.map(async (m) => {
+                    try {
+                        return await window.db.getCircle(m.circle_id);
+                    } catch (e) {
+                        console.error("Error loading circle:", m.circle_id, e);
+                        return null;
+                    }
+                }));
+                
+                const validCircles = circles.filter(Boolean);
+                if (validCircles.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="text-stone-500 text-sm py-4 text-center">
+                            No active circles found.<br>
+                            <a href="circles.html" class="text-primary font-semibold hover:underline mt-1 inline-block">Explore Circles</a>
+                        </div>`;
+                    return;
+                }
+
+                listContainer.innerHTML = validCircles.map(circle => {
+                    const isChecked = preSelectedCircleIds.includes(circle.id);
+                    return `
+                        <label class="flex items-center gap-3 p-3 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors border border-transparent hover:border-outline-variant/10 select-none">
+                            <input type="checkbox" name="selected-circles" value="${circle.id}" ${isChecked ? 'checked' : ''} class="w-5 h-5 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
+                            <div class="flex-1 min-w-0">
+                                <p class="font-semibold text-sm text-on-surface truncate">${circle.name}</p>
+                                <p class="text-[10px] text-stone-500 truncate">${circle.description || 'Neighborhood circle'}</p>
+                            </div>
+                        </label>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                console.error("Error loading user circles for selection:", err);
+                listContainer.innerHTML = `<div class="text-error text-sm p-4 text-center font-medium">Failed to load circles.</div>`;
+            }
+        }
+
         // --- Edit Mode & Page Initialization ---
         async function initPage() {
+            const session = await requireAuth();
+            if (!session) return;
+            const userId = session.user.uid;
+
+            let preSelectedCircles = [];
+            if (circleId) {
+                preSelectedCircles = [circleId];
+            }
+
             if (!itemId) {
                 // Creation Mode: auto-locate if phone GPS, else map default
                 if (isMobile) {
@@ -453,6 +599,9 @@
                         initMap(37.7749, -122.4194);
                     }
                 }
+                
+                // Load circles checklist
+                await loadUserCirclesForSelection(userId, preSelectedCircles);
                 return;
             }
 
@@ -472,9 +621,20 @@
 
                 // Populate inputs
                 document.getElementById('item-name').value = item.name || '';
-                document.getElementById('item-category').value = item.category || 'other';
                 document.getElementById('item-description').value = item.description || '';
                 
+                // Pre-check category checkboxes
+                let selectedCats = [];
+                if (item.categories && Array.isArray(item.categories)) {
+                    selectedCats = item.categories;
+                } else if (item.category) {
+                    selectedCats = [item.category];
+                }
+                const catCheckboxes = document.querySelectorAll('input[name="item-categories"]');
+                catCheckboxes.forEach(cb => {
+                    cb.checked = selectedCats.includes(cb.value);
+                });
+
                 // Pre-select the correct listing type in edit mode
                 const savedType = item.listing_type || 'free';
                 typeLabels.forEach(({ radio }) => {
@@ -501,6 +661,15 @@
                         initMap(37.7749, -122.4194);
                     }
                 }
+
+                // Load circles checkboxes in edit mode
+                if (item.circle_ids && Array.isArray(item.circle_ids)) {
+                    preSelectedCircles = item.circle_ids;
+                } else if (item.circle_id) {
+                    preSelectedCircles = [item.circle_id];
+                }
+                await loadUserCirclesForSelection(userId, preSelectedCircles);
+
             } catch (err) {
                 console.error("Error loading item for edit:", err);
                 alert("Failed to load item for edit.");
@@ -528,6 +697,14 @@
             e.preventDefault();
             errorDiv.classList.add('hidden');
             
+            // Validate that at least one category is selected
+            const checkedCats = document.querySelectorAll('input[name="item-categories"]:checked');
+            if (checkedCats.length === 0) {
+                showError("Please select at least one category.");
+                return;
+            }
+            const selectedCategories = Array.from(checkedCats).map(cb => cb.value);
+
             btn.disabled = true;
             btn.classList.add('opacity-70', 'cursor-not-allowed');
             btn.innerHTML = `<span class="material-symbols-outlined animate-spin">progress_activity</span> Saving...`;
@@ -537,7 +714,6 @@
                 if (!session) return;
 
                 const name = document.getElementById('item-name').value;
-                const category = document.getElementById('item-category').value;
                 const description = document.getElementById('item-description').value;
                 const itemLocation = document.getElementById('item-location').value;
 
@@ -552,15 +728,23 @@
                 }
 
                 const listingType = document.querySelector('input[name="listing-type"]:checked').value;
+                
+                // Get checked circles
+                const checkedCircles = document.querySelectorAll('input[name="selected-circles"]:checked');
+                const selectedCircles = Array.from(checkedCircles).map(cb => cb.value);
+
                 const payload = {
                     name: name,
-                    category: category,
+                    category: selectedCategories[0] || 'other',
+                    categories: selectedCategories,
                     description: description,
                     image_url: imageUrl,
                     listing_type: listingType,
                     location: itemLocation,
                     latitude: itemLatitude || null,
-                    longitude: itemLongitude || null
+                    longitude: itemLongitude || null,
+                    circle_id: selectedCircles[0] || null,
+                    circle_ids: selectedCircles
                 };
 
                 if (itemId) {
@@ -571,11 +755,13 @@
                     await window.db.addItem({
                         ...payload,
                         owner_id: session.user.uid,
-                        status: 'available',
-                        circle_id: circleId || null
+                        status: 'available'
                     });
                     if (circleId) {
                         const circleUrl = window.location.pathname.endsWith('.html') ? `circle-detail.html?id=${circleId}` : `circle-detail?id=${circleId}`;
+                        window.location.href = circleUrl;
+                    } else if (selectedCircles.length > 0) {
+                        const circleUrl = window.location.pathname.endsWith('.html') ? `circle-detail.html?id=${selectedCircles[0]}` : `circle-detail?id=${selectedCircles[0]}`;
                         window.location.href = circleUrl;
                     } else {
                         const exploreUrl = window.location.pathname.endsWith('.html') ? 'explore.html' : 'explore';

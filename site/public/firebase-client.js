@@ -185,20 +185,32 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         getItems: async function(category = 'all', userId = null) {
             try {
                 let query = firebase.firestore().collection('items');
-                if (category !== 'all') {
-                    query = query.where('category', '==', category);
-                }
                 const snapshot = await query.get();
                 let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // Category filtering
+                if (category !== 'all') {
+                    items = items.filter(item => {
+                        if (item.categories && Array.isArray(item.categories)) {
+                            return item.categories.includes(category);
+                        }
+                        return item.category === category;
+                    });
+                }
                 
                 // Circle-scoped visibility filtering
                 if (userId) {
                     const memberships = await this.getMyMemberships(userId);
                     const myCircleIds = new Set(memberships.map(m => m.circle_id));
-                    items = items.filter(item => !item.circle_id || myCircleIds.has(item.circle_id));
+                    items = items.filter(item => {
+                        if (item.circle_ids && item.circle_ids.length > 0) {
+                            return item.circle_ids.some(cid => myCircleIds.has(cid));
+                        }
+                        return !item.circle_id || myCircleIds.has(item.circle_id);
+                    });
                 } else {
-                    // Unauthenticated: only show items with no circle_id
-                    items = items.filter(item => !item.circle_id);
+                    // Unauthenticated: only show items with no circle_id and no circle_ids
+                    items = items.filter(item => !item.circle_id && (!item.circle_ids || item.circle_ids.length === 0));
                 }
 
                 // Sort in memory by created_at descending
@@ -227,9 +239,19 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         getCircleItems: async function(circleId) {
             try {
-                const snapshot = await firebase.firestore().collection('items')
+                // Try querying array-contains on circle_ids
+                const snapshot1 = await firebase.firestore().collection('items')
+                    .where('circle_ids', 'array-contains', circleId).get();
+                
+                // Fallback to single circle_id
+                const snapshot2 = await firebase.firestore().collection('items')
                     .where('circle_id', '==', circleId).get();
-                return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                const itemsMap = {};
+                snapshot1.docs.forEach(doc => { itemsMap[doc.id] = { id: doc.id, ...doc.data() }; });
+                snapshot2.docs.forEach(doc => { itemsMap[doc.id] = { id: doc.id, ...doc.data() }; });
+                
+                return Object.values(itemsMap);
             } catch (err) {
                 console.error("Error getting circle items:", err);
                 return [];

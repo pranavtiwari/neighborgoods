@@ -96,6 +96,14 @@
 <button data-category="skills" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Experience/Skills</button>
 <button data-category="neighbour-helping-neighbour" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Neighbour helping Neighbour</button>
 <button data-category="outdoor" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Outdoor Adventure</button>
+<button data-category="party" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Party & Event</button>
+<button data-category="baby" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Baby & Kids</button>
+<button data-category="sports" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Sports & Rec</button>
+<button data-category="camping" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Camping & Travel</button>
+<button data-category="games" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Board Games & Toys</button>
+<button data-category="crafts" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Arts & Crafts</button>
+<button data-category="automotive" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Automotive Tools</button>
+<button data-category="music" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Music & Instruments</button>
 </div>
 </section>
 <!-- Featured Carousel: Hot Near You -->
@@ -288,7 +296,7 @@
                     const tag = isSkill ? 'Neighbor Skill' : 'Neighbor Help';
                     const fallbackText = isSkill ? 'Skill' : 'Help';
                     return `
-                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${item.name}" data-category="${item.category}">
+                    <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${item.name}" data-categories="${(item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).join(',')}">
                         ${badgeHtml}
                         <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
                             <img alt="${item.name}" class="w-full h-full object-cover mix-blend-multiply opacity-80" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x400?text=${fallbackText}'"/>
@@ -319,7 +327,7 @@
                         : `<span class="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Free</span>`);
 
                 return `
-                <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${item.name}" data-category="${item.category}">
+                <div onclick="window.location.href='item-details.html?id=${item.id}'" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${item.name}" data-categories="${(item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).join(',')}">
                     <div class="${imgAspect} rounded-lg overflow-hidden ${index === 0 ? 'bg-surface-container-low' : ''} relative">
                         ${badgeHtml}
                         <img alt="${item.name}" class="w-full h-full object-cover" src="${item.image_url || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
@@ -366,10 +374,10 @@
         const currentCards = document.querySelectorAll('.item-card');
         currentCards.forEach(card => {
             const name = card.getAttribute('data-name').toLowerCase();
-            const category = card.getAttribute('data-category');
+            const categories = (card.getAttribute('data-categories') || '').split(',');
             
             const matchesSearch = name.includes(currentSearch.toLowerCase());
-            const matchesCategory = currentCategory === 'all' || category === currentCategory;
+            const matchesCategory = currentCategory === 'all' || categories.includes(currentCategory);
 
             if (matchesSearch && matchesCategory) {
                 card.style.display = 'flex';
