@@ -468,6 +468,34 @@
 
         document.getElementById('gps-btn').addEventListener('click', requestGPSLocation);
 
+        document.getElementById('item-location').addEventListener('change', async (e) => {
+            const query = e.target.value.trim();
+            if (!query) return;
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`, {
+                    headers: {
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'User-Agent': 'NeighborGoods/1.0'
+                    }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.length > 0) {
+                        const lat = parseFloat(data[0].lat);
+                        const lng = parseFloat(data[0].lon);
+                        itemLatitude = lat;
+                        itemLongitude = lng;
+                        if (map && marker) {
+                            map.setView([lat, lng], 13);
+                            marker.setLatLng([lat, lng]);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Geocoding error:", err);
+            }
+        });
+
         async function loadUserCirclesForSelection(userId, preSelectedCircleIds = []) {
             const listContainer = document.getElementById('circles-checkbox-list');
             try {
@@ -531,7 +559,22 @@
             }
 
             if (!itemId) {
-                // Creation Mode: auto-locate if phone GPS, else map default
+                // Creation Mode: Check user profile for last saved location first
+                try {
+                    const profile = await window.db.getProfile(userId);
+                    if (profile && profile.last_location && profile.last_latitude && profile.last_longitude) {
+                        itemLatitude = parseFloat(profile.last_latitude);
+                        itemLongitude = parseFloat(profile.last_longitude);
+                        document.getElementById('item-location').value = profile.last_location;
+                        initMap(itemLatitude, itemLongitude);
+                        await loadUserCirclesForSelection(userId, preSelectedCircles);
+                        return;
+                    }
+                } catch (e) {
+                    console.error("Error fetching last saved location from profile:", e);
+                }
+
+                // Fallback: auto-locate if phone GPS, else map default
                 if (isMobile) {
                     await requestGPSLocation();
                 } else {
@@ -695,6 +738,19 @@
                     circle_id: selectedCircles[0] || null,
                     circle_ids: selectedCircles
                 };
+
+                // Save last used location to user profile
+                if (itemLatitude && itemLongitude && itemLocation) {
+                    try {
+                        await window.db.updateProfile(session.user.uid, {
+                            last_location: itemLocation,
+                            last_latitude: itemLatitude,
+                            last_longitude: itemLongitude
+                        });
+                    } catch (profileErr) {
+                        console.error("Failed to save location in profile:", profileErr);
+                    }
+                }
 
                 if (itemId) {
                     await window.db.updateItem(itemId, payload);
