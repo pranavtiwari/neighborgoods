@@ -70,77 +70,16 @@
             </div>
 
             <!-- Categories Selection -->
-            <div>
-                <label class="block text-sm font-bold mb-2">Categories (Select one or more)</label>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-3 bg-surface-container rounded-xl border border-outline-variant/10 shadow-inner" id="categories-checkbox-list">
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="garden" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Garden Tools</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="power" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Power Tools</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="kitchen" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Kitchen Gear</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="electronics/computers" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Electronics & Computers</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="books" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Books</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="skills" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Experience & Skills</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="neighbour-helping-neighbour" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Neighbour helping Neighbour</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="outdoor" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Outdoor Adventure</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="party" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Party & Event Supplies</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="baby" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Baby & Kids Gear</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="sports" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Sports & Recreation</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="camping" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Camping & Travel</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="games" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Board Games, Toys & Puzzles</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="crafts" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Arts, Crafts & Sewing</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="automotive" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Automotive Tools & Care</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="music" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Music & Instruments</span>
-                    </label>
-                    <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors select-none">
-                        <input type="checkbox" name="item-categories" value="other" class="w-4 h-4 rounded border-stone-300 dark:border-stone-700 text-primary focus:ring-primary accent-primary cursor-pointer">
-                        <span class="text-sm font-medium text-on-surface">Other</span>
-                    </label>
+            <div class="relative">
+                <label class="block text-sm font-bold mb-2">Categories (Search & Select one or more)</label>
+                <div class="flex flex-wrap gap-2 mb-2 min-h-[44px] p-2 bg-surface-container rounded-xl border border-outline-variant/10 shadow-inner" id="selected-categories-chips">
+                    <span class="text-stone-400 dark:text-stone-500 self-center text-sm px-2 select-none" id="no-categories-placeholder">No categories selected</span>
+                </div>
+                <div class="relative">
+                    <input type="text" id="category-search-input" placeholder="Search categories (e.g. Garden, Tools...)" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base" autocomplete="off">
+                    <div id="category-autocomplete-dropdown" class="hidden absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-surface-container-high rounded-xl border border-outline-variant/20 shadow-2xl z-50 py-1">
+                        <!-- Autocomplete items will render here -->
+                    </div>
                 </div>
             </div>
             
@@ -268,6 +207,162 @@
         const itemId = urlParams.get('id');
         const circleId = urlParams.get('circleId');
         let currentItemImageUrl = null;
+
+        const CATEGORIES = [
+          { value: 'garden', label: 'Garden Tools' },
+          { value: 'power', label: 'Power Tools' },
+          { value: 'kitchen', label: 'Kitchen Gear' },
+          { value: 'electronics/computers', label: 'Electronics & Computers' },
+          { value: 'books', label: 'Books' },
+          { value: 'skills', label: 'Experience & Skills' },
+          { value: 'neighbour-helping-neighbour', label: 'Neighbour helping Neighbour' },
+          { value: 'outdoor', label: 'Outdoor Adventure' },
+          { value: 'party', label: 'Party & Event Supplies' },
+          { value: 'baby', label: 'Baby & Kids Gear' },
+          { value: 'sports', label: 'Sports & Recreation' },
+          { value: 'camping', label: 'Camping & Travel' },
+          { value: 'games', label: 'Board Games, Toys & Puzzles' },
+          { value: 'crafts', label: 'Arts, Crafts & Sewing' },
+          { value: 'automotive', label: 'Automotive Tools & Care' },
+          { value: 'music', label: 'Music & Instruments' },
+          { value: 'other', label: 'Other' }
+        ];
+
+        let selectedCategories = [];
+        let userCircles = [];
+
+        function renderCategoryChips() {
+            const container = document.getElementById('selected-categories-chips');
+            const placeholder = document.getElementById('no-categories-placeholder');
+            
+            // Clear existing chips
+            container.querySelectorAll('.category-chip-el').forEach(el => el.remove());
+            
+            if (selectedCategories.length === 0) {
+                placeholder.classList.remove('hidden');
+            } else {
+                placeholder.classList.add('hidden');
+                selectedCategories.forEach(catValue => {
+                    const catObj = CATEGORIES.find(c => c.value === catValue);
+                    if (!catObj) return;
+                    
+                    const chip = document.createElement('div');
+                    chip.className = 'category-chip-el flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full px-3 py-1 text-sm font-semibold select-none';
+                    chip.innerHTML = `
+                        <span>${catObj.label}</span>
+                        <button type="button" class="remove-cat-btn flex items-center justify-center hover:bg-primary/20 rounded-full p-0.5" data-value="${catValue}">
+                            <span class="material-symbols-outlined text-sm font-bold">close</span>
+                        </button>
+                    `;
+                    chip.querySelector('.remove-cat-btn').addEventListener('click', () => {
+                        selectedCategories = selectedCategories.filter(val => val !== catValue);
+                        renderCategoryChips();
+                        updateCircleCheckboxesState();
+                    });
+                    container.appendChild(chip);
+                });
+            }
+        }
+
+        function getEffectiveAllowedCategories() {
+            const checkedCircleIds = Array.from(document.querySelectorAll('input[name="selected-circles"]:checked')).map(cb => cb.value);
+            if (checkedCircleIds.length === 0) {
+                return CATEGORIES.map(c => c.value);
+            }
+            
+            let intersection = null;
+            checkedCircleIds.forEach(cid => {
+                const circleObj = userCircles.find(c => c.id === cid);
+                if (!circleObj) return;
+                
+                const allowed = (circleObj.allowed_categories && circleObj.allowed_categories.length > 0)
+                    ? circleObj.allowed_categories
+                    : CATEGORIES.map(c => c.value);
+                    
+                if (intersection === null) {
+                    intersection = [...allowed];
+                } else {
+                    intersection = intersection.filter(val => allowed.includes(val));
+                }
+            });
+            
+            return intersection || [];
+        }
+
+        function updateCircleCheckboxesState() {
+            document.querySelectorAll('input[name="selected-circles"]').forEach(cb => {
+                const cid = cb.value;
+                const circleObj = userCircles.find(c => c.id === cid);
+                if (!circleObj) return;
+                
+                const allowed = (circleObj.allowed_categories && circleObj.allowed_categories.length > 0)
+                    ? circleObj.allowed_categories
+                    : CATEGORIES.map(c => c.value);
+                    
+                const supportsAll = selectedCategories.every(cat => allowed.includes(cat));
+                
+                const labelEl = cb.closest('label');
+                if (supportsAll) {
+                    cb.removeAttribute('disabled');
+                    labelEl.classList.remove('opacity-40', 'cursor-not-allowed');
+                    labelEl.classList.add('cursor-pointer');
+                } else {
+                    cb.checked = false;
+                    cb.setAttribute('disabled', 'true');
+                    labelEl.classList.add('opacity-40', 'cursor-not-allowed');
+                    labelEl.classList.remove('cursor-pointer');
+                }
+            });
+        }
+
+        // Dropdown autocomplete search logic
+        function initCategorySearchAutocomplete() {
+            const searchInput = document.getElementById('category-search-input');
+            const dropdown = document.getElementById('category-autocomplete-dropdown');
+            
+            function showDropdown() {
+                const query = searchInput.value.toLowerCase().trim();
+                const allowedCats = getEffectiveAllowedCategories();
+                
+                const filtered = CATEGORIES.filter(cat => {
+                    const matchesQuery = cat.label.toLowerCase().includes(query) || cat.value.toLowerCase().includes(query);
+                    const isAllowed = allowedCats.includes(cat.value);
+                    const notSelected = !selectedCategories.includes(cat.value);
+                    return matchesQuery && isAllowed && notSelected;
+                });
+                
+                if (filtered.length === 0) {
+                    dropdown.innerHTML = '<div class="text-stone-500 text-sm px-4 py-3">No matching categories found</div>';
+                } else {
+                    dropdown.innerHTML = filtered.map(cat => `
+                        <div class="category-item-el px-4 py-3 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer text-sm font-semibold transition-colors text-on-surface" data-value="${cat.value}">
+                            ${cat.label}
+                        </div>
+                    `).join('');
+                    
+                    dropdown.querySelectorAll('.category-item-el').forEach(el => {
+                        el.addEventListener('click', () => {
+                            const val = el.getAttribute('data-value');
+                            selectedCategories.push(val);
+                            renderCategoryChips();
+                            updateCircleCheckboxesState();
+                            searchInput.value = '';
+                            dropdown.classList.add('hidden');
+                        });
+                    });
+                }
+                dropdown.classList.remove('hidden');
+            }
+            
+            searchInput.addEventListener('input', showDropdown);
+            searchInput.addEventListener('focus', showDropdown);
+            
+            document.addEventListener('click', (e) => {
+                if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        }
 
         // Image Preview and Cropping Logic
         imageUpload.addEventListener('change', (e) => {
@@ -519,6 +614,8 @@
                 }));
                 
                 const validCircles = circles.filter(Boolean);
+                userCircles = validCircles;
+
                 if (validCircles.length === 0) {
                     listContainer.innerHTML = `
                         <div class="text-stone-500 text-sm py-4 text-center">
@@ -541,6 +638,16 @@
                     `;
                 }).join('');
 
+                // Add change event listeners to update state dynamically
+                listContainer.querySelectorAll('input[name="selected-circles"]').forEach(cb => {
+                    cb.addEventListener('change', () => {
+                        updateCircleCheckboxesState();
+                    });
+                });
+
+                // Apply initial disabled / checked constraints
+                updateCircleCheckboxesState();
+
             } catch (err) {
                 console.error("Error loading user circles for selection:", err);
                 listContainer.innerHTML = `<div class="text-error text-sm p-4 text-center font-medium">Failed to load circles.</div>`;
@@ -549,6 +656,7 @@
 
         // --- Edit Mode & Page Initialization ---
         async function initPage() {
+            initCategorySearchAutocomplete();
             const session = await requireAuth();
             if (!session) return;
             const userId = session.user.uid;
@@ -615,17 +723,15 @@
                 document.getElementById('item-name').value = item.name || '';
                 document.getElementById('item-description').value = item.description || '';
                 
-                // Pre-check category checkboxes
-                let selectedCats = [];
+                // Populate category autocomplete chips
                 if (item.categories && Array.isArray(item.categories)) {
-                    selectedCats = item.categories;
+                    selectedCategories = [...item.categories];
                 } else if (item.category) {
-                    selectedCats = [item.category];
+                    selectedCategories = [item.category];
+                } else {
+                    selectedCategories = [];
                 }
-                const catCheckboxes = document.querySelectorAll('input[name="item-categories"]');
-                catCheckboxes.forEach(cb => {
-                    cb.checked = selectedCats.includes(cb.value);
-                });
+                renderCategoryChips();
 
                 // Pre-select the correct listing type in edit mode
                 const savedType = item.listing_type || 'free';
@@ -690,12 +796,10 @@
             errorDiv.classList.add('hidden');
             
             // Validate that at least one category is selected
-            const checkedCats = document.querySelectorAll('input[name="item-categories"]:checked');
-            if (checkedCats.length === 0) {
+            if (selectedCategories.length === 0) {
                 showError("Please select at least one category.");
                 return;
             }
-            const selectedCategories = Array.from(checkedCats).map(cb => cb.value);
 
             btn.disabled = true;
             btn.classList.add('opacity-70', 'cursor-not-allowed');

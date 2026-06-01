@@ -327,6 +327,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 const db = firebase.firestore();
                 const ref = await db.collection('circles').add({
                     ...circleData,
+                    allowed_categories: circleData.allowed_categories || [],
                     created_by: creatorId,
                     created_at: firebase.firestore.FieldValue.serverTimestamp()
                 });
@@ -518,8 +519,20 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         // --- Borrow Requests ---
         createBorrowRequest: async function(requestData) {
             try {
+                let circleId = null;
+                let circleIds = [];
+                if (requestData.item_id) {
+                    const itemDoc = await firebase.firestore().collection('items').doc(requestData.item_id).get();
+                    if (itemDoc.exists) {
+                        const itemData = itemDoc.data();
+                        circleId = itemData.circle_id || null;
+                        circleIds = itemData.circle_ids || [];
+                    }
+                }
                 const ref = await firebase.firestore().collection('requests').add({
                     ...requestData,
+                    circle_id: circleId,
+                    circle_ids: circleIds,
                     status: 'pending',
                     created_at: firebase.firestore.FieldValue.serverTimestamp()
                 });
@@ -655,10 +668,22 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         sendMessage: async function(senderId, receiverId, itemId, content) {
             try {
+                let circleId = null;
+                let circleIds = [];
+                if (itemId) {
+                    const itemDoc = await firebase.firestore().collection('items').doc(itemId).get();
+                    if (itemDoc.exists) {
+                        const itemData = itemDoc.data();
+                        circleId = itemData.circle_id || null;
+                        circleIds = itemData.circle_ids || [];
+                    }
+                }
                 const ref = await firebase.firestore().collection('messages').add({
                     sender_id: senderId,
                     receiver_id: receiverId,
                     item_id: itemId || null,
+                    circle_id: circleId,
+                    circle_ids: circleIds,
                     content: content,
                     is_read: false,
                     participants: [senderId, receiverId],
