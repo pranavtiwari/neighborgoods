@@ -160,6 +160,11 @@
             for (const m of memberships) {
                 const circle = await window.db.getCircle(m.circle_id);
                 if (circle) {
+                    if (circle.allowed_categories === undefined) {
+                        console.log(`Migrating joined circle ${circle.name} to have allowed_categories: []`);
+                        await window.db.updateCircle(circle.id, { allowed_categories: [] });
+                        circle.allowed_categories = [];
+                    }
                     const countSnap = await firebase.firestore().collection('circle_members')
                         .where('circle_id', '==', circle.id).get();
                     circle.memberCount = countSnap.size;
@@ -169,6 +174,71 @@
 
             // Load Suggestion Circles
             const circles = await window.db.getCircles();
+            
+            // Migrate suggestion circles if allowed_categories is missing
+            for (const c of circles) {
+                if (c.allowed_categories === undefined) {
+                    console.log(`Migrating circle ${c.name} to have allowed_categories: []`);
+                    await window.db.updateCircle(c.id, { allowed_categories: [] });
+                    c.allowed_categories = [];
+                }
+            }
+
+            // Migrate existing requests if circle_id is missing
+            try {
+                const requestsSnap = await firebase.firestore().collection('requests').get();
+                for (const doc of requestsSnap.docs) {
+                    const req = doc.data();
+                    if (req.circle_id === undefined && req.item_id) {
+                        const itemDoc = await firebase.firestore().collection('items').doc(req.item_id).get();
+                        if (itemDoc.exists) {
+                            const itemData = itemDoc.data();
+                            await doc.ref.update({
+                                circle_id: itemData.circle_id || null,
+                                circle_ids: itemData.circle_ids || []
+                            });
+                        } else {
+                            await doc.ref.update({
+                                circle_id: null,
+                                circle_ids: []
+                            });
+                        }
+                    }
+                }
+            } catch (migrationErr) {
+                console.error("Requests migration error:", migrationErr);
+            }
+
+            // Migrate existing messages if circle_id is missing
+            try {
+                const messagesSnap = await firebase.firestore().collection('messages').get();
+                for (const doc of messagesSnap.docs) {
+                    const msg = doc.data();
+                    if (msg.circle_id === undefined && msg.item_id) {
+                        const itemDoc = await firebase.firestore().collection('items').doc(msg.item_id).get();
+                        if (itemDoc.exists) {
+                            const itemData = itemDoc.data();
+                            await doc.ref.update({
+                                circle_id: itemData.circle_id || null,
+                                circle_ids: itemData.circle_ids || []
+                            });
+                        } else {
+                            await doc.ref.update({
+                                circle_id: null,
+                                circle_ids: []
+                            });
+                        }
+                    } else if (msg.circle_id === undefined) {
+                        await doc.ref.update({
+                            circle_id: null,
+                            circle_ids: []
+                        });
+                    }
+                }
+            } catch (migrationErr) {
+                console.error("Messages migration error:", migrationErr);
+            }
+
             const myCircleIds = new Set(allMyCircles.map(m => m.circles.id));
             
             allSuggestions = [];

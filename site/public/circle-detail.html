@@ -151,66 +151,113 @@
         </div>
 
         <!-- Asymmetric Content Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-16">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
             
-            <!-- Main Feed (65%) -->
-            <div class="lg:col-span-8 space-y-12">
-                <!-- Private circle non-member gate -->
-                <div id="private-gate" class="hidden bg-surface-container-low rounded-xl p-12 text-center">
-                    <span class="material-symbols-outlined text-5xl text-on-surface-variant/30 mb-4 block">lock</span>
-                    <h3 class="text-xl font-bold mb-2">Private Circle</h3>
-                    <p class="text-on-surface-variant mb-6">Join this circle to see posts and shared items.</p>
-                    <button id="gate-request-btn" onclick="handleRequestJoin()" class="px-8 py-3 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-transform">Request to Join</button>
-                    <div id="gate-pending" class="hidden mt-4 text-stone-500 text-sm">
-                        Your request is pending admin approval.
-                        <button onclick="handleCancelRequest()" class="text-error underline ml-1">Cancel</button>
-                    </div>
-                </div>
-                <div id="feed-section">
-                    <h2 class="text-headline-md font-bold mb-8">Recent Activity</h2>
-                    <div id="circle-feed" class="space-y-8">
-                        <div class="animate-pulse space-y-4">
-                            <div class="h-40 bg-surface-container rounded-xl"></div>
-                            <div class="h-40 bg-surface-container rounded-xl"></div>
+            <!-- Left Column (col-span-8): Circle Inventory -->
+            <div id="inventory-section-wrapper" class="lg:col-span-8 space-y-8">
+                <div class="bg-surface-container-low rounded-2xl p-8 flex flex-col border border-outline-variant/10 shadow-sm">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h2 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
+                                <span class="material-symbols-outlined text-primary text-3xl">grid_view</span>
+                                Circle Inventory
+                            </h2>
+                            <p class="text-xs text-stone-500 mt-1">Shared goods and resources in this Commons</p>
                         </div>
+                        <div class="flex items-center gap-3 self-start sm:self-auto">
+                            <span id="inventory-count" class="text-xs font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20"></span>
+                            
+                            <div class="relative w-48 sm:w-64">
+                                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-[20px]">search</span>
+                                <input type="text" id="inventory-search" placeholder="Search items..." class="w-full pl-10 pr-10 py-2 rounded-xl border border-outline-variant/20 bg-surface-container-high focus:ring-2 focus:ring-primary text-sm shadow-inner">
+                            </div>
+                            <button id="location-sort-btn" onclick="toggleLocationSort()" class="w-10 h-10 rounded-xl border border-outline-variant/20 flex items-center justify-center text-stone-500 hover:text-primary hover:bg-primary/10 hover:border-primary/30 transition-all shadow-sm" title="Sort by distance">
+                                <span class="material-symbols-outlined text-[20px]">location_on</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Scrollable Top-Used Categories Filter Chips -->
+                    <div class="mb-6">
+                        <p class="text-xs font-bold text-on-surface-variant/70 mb-2 uppercase tracking-wider">Top Categories</p>
+                        <div id="category-filter-chips-container" class="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+                            <!-- Category Filter Chips rendered dynamically -->
+                        </div>
+                    </div>
+
+                    <div id="circle-inventory" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                        <!-- Inventory grid rendered dynamically -->
                     </div>
                 </div>
             </div>
 
-            <!-- Sidebar (35%) -->
-            <div class="lg:col-span-4 space-y-10">
+            <!-- Right Column (col-span-4): Pending Join Requests, Recent Activity, About -->
+            <div class="lg:col-span-4 space-y-8">
                 
                 <!-- Admin: Pending Join Requests -->
-                <div id="join-requests-panel" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-6">
-                    <h3 class="label-md text-amber-700 mb-4 flex items-center gap-2">
-                        <span class="material-symbols-outlined text-base text-amber-600">pending</span>
+                <div id="join-requests-panel" class="hidden bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-6 shadow-sm">
+                    <h3 class="label-md text-amber-700 dark:text-amber-400 mb-4 flex items-center gap-2 font-bold">
+                        <span class="material-symbols-outlined text-base text-amber-600 dark:text-amber-500">pending</span>
                         Pending Requests
                         <span id="request-count-badge" class="ml-auto bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full"></span>
                     </h3>
                     <div id="join-requests-list" class="space-y-3"></div>
                 </div>
 
-                <!-- Inventory Preview -->
-                <div class="bg-surface-container-low rounded-xl p-8 flex flex-col max-h-[600px]">
-                    <div class="flex items-center justify-between mb-4 shrink-0">
-                        <h3 class="label-md text-on-surface">Circle Inventory</h3>
-                        <span id="inventory-count" class="text-xs font-bold text-stone-400 bg-surface px-2 py-0.5 rounded-md"></span>
+                <!-- Private circle non-member gate -->
+                <div id="private-gate" class="hidden bg-surface-container-low border border-outline-variant/10 rounded-2xl p-8 text-center shadow-sm">
+                    <span class="material-symbols-outlined text-5xl text-on-surface-variant/30 mb-4 block">lock</span>
+                    <h3 class="text-lg font-bold mb-2 text-on-surface">Private Circle</h3>
+                    <p class="text-sm text-on-surface-variant mb-6">Join this circle to see posts and shared items.</p>
+                    <button id="gate-request-btn" onclick="handleRequestJoin()" class="w-full py-3 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-transform shadow-md">Request to Join</button>
+                    <div id="gate-pending" class="hidden mt-4 text-stone-500 text-sm">
+                        Your request is pending admin approval.
+                        <button onclick="handleCancelRequest()" class="text-error underline ml-1 font-semibold">Cancel</button>
                     </div>
-                    
-                    <div class="relative mb-4 shrink-0">
-                        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-[20px]">search</span>
-                        <input type="text" id="inventory-search" placeholder="Search items..." class="w-full pl-10 pr-12 py-3 rounded-lg border-none bg-surface focus:ring-2 focus:ring-primary text-sm shadow-sm transition-shadow">
-                        <button id="location-sort-btn" onclick="toggleLocationSort()" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-md flex items-center justify-center text-stone-400 hover:text-primary hover:bg-primary/10 transition-colors" title="Sort by distance">
-                            <span class="material-symbols-outlined text-[18px]">location_on</span>
-                        </button>
-                    </div>
-
-                    <div id="circle-inventory" class="space-y-4 overflow-y-auto custom-scrollbar pr-2 flex-1 pb-4"><!-- Inventory --></div>
                 </div>
 
-                <!-- About -->
-                <div class="p-8 border-t border-outline-variant/20">
-                    <h3 class="label-md text-on-surface mb-6">About this Commons</h3>
+                <!-- Recent Activity Feed -->
+                <div id="feed-section" class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-sm">
+                    <h2 class="text-lg font-bold text-on-surface mb-6 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">forum</span>
+                        Recent Activity
+                    </h2>
+                    <div id="circle-feed" class="space-y-6">
+                        <div class="animate-pulse space-y-4">
+                            <div class="h-24 bg-surface-container rounded-xl"></div>
+                            <div class="h-24 bg-surface-container rounded-xl"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Commons Stats -->
+                <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-sm">
+                    <h3 class="text-sm font-bold text-on-surface mb-4 uppercase tracking-wider flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary text-base">analytics</span>
+                        Commons Stats
+                    </h3>
+                    <div class="grid grid-cols-3 gap-2 text-center">
+                        <div class="bg-surface-container rounded-xl p-3 border border-outline-variant/5">
+                            <p id="circle-stats-listings" class="text-lg font-black text-primary">...</p>
+                            <p class="text-[9px] font-bold text-stone-500 uppercase tracking-tight mt-0.5">Listings</p>
+                        </div>
+                        <div class="bg-surface-container rounded-xl p-3 border border-outline-variant/5">
+                            <p id="circle-stats-transactions" class="text-lg font-black text-primary">...</p>
+                            <p class="text-[9px] font-bold text-stone-500 uppercase tracking-tight mt-0.5">Completed</p>
+                        </div>
+                        <div class="bg-surface-container rounded-xl p-3 border border-outline-variant/5">
+                            <p id="circle-stats-chats" class="text-lg font-black text-primary">...</p>
+                            <p class="text-[9px] font-bold text-stone-500 uppercase tracking-tight mt-0.5">Chats</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- About this Circle -->
+                <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-sm">
+                    <h3 class="text-sm font-bold text-on-surface mb-4 uppercase tracking-wider flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary text-base">info</span>
+                        About this Commons
+                    </h3>
                     <div class="space-y-4 text-sm text-on-surface-variant leading-relaxed">
                         <p>This is a shared space for neighbors to lend, borrow, and build together.</p>
                         <p><strong>Rules:</strong> Be kind, return items in original condition, and communicate clearly.</p>
@@ -288,6 +335,19 @@
                         <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                     </label>
                 </div>
+                <!-- Category Restrictions -->
+                <div class="relative">
+                    <label class="block text-sm font-bold mb-2">Allowed Categories (Empty = Allow all)</label>
+                    <div class="flex flex-wrap gap-2 mb-2 min-h-[40px] p-2 bg-surface-container rounded-xl border border-outline-variant/10 shadow-inner" id="edit-selected-categories-chips">
+                        <span class="text-stone-400 dark:text-stone-500 self-center text-sm px-2 select-none" id="edit-no-categories-placeholder">Allows all categories</span>
+                    </div>
+                    <div class="relative">
+                        <input type="text" id="edit-category-search-input" placeholder="Search allowed categories..." class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-3 px-4 text-base" autocomplete="off">
+                        <div id="edit-category-autocomplete-dropdown" class="hidden absolute left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-surface-container-high rounded-xl border border-outline-variant/20 shadow-2xl z-[150] py-1">
+                            <!-- Autocomplete items will render here -->
+                        </div>
+                    </div>
+                </div>
                 <!-- Error -->
                 <div id="edit-error" class="hidden bg-error/10 text-error p-4 rounded-xl text-sm font-medium"></div>
                 </div>
@@ -322,12 +382,131 @@
         let currentUserRole = null; // 'admin' | 'member' | null
         let currentUserIsMember = false;
         let editSelectedFile = null;
+        let editSelectedCategories = [];
+
+        function renderEditCategoryChips() {
+            const container = document.getElementById('edit-selected-categories-chips');
+            const placeholder = document.getElementById('edit-no-categories-placeholder');
+            
+            // Clear existing chips
+            container.querySelectorAll('.edit-category-chip-el').forEach(el => el.remove());
+            
+            const CATEGORIES = [
+              { value: 'garden', label: 'Garden Tools' },
+              { value: 'power', label: 'Power Tools' },
+              { value: 'kitchen', label: 'Kitchen Gear' },
+              { value: 'electronics/computers', label: 'Electronics & Computers' },
+              { value: 'books', label: 'Books' },
+              { value: 'skills', label: 'Experience & Skills' },
+              { value: 'neighbour-helping-neighbour', label: 'Neighbour helping Neighbour' },
+              { value: 'outdoor', label: 'Outdoor Adventure' },
+              { value: 'party', label: 'Party & Event Supplies' },
+              { value: 'baby', label: 'Baby & Kids Gear' },
+              { value: 'sports', label: 'Sports & Recreation' },
+              { value: 'camping', label: 'Camping & Travel' },
+              { value: 'games', label: 'Board Games, Toys & Puzzles' },
+              { value: 'crafts', label: 'Arts, Crafts & Sewing' },
+              { value: 'automotive', label: 'Automotive Tools & Care' },
+              { value: 'music', label: 'Music & Instruments' },
+              { value: 'other', label: 'Other' }
+            ];
+
+            if (editSelectedCategories.length === 0) {
+                placeholder.classList.remove('hidden');
+            } else {
+                placeholder.classList.add('hidden');
+                editSelectedCategories.forEach(catValue => {
+                    const catObj = CATEGORIES.find(c => c.value === catValue);
+                    if (!catObj) return;
+                    
+                    const chip = document.createElement('div');
+                    chip.className = 'edit-category-chip-el flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full px-2.5 py-1 text-xs font-semibold select-none';
+                    chip.innerHTML = `
+                        <span>${catObj.label}</span>
+                        <button type="button" class="edit-remove-cat-btn flex items-center justify-center hover:bg-primary/20 rounded-full p-0.5" data-value="${catValue}">
+                            <span class="material-symbols-outlined text-xs font-bold">close</span>
+                        </button>
+                    `;
+                    chip.querySelector('.edit-remove-cat-btn').addEventListener('click', () => {
+                        editSelectedCategories = editSelectedCategories.filter(val => val !== catValue);
+                        renderEditCategoryChips();
+                    });
+                    container.appendChild(chip);
+                });
+            }
+        }
+
+        function initEditCategorySearchAutocomplete() {
+            const searchInput = document.getElementById('edit-category-search-input');
+            const dropdown = document.getElementById('edit-category-autocomplete-dropdown');
+            
+            const CATEGORIES = [
+              { value: 'garden', label: 'Garden Tools' },
+              { value: 'power', label: 'Power Tools' },
+              { value: 'kitchen', label: 'Kitchen Gear' },
+              { value: 'electronics/computers', label: 'Electronics & Computers' },
+              { value: 'books', label: 'Books' },
+              { value: 'skills', label: 'Experience & Skills' },
+              { value: 'neighbour-helping-neighbour', label: 'Neighbour helping Neighbour' },
+              { value: 'outdoor', label: 'Outdoor Adventure' },
+              { value: 'party', label: 'Party & Event Supplies' },
+              { value: 'baby', label: 'Baby & Kids Gear' },
+              { value: 'sports', label: 'Sports & Recreation' },
+              { value: 'camping', label: 'Camping & Travel' },
+              { value: 'games', label: 'Board Games, Toys & Puzzles' },
+              { value: 'crafts', label: 'Arts, Crafts & Sewing' },
+              { value: 'automotive', label: 'Automotive Tools & Care' },
+              { value: 'music', label: 'Music & Instruments' },
+              { value: 'other', label: 'Other' }
+            ];
+
+            function showDropdown() {
+                const query = searchInput.value.toLowerCase().trim();
+                
+                const filtered = CATEGORIES.filter(cat => {
+                    const matchesQuery = cat.label.toLowerCase().includes(query) || cat.value.toLowerCase().includes(query);
+                    const notSelected = !editSelectedCategories.includes(cat.value);
+                    return matchesQuery && notSelected;
+                });
+                
+                if (filtered.length === 0) {
+                    dropdown.innerHTML = '<div class="text-stone-500 text-sm px-4 py-3">No matching categories found</div>';
+                } else {
+                    dropdown.innerHTML = filtered.map(cat => `
+                        <div class="edit-category-item-el px-4 py-2.5 hover:bg-stone-200/50 dark:hover:bg-stone-800/50 cursor-pointer text-sm font-semibold transition-colors text-on-surface" data-value="${cat.value}">
+                            ${cat.label}
+                        </div>
+                    `).join('');
+                    
+                    dropdown.querySelectorAll('.edit-category-item-el').forEach(el => {
+                        el.addEventListener('click', () => {
+                            const val = el.getAttribute('data-value');
+                            editSelectedCategories.push(val);
+                            renderEditCategoryChips();
+                            searchInput.value = '';
+                            dropdown.classList.add('hidden');
+                        });
+                    });
+                }
+                dropdown.classList.remove('hidden');
+            }
+            
+            searchInput.addEventListener('input', showDropdown);
+            searchInput.addEventListener('focus', showDropdown);
+            
+            document.addEventListener('click', (e) => {
+                if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        }
 
         // Inventory & Search State
         let allInventoryItems = [];
         let fuseIndex = null;
         let userLocation = null; // { lat, lng }
         let isLocationSortActive = false;
+        let activeCategoryFilter = 'all';
 
         // Haversine distance formula (returns distance in miles)
         function getDistance(lat1, lon1, lat2, lon2) {
@@ -341,13 +520,120 @@
             return R * c;
         }
 
+        function renderCategoryChips() {
+            const container = document.getElementById('category-filter-chips-container');
+            if (!container) return;
+            
+            // Count categories
+            const categoryCounts = {};
+            allInventoryItems.forEach(item => {
+                const cats = item.categories && Array.isArray(item.categories)
+                    ? item.categories
+                    : (item.category ? [item.category] : ['other']);
+                cats.forEach(c => {
+                    categoryCounts[c] = (categoryCounts[c] || 0) + 1;
+                });
+            });
+            
+            // Sort by count descending
+            const sortedCats = Object.keys(categoryCounts).sort((a, b) => categoryCounts[b] - categoryCounts[a]);
+            
+            const CATEGORIES = [
+              { value: 'garden', label: 'Garden Tools' },
+              { value: 'power', label: 'Power Tools' },
+              { value: 'kitchen', label: 'Kitchen Gear' },
+              { value: 'electronics/computers', label: 'Electronics & Computers' },
+              { value: 'books', label: 'Books' },
+              { value: 'skills', label: 'Experience & Skills' },
+              { value: 'neighbour-helping-neighbour', label: 'Neighbour helping Neighbour' },
+              { value: 'outdoor', label: 'Outdoor Adventure' },
+              { value: 'party', label: 'Party & Event Supplies' },
+              { value: 'baby', label: 'Baby & Kids Gear' },
+              { value: 'sports', label: 'Sports & Recreation' },
+              { value: 'camping', label: 'Camping & Travel' },
+              { value: 'games', label: 'Board Games, Toys & Puzzles' },
+              { value: 'crafts', label: 'Arts, Crafts & Sewing' },
+              { value: 'automotive', label: 'Automotive Tools & Care' },
+              { value: 'music', label: 'Music & Instruments' },
+              { value: 'other', label: 'Other' }
+            ];
+
+            let html = `
+                <button data-category="all" class="category-filter-chip whitespace-nowrap px-4 py-2 rounded-full font-semibold text-xs tracking-wide transition-all ${activeCategoryFilter === 'all' ? 'bg-primary text-on-primary shadow-md' : 'bg-surface-container-high text-on-surface-variant hover:bg-stone-200 dark:hover:bg-stone-800'}">
+                    All (${allInventoryItems.length})
+                </button>
+            `;
+            
+            sortedCats.forEach(catValue => {
+                const catObj = CATEGORIES.find(c => c.value === catValue) || { value: catValue, label: catValue };
+                const count = categoryCounts[catValue];
+                const isActive = activeCategoryFilter === catValue;
+                html += `
+                    <button data-category="${catValue}" class="category-filter-chip whitespace-nowrap px-4 py-2 rounded-full font-semibold text-xs tracking-wide transition-all ${isActive ? 'bg-primary text-on-primary shadow-md' : 'bg-surface-container-high text-on-surface-variant hover:bg-stone-200 dark:hover:bg-stone-800'}">
+                        ${catObj.label} (${count})
+                    </button>
+                `;
+            });
+            
+            container.innerHTML = html;
+            
+            // Add click event listeners
+            container.querySelectorAll('.category-filter-chip').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    activeCategoryFilter = btn.getAttribute('data-category');
+                    
+                    // Update active styling
+                    container.querySelectorAll('.category-filter-chip').forEach(b => {
+                        const isBtnActive = b.getAttribute('data-category') === activeCategoryFilter;
+                        if (isBtnActive) {
+                            b.className = 'category-filter-chip whitespace-nowrap px-4 py-2 rounded-full font-semibold text-xs tracking-wide transition-all bg-primary text-on-primary shadow-md';
+                        } else {
+                            b.className = 'category-filter-chip whitespace-nowrap px-4 py-2 rounded-full font-semibold text-xs tracking-wide transition-all bg-surface-container-high text-on-surface-variant hover:bg-stone-200 dark:hover:bg-stone-800';
+                        }
+                    });
+                    
+                    handleInventorySearch();
+                });
+            });
+        }
+
+        async function loadCircleStats(circleId) {
+            try {
+                // 1. Listings count
+                document.getElementById('circle-stats-listings').textContent = allInventoryItems.length;
+
+                // 2. Completed requests for this circle: query requests where status == 'completed'
+                const reqsSnap = await firebase.firestore().collection('requests')
+                    .where('status', '==', 'completed')
+                    .get();
+                
+                const circleRequests = reqsSnap.docs.filter(doc => {
+                    const data = doc.data();
+                    return data.circle_id === circleId || (data.circle_ids && data.circle_ids.includes(circleId));
+                });
+                
+                document.getElementById('circle-stats-transactions').textContent = circleRequests.length;
+
+                // 3. Chats count
+                const msgsSnap = await firebase.firestore().collection('messages').get();
+                const circleMessages = msgsSnap.docs.filter(doc => {
+                    const data = doc.data();
+                    return data.circle_id === circleId || (data.circle_ids && data.circle_ids.includes(circleId));
+                });
+                
+                document.getElementById('circle-stats-chats').textContent = circleMessages.length;
+            } catch (err) {
+                console.error("Error loading circle stats:", err);
+            }
+        }
+
         // Render Inventory items
         function renderInventory(items) {
             const inventoryContainer = document.getElementById('circle-inventory');
             document.getElementById('inventory-count').textContent = `${items.length} items`;
 
             if (items.length === 0) {
-                inventoryContainer.innerHTML = `<p class="text-sm text-on-surface-variant italic text-center py-4">No matching items found.</p>`;
+                inventoryContainer.innerHTML = `<div class="col-span-full py-12 text-center text-stone-500 italic">No matching items found in this category.</div>`;
                 return;
             }
 
@@ -355,17 +641,22 @@
                 let distanceHtml = '';
                 if (userLocation && item.latitude && item.longitude && isLocationSortActive) {
                     const dist = getDistance(userLocation.lat, userLocation.lng, item.latitude, item.longitude);
-                    distanceHtml = `<p class="text-[10px] text-stone-500 font-medium flex items-center gap-0.5 mt-0.5"><span class="material-symbols-outlined text-[12px]">near_me</span> ${dist.toFixed(1)} mi</p>`;
+                    distanceHtml = `<span class="text-stone-500 text-xs font-semibold flex items-center gap-0.5"><span class="material-symbols-outlined text-xs">near_me</span> ${dist.toFixed(1)} mi</span>`;
                 }
                 return `
-                <div onclick="window.location.href='item-details.html?id=${item.id}'" class="group flex items-center gap-4 cursor-pointer bg-surface p-2 rounded-xl border border-transparent hover:border-outline-variant/30 transition-all shadow-sm">
-                    <div class="w-14 h-14 rounded-lg overflow-hidden bg-surface-container flex-shrink-0">
-                        <img src="${item.image_url || 'https://placehold.co/100x100?text=Item'}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 group-hover:scale-110 transition-transform duration-500">
+                <div onclick="window.location.href='item-details.html?id=${item.id}'" class="group bg-surface rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 border border-outline-variant/10 cursor-pointer flex flex-col h-full">
+                    <div class="relative aspect-square w-full overflow-hidden bg-surface-container-low flex-shrink-0 flex items-center justify-center p-4">
+                        <img src="${item.image_url || 'https://placehold.co/300x300?text=Item'}" class="w-full h-full object-contain rounded-xl bg-stone-50 dark:bg-stone-900 group-hover:scale-105 transition-transform duration-500">
                     </div>
-                    <div class="flex-1 min-w-0">
-                        <h4 class="font-bold text-sm truncate">${item.name}</h4>
-                        <p class="text-xs text-primary font-bold uppercase tracking-tighter mt-1">Available</p>
-                        ${distanceHtml}
+                    <div class="p-4 flex-1 flex flex-col justify-between">
+                        <div>
+                            <h4 class="font-bold text-base text-on-surface line-clamp-1 group-hover:text-primary transition-colors">${item.name}</h4>
+                            <p class="text-xs text-stone-500 dark:text-stone-400 line-clamp-2 mt-1 mb-2">${item.description || 'No description provided'}</p>
+                        </div>
+                        <div class="flex items-center justify-between mt-auto pt-2 border-t border-outline-variant/10">
+                            <span class="text-[10px] font-bold text-primary px-2 py-0.5 rounded-full bg-primary/10 uppercase tracking-wide">Available</span>
+                            ${distanceHtml}
+                        </div>
                     </div>
                 </div>`;
             }).join('');
@@ -375,17 +666,32 @@
             const query = document.getElementById('inventory-search').value.trim();
             let results = [];
 
-            // 1. Fuzzy Search
-            if (query && fuseIndex) {
-                const searchResults = fuseIndex.search(query);
-                // Extract items and keep the Fuse score for ranking
-                results = searchResults.map(r => ({ ...r.item, _score: r.score }));
+            // 1. Category Filter
+            if (activeCategoryFilter !== 'all') {
+                results = allInventoryItems.filter(item => {
+                    const cats = item.categories && Array.isArray(item.categories)
+                        ? item.categories
+                        : (item.category ? [item.category] : ['other']);
+                    return cats.includes(activeCategoryFilter);
+                });
             } else {
                 results = [...allInventoryItems];
+            }
+
+            // 2. Fuzzy Search
+            if (query && fuseIndex) {
+                const searchResults = fuseIndex.search(query);
+                const matchedIds = new Set(searchResults.map(r => r.item.id));
+                const scoreMap = {};
+                searchResults.forEach(r => scoreMap[r.item.id] = r.score);
+                
+                results = results.filter(item => matchedIds.has(item.id));
+                results.forEach(item => item._score = scoreMap[item.id] || 0);
+            } else {
                 results.forEach(r => r._score = 0); // Base score
             }
 
-            // 2. Location Sorting
+            // 3. Location Sorting
             if (isLocationSortActive && userLocation) {
                 results.forEach(item => {
                     if (item.latitude && item.longitude) {
@@ -524,6 +830,8 @@
                 });
 
                 renderInventory(allInventoryItems);
+                renderCategoryChips();
+                loadCircleStats(currentCircleId);
 
                 // 5. Update header avatar
                 if (user) {
@@ -568,14 +876,16 @@
                     document.getElementById('edit-circle-btn').classList.add('flex');
                 }
 
-                // Show feed
+                // Show feed and inventory
                 document.getElementById('private-gate').classList.add('hidden');
                 document.getElementById('feed-section').classList.remove('hidden');
+                document.getElementById('inventory-section-wrapper').classList.remove('hidden');
 
             } else {
                 // Non-member: hide feed for private circles
                 if (currentCircle.is_private) {
                     document.getElementById('feed-section').classList.add('hidden');
+                    document.getElementById('inventory-section-wrapper').classList.add('hidden');
                     document.getElementById('private-gate').classList.remove('hidden');
 
                     // Check for pending request
@@ -596,6 +906,7 @@
                     document.getElementById('join-btn').classList.remove('hidden');
                     document.getElementById('join-btn').classList.add('flex');
                     document.getElementById('feed-section').classList.remove('hidden');
+                    document.getElementById('inventory-section-wrapper').classList.remove('hidden');
                 }
             }
         }
@@ -729,6 +1040,8 @@
             document.getElementById('edit-circle-description').value = currentCircle.description || '';
             document.getElementById('edit-circle-private').checked = currentCircle.is_private || false;
             document.getElementById('edit-image-preview').src = currentCircle.image_url || '';
+            editSelectedCategories = currentCircle.allowed_categories ? [...currentCircle.allowed_categories] : [];
+            renderEditCategoryChips();
             document.getElementById('edit-circle-modal').classList.remove('hidden');
             editSelectedFile = null;
         }
@@ -768,6 +1081,7 @@
                     name: document.getElementById('edit-circle-name').value.trim(),
                     description: document.getElementById('edit-circle-description').value.trim(),
                     is_private: document.getElementById('edit-circle-private').checked,
+                    allowed_categories: editSelectedCategories,
                     image_url: imageUrl
                 };
 
@@ -969,6 +1283,7 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
+            initEditCategorySearchAutocomplete();
             firebase.auth().onAuthStateChanged((user) => {
                 if (user) {
                     currentUser = user;
