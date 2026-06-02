@@ -164,25 +164,37 @@
                 try {
                     const reqSnap1 = await firebase.firestore().collection('requests')
                         .where('borrower_id', '==', currentUser.uid)
-                        .where('owner_id', '==', targetUserId)
                         .get();
                     const reqSnap2 = await firebase.firestore().collection('requests')
-                        .where('owner_id', '==', currentUser.uid)
                         .where('borrower_id', '==', targetUserId)
                         .get();
                     
-                    const userRequests = [
-                        ...reqSnap1.docs.map(doc => doc.data()),
-                        ...reqSnap2.docs.map(doc => doc.data())
+                    const allReqDocs = [
+                        ...reqSnap1.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                        ...reqSnap2.docs.map(doc => ({ id: doc.id, ...doc.data() }))
                     ];
 
-                    userRequests.sort((a, b) => {
+                    const filteredRequests = [];
+                    for (const req of allReqDocs) {
+                        if (!req.item_id) continue;
+                        const itemDoc = await firebase.firestore().collection('items').doc(req.item_id).get();
+                        if (itemDoc.exists) {
+                            const itemData = itemDoc.data();
+                            const isMatch = (req.borrower_id === currentUser.uid && itemData.owner_id === targetUserId) ||
+                                            (req.borrower_id === targetUserId && itemData.owner_id === currentUser.uid);
+                            if (isMatch) {
+                                filteredRequests.push(req);
+                            }
+                        }
+                    }
+
+                    filteredRequests.sort((a, b) => {
                         const tA = a.created_at?.toDate ? a.created_at.toDate().getTime() : 0;
                         const tB = b.created_at?.toDate ? b.created_at.toDate().getTime() : 0;
                         return tB - tA;
                     });
 
-                    const activeReq = userRequests.find(req => req.status !== 'declined' && req.item_id) || userRequests.find(req => req.item_id);
+                    const activeReq = filteredRequests.find(req => req.status !== 'declined' && req.item_id) || filteredRequests.find(req => req.item_id);
                     if (activeReq) {
                         contextItemId = activeReq.item_id;
                     } else {
@@ -273,13 +285,18 @@
             if (!currentUser || !targetUserId || !contextItemId) return;
             
             try {
+                const itemDoc = await firebase.firestore().collection('items').doc(contextItemId).get();
+                if (!itemDoc.exists) return;
+                const itemData = itemDoc.data();
+                const itemOwnerId = itemData.owner_id;
+
                 const snap = await firebase.firestore().collection('requests')
                     .where('item_id', '==', contextItemId)
                     .get();
                 
                 activeRequest = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).find(req => {
-                    return (req.borrower_id === currentUser.uid && req.owner_id === targetUserId) ||
-                           (req.borrower_id === targetUserId && req.owner_id === currentUser.uid);
+                    return (req.borrower_id === currentUser.uid && itemOwnerId === targetUserId) ||
+                           (req.borrower_id === targetUserId && itemOwnerId === currentUser.uid);
                 });
 
                 const bar = document.getElementById('transaction-bar');
@@ -297,7 +314,7 @@
 
                 actionsDiv.innerHTML = '';
                 
-                const isLender = activeRequest.owner_id === currentUser.uid;
+                const isLender = itemOwnerId === currentUser.uid;
                 const isBorrower = activeRequest.borrower_id === currentUser.uid;
                 
                 if (activeRequest.status === 'pending') {
