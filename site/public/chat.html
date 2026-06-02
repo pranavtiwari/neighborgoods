@@ -76,7 +76,7 @@
 
     <!-- Context Card -->
     <div id="context-card" class="px-6 py-3 sticky top-[72px] z-40 bg-surface/80 backdrop-blur-sm hidden">
-        <div class="bg-surface-container-lowest rounded-xl p-3 shadow-[0_4px_20px_rgba(51,51,51,0.04)] flex items-center gap-4">
+        <div class="bg-surface-container-lowest rounded-xl p-3 shadow-[0_4px_20px_rgba(51,51,51,0.04)] flex items-center gap-4 max-w-xl mx-auto">
             <div class="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
                 <img id="context-item-img" src="" class="w-full h-full object-cover">
             </div>
@@ -87,6 +87,22 @@
                 </div>
             </div>
             <button class="bg-primary/5 text-primary px-3 py-1.5 rounded-lg text-xs font-bold shrink-0">View Item</button>
+        </div>
+    </div>
+
+    <!-- Transaction State Bar -->
+    <div id="transaction-bar" class="px-6 pb-3 sticky top-[148px] z-35 bg-surface/80 backdrop-blur-sm hidden">
+        <div class="bg-surface-container-low border border-outline-variant/10 rounded-xl p-3 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 max-w-xl mx-auto">
+            <div class="flex items-center gap-2.5">
+                <span id="transaction-status-icon" class="material-symbols-outlined text-primary text-[20px]">info</span>
+                <div class="min-w-0 flex-1">
+                    <p id="transaction-status-text" class="text-xs font-bold text-on-surface truncate">Transaction Status: Loading...</p>
+                    <p id="transaction-helper-text" class="text-[10px] text-on-surface-variant font-medium mt-0.5 leading-tight">...</p>
+                </div>
+            </div>
+            <div id="transaction-actions" class="flex gap-2 w-full sm:w-auto justify-end shrink-0">
+                <!-- Action buttons injected dynamically -->
+            </div>
         </div>
     </div>
 
@@ -191,7 +207,159 @@
             </div>`;
 
             subscribeToMessages();
+            loadTransactionStatus();
         }
+
+        let activeRequest = null;
+
+        async function loadTransactionStatus() {
+            if (!currentUser || !targetUserId || !contextItemId) return;
+            
+            try {
+                const snap = await firebase.firestore().collection('requests')
+                    .where('item_id', '==', contextItemId)
+                    .get();
+                
+                activeRequest = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).find(req => {
+                    return (req.borrower_id === currentUser.uid && req.owner_id === targetUserId) ||
+                           (req.borrower_id === targetUserId && req.owner_id === currentUser.uid);
+                });
+
+                const bar = document.getElementById('transaction-bar');
+                if (!activeRequest) {
+                    bar.classList.add('hidden');
+                    return;
+                }
+
+                bar.classList.remove('hidden');
+
+                const statusText = document.getElementById('transaction-status-text');
+                const helperText = document.getElementById('transaction-helper-text');
+                const actionsDiv = document.getElementById('transaction-actions');
+                const iconSpan = document.getElementById('transaction-status-icon');
+
+                actionsDiv.innerHTML = '';
+                
+                const isLender = activeRequest.owner_id === currentUser.uid;
+                const isBorrower = activeRequest.borrower_id === currentUser.uid;
+                
+                if (activeRequest.status === 'pending') {
+                    iconSpan.textContent = 'pending';
+                    iconSpan.className = 'material-symbols-outlined text-amber-500 text-[20px]';
+                    statusText.textContent = 'Request Pending';
+                    if (isLender) {
+                        helperText.textContent = 'Borrower wants to borrow this item.';
+                        actionsDiv.innerHTML = `
+                            <button onclick="updateRequestStatus('approved')" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all">Approve</button>
+                            <button onclick="updateRequestStatus('declined')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Decline</button>
+                        `;
+                    } else {
+                        helperText.textContent = 'Waiting for lender approval.';
+                        actionsDiv.innerHTML = `
+                            <button onclick="updateRequestStatus('declined')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Cancel</button>
+                        `;
+                    }
+                } else if (activeRequest.status === 'approved') {
+                    iconSpan.textContent = 'handshake';
+                    iconSpan.className = 'material-symbols-outlined text-primary text-[20px]';
+                    statusText.textContent = 'Request Approved';
+                    if (isBorrower) {
+                        helperText.textContent = 'Agree on pickup. Click once you have the item.';
+                        actionsDiv.innerHTML = `
+                            <button onclick="updateRequestStatus('borrowed')" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all">Mark Picked Up</button>
+                        `;
+                    } else {
+                        helperText.textContent = 'Approved. Waiting for borrower to pick up.';
+                    }
+                } else if (activeRequest.status === 'borrowed') {
+                    iconSpan.textContent = 'shopping_bag';
+                    iconSpan.className = 'material-symbols-outlined text-primary text-[20px]';
+                    statusText.textContent = 'Borrowed (In Possession)';
+                    if (isBorrower) {
+                        helperText.textContent = 'You have this item. Mark as returned when done.';
+                        actionsDiv.innerHTML = `
+                            <button onclick="updateRequestStatus('returned')" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all">Mark Returned</button>
+                        `;
+                    } else {
+                        helperText.textContent = 'Borrower has picked up the item.';
+                    }
+                } else if (activeRequest.status === 'returned') {
+                    iconSpan.textContent = 'keyboard_return';
+                    iconSpan.className = 'material-symbols-outlined text-blue-500 text-[20px]';
+                    statusText.textContent = 'Returned (Pending Receipt)';
+                    if (isLender) {
+                        helperText.textContent = 'Borrower marked item as returned. Confirm receipt.';
+                        actionsDiv.innerHTML = `
+                            <button onclick="updateRequestStatus('completed')" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all">Confirm Received</button>
+                        `;
+                    } else {
+                        helperText.textContent = 'You returned the item. Waiting for lender confirmation.';
+                    }
+                } else if (activeRequest.status === 'completed') {
+                    iconSpan.textContent = 'check_circle';
+                    iconSpan.className = 'material-symbols-outlined text-green-500 text-[20px]';
+                    statusText.textContent = 'Transaction Completed';
+                    helperText.textContent = 'Carbon saved and transaction finalized!';
+                } else if (activeRequest.status === 'declined') {
+                    iconSpan.textContent = 'cancel';
+                    iconSpan.className = 'material-symbols-outlined text-red-500 text-[20px]';
+                    statusText.textContent = 'Cancelled / Declined';
+                    helperText.textContent = 'This request has been cancelled or declined.';
+                }
+            } catch (err) {
+                console.error("Error loading transaction status:", err);
+            }
+        }
+
+        async function updateRequestStatus(newStatus) {
+            if (!activeRequest) return;
+            try {
+                const btn = window.event ? window.event.target : null;
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = 'Updating...';
+                }
+
+                if (newStatus === 'approved') {
+                    const itemData = await window.db.getItem(contextItemId);
+                    const listingType = itemData ? itemData.listing_type : 'free';
+                    await window.db.confirmBorrowRequest(activeRequest.id, contextItemId, listingType);
+                } else if (newStatus === 'declined') {
+                    await window.db.declineBorrowRequest(activeRequest.id);
+                } else if (newStatus === 'borrowed') {
+                    await window.db.markPickedUp(activeRequest.id, contextItemId);
+                } else if (newStatus === 'returned') {
+                    await window.db.markReturned(activeRequest.id);
+                } else if (newStatus === 'completed') {
+                    await window.db.confirmReturn(activeRequest.id);
+                }
+
+                let autoMsg = '';
+                if (newStatus === 'approved') {
+                    autoMsg = '📢 *Transaction Update:* I approved your request!';
+                } else if (newStatus === 'declined') {
+                    autoMsg = '📢 *Transaction Update:* Request has been cancelled/declined.';
+                } else if (newStatus === 'borrowed') {
+                    autoMsg = '📢 *Transaction Update:* I picked up the item!';
+                } else if (newStatus === 'returned') {
+                    autoMsg = '📢 *Transaction Update:* I returned the item!';
+                } else if (newStatus === 'completed') {
+                    autoMsg = '📢 *Transaction Update:* I confirmed return received! The transaction is now complete.';
+                }
+
+                if (autoMsg) {
+                    await window.db.sendMessage(currentUser.uid, targetUserId, contextItemId, autoMsg);
+                }
+
+                await loadTransactionStatus();
+            } catch (err) {
+                alert('Error updating status: ' + err.message);
+                loadTransactionStatus();
+            }
+        }
+
+        // Expose to window for inline onclick handlers
+        window.updateRequestStatus = updateRequestStatus;
 
         function appendMessage(msg) {
             const emptyState = document.getElementById('empty-state');
@@ -263,6 +431,7 @@
                 if (msg.receiver_id === currentUser.uid && !msg.is_read) {
                     window.db.markMessagesAsRead(currentUser.uid, targetUserId);
                 }
+                loadTransactionStatus();
             });
         }
 

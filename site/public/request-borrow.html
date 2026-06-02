@@ -323,25 +323,46 @@
 
             document.getElementById('suggested-text-preview').textContent = suggestedMessageStr;
 
-            // Duplicate request guard
-            const hasExisting = await window.db.checkExistingRequest(itemId, user.uid);
-            if (hasExisting) {
+            // Duplicate request & availability guard
+            const isBorrowed = item.status === 'borrowed' || item.is_available === false;
+            if (isBorrowed) {
                 document.getElementById('send-request-btn').disabled = true;
                 document.getElementById('send-request-btn').classList.add('opacity-50', 'cursor-not-allowed');
-                document.getElementById('send-request-btn').innerText = "Already Requested";
+                document.getElementById('send-request-btn').innerText = "Currently Borrowed";
                 
-                if (!document.getElementById('duplicate-warning-banner')) {
+                if (!document.getElementById('availability-warning-banner')) {
                     const alertBanner = document.createElement('div');
-                    alertBanner.id = 'duplicate-warning-banner';
-                    alertBanner.className = 'bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300 p-4 rounded-xl text-sm font-medium flex items-start gap-3 mt-4';
+                    alertBanner.id = 'availability-warning-banner';
+                    alertBanner.className = 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 p-4 rounded-xl text-sm font-medium flex items-start gap-3 mt-4';
                     alertBanner.innerHTML = `
-                        <span class="material-symbols-outlined text-[20px] text-red-600 mt-0.5">warning</span>
+                        <span class="material-symbols-outlined text-[20px] text-amber-600 mt-0.5">warning</span>
                         <div>
-                            <p class="font-bold">Request already in progress</p>
-                            <p class="text-xs mt-1">You have already requested this item. You can track this request on your <a href="activity.html" class="underline font-bold font-semibold">Activity</a> page.</p>
+                            <p class="font-bold">Item Currently Borrowed</p>
+                            <p class="text-xs mt-1">This item has been picked up by a borrower and is currently unavailable. You can request it once it has been returned.</p>
                         </div>
                     `;
                     document.getElementById('send-request-btn').parentNode.insertBefore(alertBanner, document.getElementById('send-request-btn'));
+                }
+            } else {
+                const hasExisting = await window.db.checkExistingRequest(itemId, user.uid);
+                if (hasExisting) {
+                    document.getElementById('send-request-btn').disabled = true;
+                    document.getElementById('send-request-btn').classList.add('opacity-50', 'cursor-not-allowed');
+                    document.getElementById('send-request-btn').innerText = "Already Requested";
+                    
+                    if (!document.getElementById('duplicate-warning-banner')) {
+                        const alertBanner = document.createElement('div');
+                        alertBanner.id = 'duplicate-warning-banner';
+                        alertBanner.className = 'bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300 p-4 rounded-xl text-sm font-medium flex items-start gap-3 mt-4';
+                        alertBanner.innerHTML = `
+                            <span class="material-symbols-outlined text-[20px] text-red-600 mt-0.5">warning</span>
+                            <div>
+                                <p class="font-bold">Request already in progress</p>
+                                <p class="text-xs mt-1">You have already requested this item. You can track this request on your <a href="activity.html" class="underline font-bold font-semibold">Activity</a> page.</p>
+                            </div>
+                        `;
+                        document.getElementById('send-request-btn').parentNode.insertBefore(alertBanner, document.getElementById('send-request-btn'));
+                    }
                 }
             }
         } catch (err) {

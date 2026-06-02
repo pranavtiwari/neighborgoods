@@ -129,6 +129,16 @@
     <div class="text-center py-4 text-stone-500 animate-pulse">Loading items...</div>
 </div>
 </section>
+<!-- Items I'm Borrowing -->
+<section class="space-y-4">
+<div class="flex justify-between items-end px-2">
+<h3 class="text-xl font-bold tracking-tight">Items I'm Borrowing</h3>
+</div>
+<div class="space-y-4" id="borrowed-items-list">
+    <!-- Loading State -->
+    <div class="text-center py-4 text-stone-500 animate-pulse">Loading borrowed items...</div>
+</div>
+</section>
 <!-- Actions -->
 <section class="flex flex-col gap-3">
 <button onclick="window.location.href = window.location.pathname.endsWith('.html') ? 'add-item.html' : 'add-item'" class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
@@ -237,6 +247,82 @@
                     </a>
                 </div>`;
             }).join('');
+        }
+
+        // Fetch and display borrowed items
+        const borrowedList = document.getElementById('borrowed-items-list');
+        try {
+            const borrowingRequests = await window.db.getBorrowRequestsForUser(session.user.uid, 'borrowing');
+            const activeBorrows = borrowingRequests.filter(req => ['approved', 'borrowed', 'returned'].includes(req.status));
+            
+            if (activeBorrows.length === 0) {
+                borrowedList.innerHTML = `<div class="text-center py-6 text-stone-500 font-medium">You aren't borrowing any items right now.</div>`;
+            } else {
+                borrowedList.innerHTML = activeBorrows.map(req => {
+                    const item = req.items || {};
+                    const isGiveaway = item.listing_type === 'giveaway';
+                    
+                    let statusBadge = '';
+                    if (req.status === 'approved') {
+                        statusBadge = `<span class="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded">Approved (pending pickup)</span>`;
+                    } else if (req.status === 'borrowed') {
+                        statusBadge = `<span class="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] font-bold px-2 py-0.5 rounded">Picked Up</span>`;
+                    } else if (req.status === 'returned') {
+                        statusBadge = `<span class="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded">Returned (pending receipt)</span>`;
+                    }
+
+                    let dateInfoHtml = '';
+                    if (isGiveaway) {
+                        dateInfoHtml = `<p class="text-xs text-teal-600 dark:text-teal-400 mt-1 font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-xs">redeem</span> Giveaway item (permanent)</p>`;
+                    } else if (req.end_date) {
+                        const endDate = new Date(req.end_date);
+                        const dueDateStr = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                        
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const endDay = new Date(endDate);
+                        endDay.setHours(0, 0, 0, 0);
+
+                        let dateColorClass = 'text-on-surface-variant';
+                        let dateTextPrefix = 'Due back by';
+
+                        if (endDay < today) {
+                            dateColorClass = 'text-red-600 dark:text-red-400 font-semibold';
+                            dateTextPrefix = '⚠️ Overdue since';
+                        } else if (endDay.getTime() === today.getTime()) {
+                            dateColorClass = 'text-amber-600 dark:text-amber-400 font-semibold';
+                            dateTextPrefix = '⏳ Due TODAY';
+                        } else {
+                            dateColorClass = 'text-green-600 dark:text-green-400';
+                        }
+                        dateInfoHtml = `<p class="text-xs ${dateColorClass} mt-1.5 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                            ${dateTextPrefix} ${dueDateStr}
+                        </p>`;
+                    }
+
+                    const chatUrl = `chat.html?userId=${item.owner_id}&itemId=${item.id}`;
+
+                    return `
+                    <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
+                        <img alt="${item.name || 'Item'}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category || 'Item')}"/>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h4 class="font-bold text-on-surface truncate max-w-[200px]">${item.name || 'Unknown Item'}</h4>
+                                ${statusBadge}
+                            </div>
+                            <p class="text-xs text-on-surface-variant mt-1">Lender: ${item.profiles?.full_name || item.owner_name || 'Neighbor'}</p>
+                            ${dateInfoHtml}
+                        </div>
+                        <a href="${chatUrl}" class="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-all shrink-0">
+                            <span class="material-symbols-outlined text-[20px] font-bold" data-icon="chat">chat</span>
+                        </a>
+                    </div>`;
+                }).join('');
+            }
+        } catch (err) {
+            console.error("Error fetching borrowed items:", err);
+            borrowedList.innerHTML = `<div class="text-center py-6 text-error font-medium">Failed to load borrowed items.</div>`;
         }
     }
     

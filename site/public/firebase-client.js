@@ -775,6 +775,25 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
+        markPickedUp: async function(requestId, itemId) {
+            try {
+                await firebase.firestore().collection('requests').doc(requestId).update({
+                    status: 'borrowed',
+                    picked_up_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                const itemDoc = await firebase.firestore().collection('items').doc(itemId).get();
+                if (itemDoc.exists) {
+                    await firebase.firestore().collection('items').doc(itemId).update({
+                        status: 'borrowed',
+                        is_available: false
+                    });
+                }
+            } catch (err) {
+                console.error("Error marking as picked up:", err);
+                throw err;
+            }
+        },
+
         markReturned: async function(requestId) {
             try {
                 await firebase.firestore().collection('requests').doc(requestId).update({
@@ -805,6 +824,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     const itemData = itemDoc.data();
                     const lenderId = itemData.owner_id;
                     const borrowerId = reqData.borrower_id;
+
+                    // Mark item as available again
+                    await firebase.firestore().collection('items').doc(reqData.item_id).update({
+                        status: 'available',
+                        is_available: true
+                    });
 
                     // Increment carbon_saved_kg by 2 on lender profile
                     const lenderProfileRef = firebase.firestore().collection('profiles').doc(lenderId);

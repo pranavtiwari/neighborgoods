@@ -231,30 +231,45 @@
                     }
                 } else {
                     // Borrower view — text depends on listing type
+                    const isBorrowed = item.status === 'borrowed' || item.is_available === false;
                     const isGiveaway = item.listing_type === 'giveaway';
-
+ 
                     // Update badge on photo
                     const badge = document.getElementById('item-badge');
                     if (badge) {
-                        if (isGiveaway) {
+                        if (isBorrowed) {
+                            badge.textContent = 'Currently Borrowed';
+                            badge.className = 'px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-red-500 text-white';
+                        } else if (isGiveaway) {
                             badge.textContent = 'Free — Yours to Keep!';
                             badge.className = 'px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase bg-teal-500 text-white';
                         } else {
                             badge.textContent = 'Borrowing';
                         }
                     }
-
+ 
                     if (borrowBtn) {
-                        borrowBtn.textContent = isGiveaway ? 'Request to Claim' : 'Request to Borrow';
-                        borrowBtn.className = "w-full md:w-auto bg-gradient-to-br from-green-800 to-green-600 text-white font-bold rounded-lg px-12 py-4 active:scale-[0.98] transform transition-all shadow-lg hover:opacity-90";
-                        borrowBtn.onclick = () => window.location.href = `request-borrow.html?id=${itemId}`;
+                        if (isBorrowed) {
+                            borrowBtn.textContent = 'Currently Borrowed';
+                            borrowBtn.disabled = true;
+                            borrowBtn.className = "w-full md:w-auto bg-stone-300 text-stone-500 font-bold rounded-lg px-12 py-4 cursor-not-allowed shadow-none";
+                            borrowBtn.onclick = null;
+                        } else {
+                            borrowBtn.textContent = isGiveaway ? 'Request to Claim' : 'Request to Borrow';
+                            borrowBtn.className = "w-full md:w-auto bg-gradient-to-br from-green-800 to-green-600 text-white font-bold rounded-lg px-12 py-4 active:scale-[0.98] transform transition-all shadow-lg hover:opacity-90";
+                            borrowBtn.onclick = () => window.location.href = `request-borrow.html?id=${itemId}`;
+                        }
                     }
                     if (chatBtn) {
                         chatBtn.classList.remove('hidden');
                         chatBtn.onclick = () => window.location.href = `chat.html?userId=${item.owner_id}&itemId=${itemId}`;
                     }
                     if (reserveTitleEl) {
-                        reserveTitleEl.textContent = isGiveaway ? `Claim ${item.name}` : `Reserve ${item.name}`;
+                        if (isBorrowed) {
+                            reserveTitleEl.textContent = 'Currently Borrowed';
+                        } else {
+                            reserveTitleEl.textContent = isGiveaway ? `Claim ${item.name}` : `Reserve ${item.name}`;
+                        }
                     }
                 }
             });

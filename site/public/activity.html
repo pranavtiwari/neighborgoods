@@ -243,6 +243,20 @@
     }
 
     // --- Return Flow handlers ---
+    async function handleMarkPickedUp(requestId, itemId, btnEl) {
+        if (!confirm("Are you sure you want to mark this item as picked up?")) return;
+        btnEl.disabled = true;
+        btnEl.textContent = 'Updating...';
+        try {
+            await window.db.markPickedUp(requestId, itemId);
+            await fetchActivity();
+        } catch (e) {
+            alert('Failed to mark as picked up: ' + e.message);
+            btnEl.disabled = false;
+            btnEl.textContent = 'Mark Picked Up';
+        }
+    }
+
     async function handleMarkReturned(requestId, btnEl) {
         if (!confirm("Are you sure you want to mark this item as returned?")) return;
         btnEl.disabled = true;
@@ -377,16 +391,27 @@
                 const item = req.items;
                 const otherParty = currentView === 'borrowing' ? item.profiles : req.profiles;
                 
-                // Color codes
+                // Color codes & Status Label
                 let statusColor = 'bg-surface-container-highest text-on-surface-variant';
+                let statusLabel = req.status;
                 if (req.status === 'approved') {
                     statusColor = 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300';
+                    statusLabel = 'Approved (Pending Pickup)';
+                } else if (req.status === 'borrowed') {
+                    statusColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300';
+                    statusLabel = 'Picked Up (Borrowed)';
                 } else if (req.status === 'returned') {
                     statusColor = 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
+                    statusLabel = 'Returned (Pending Receipt)';
                 } else if (req.status === 'completed') {
                     statusColor = 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300';
+                    statusLabel = 'Completed';
                 } else if (req.status === 'declined') {
                     statusColor = 'bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300';
+                    statusLabel = 'Cancelled/Declined';
+                } else if (req.status === 'pending') {
+                    statusColor = 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400';
+                    statusLabel = 'Pending';
                 }
 
                 const isGiveaway = item.listing_type === 'giveaway';
@@ -450,6 +475,13 @@
                 } else if (!isOwnerView && req.status === 'approved') {
                     actionButtons = `
                         <button
+                            onclick="handleMarkPickedUp('${req.id}', '${item.id}', this)"
+                            class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[16px]">shopping_bag</span> Mark Picked Up
+                        </button>`;
+                } else if (!isOwnerView && req.status === 'borrowed') {
+                    actionButtons = `
+                        <button
                             onclick="handleMarkReturned('${req.id}', this)"
                             class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
                             <span class="material-symbols-outlined text-[16px]">keyboard_return</span> Mark as Returned
@@ -485,7 +517,7 @@
                         <div class="flex-1">
                             <div class="flex justify-between items-start">
                                 <h4 class="font-bold text-lg leading-tight mb-1">${item.name}</h4>
-                                <span class="${statusColor} px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">${req.status}</span>
+                                <span class="${statusColor} px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">${statusLabel}</span>
                             </div>
                             <p class="text-on-surface-variant text-sm flex items-center gap-1 mt-1">
                                 <span class="material-symbols-outlined text-sm">person</span> ${otherParty?.full_name || 'Neighbor'}

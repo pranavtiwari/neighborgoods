@@ -654,7 +654,10 @@
                             <p class="text-xs text-stone-500 dark:text-stone-400 line-clamp-2 mt-1 mb-2">${item.description || 'No description provided'}</p>
                         </div>
                         <div class="flex items-center justify-between mt-auto pt-2 border-t border-outline-variant/10">
-                            <span class="text-[10px] font-bold text-primary px-2 py-0.5 rounded-full bg-primary/10 uppercase tracking-wide">Available</span>
+                            ${item.status === 'borrowed' || item.is_available === false
+                                ? `<span class="text-[10px] font-bold text-red-700 px-2 py-0.5 rounded-full bg-red-100 uppercase tracking-wide">Borrowed</span>`
+                                : `<span class="text-[10px] font-bold text-primary px-2 py-0.5 rounded-full bg-primary/10 uppercase tracking-wide">Available</span>`
+                            }
                             ${distanceHtml}
                         </div>
                     </div>

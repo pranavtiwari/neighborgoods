@@ -242,6 +242,8 @@
         try {
             const userPos = await getCurrentPositionPromise() || { lat: 37.7749, lng: -122.4194 }; // SF default
             let items = await window.db.getItems('all', user ? user.uid : null);
+            // Filter out items that are currently borrowed
+            items = items.filter(item => item.status !== 'borrowed' && item.is_available !== false);
             if (user) {
                 items = items.filter(item => item.owner_id !== user.uid);
             }
