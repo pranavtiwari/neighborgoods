@@ -129,7 +129,7 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const targetUserId = urlParams.get('userId');
-        const contextItemId = urlParams.get('itemId');
+        let contextItemId = urlParams.get('itemId');
 
         const chatMessages = document.getElementById('chat-messages');
         const messageInput = document.getElementById('message-input');
@@ -157,6 +157,63 @@
                 if (profileData.avatar_url) document.getElementById('target-avatar').src = profileData.avatar_url;
             } else {
                 document.getElementById('target-name').textContent = 'Unknown User';
+            }
+
+            // Dynamic resolution of contextItemId if not present in URL
+            if (!contextItemId) {
+                try {
+                    const reqSnap1 = await firebase.firestore().collection('requests')
+                        .where('borrower_id', '==', currentUser.uid)
+                        .where('owner_id', '==', targetUserId)
+                        .get();
+                    const reqSnap2 = await firebase.firestore().collection('requests')
+                        .where('owner_id', '==', currentUser.uid)
+                        .where('borrower_id', '==', targetUserId)
+                        .get();
+                    
+                    const userRequests = [
+                        ...reqSnap1.docs.map(doc => doc.data()),
+                        ...reqSnap2.docs.map(doc => doc.data())
+                    ];
+
+                    userRequests.sort((a, b) => {
+                        const tA = a.created_at?.toDate ? a.created_at.toDate().getTime() : 0;
+                        const tB = b.created_at?.toDate ? b.created_at.toDate().getTime() : 0;
+                        return tB - tA;
+                    });
+
+                    const activeReq = userRequests.find(req => req.status !== 'declined' && req.item_id) || userRequests.find(req => req.item_id);
+                    if (activeReq) {
+                        contextItemId = activeReq.item_id;
+                    } else {
+                        const msgSnap1 = await firebase.firestore().collection('messages')
+                            .where('sender_id', '==', currentUser.uid)
+                            .where('receiver_id', '==', targetUserId)
+                            .get();
+                        const msgSnap2 = await firebase.firestore().collection('messages')
+                            .where('sender_id', '==', targetUserId)
+                            .where('receiver_id', '==', currentUser.uid)
+                            .get();
+                        
+                        const userMsgs = [
+                            ...msgSnap1.docs.map(doc => doc.data()),
+                            ...msgSnap2.docs.map(doc => doc.data())
+                        ];
+
+                        userMsgs.sort((a, b) => {
+                            const tA = a.created_at?.toDate ? a.created_at.toDate().getTime() : 0;
+                            const tB = b.created_at?.toDate ? b.created_at.toDate().getTime() : 0;
+                            return tB - tA;
+                        });
+
+                        const msgWithItem = userMsgs.find(msg => msg.item_id);
+                        if (msgWithItem) {
+                            contextItemId = msgWithItem.item_id;
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error dynamically resolving contextItemId:", err);
+                }
             }
 
             // Context Item Logic
