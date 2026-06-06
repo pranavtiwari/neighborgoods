@@ -47,6 +47,43 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         }
     };
 
+    // Helper function to handle Email/Password Login
+    window.loginWithEmail = async function(email, password, redirectTo = 'explore.html') {
+        try {
+            await firebase.auth().signInWithEmailAndPassword(email, password);
+            window.location.href = redirectTo;
+        } catch (error) {
+            console.error('Email login error:', error);
+            throw error;
+        }
+    };
+
+    // Helper function to handle Email/Password Registration
+    window.registerWithEmail = async function(email, password, fullName, redirectTo = 'explore.html') {
+        try {
+            const result = await firebase.auth().createUserWithEmailAndPassword(email, password);
+            const user = result.user;
+            
+            // Create profile
+            const profileRef = firebase.firestore().collection('profiles').doc(user.uid);
+            await profileRef.set({
+                full_name: fullName || 'Neighbor',
+                avatar_url: `https://i.pravatar.cc/150?u=${user.uid}`,
+                bio: '',
+                reputation_score: 5.0,
+                carbon_saved_kg: 0,
+                location: '',
+                created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            window.location.href = redirectTo;
+        } catch (error) {
+            console.error('Email registration error:', error);
+            throw error;
+        }
+    };
+
     // Helper function to handle Logout
     window.logout = async function() {
         try {
@@ -76,10 +113,11 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
     // Listen to auth changes globally (to handle sign outs)
     firebase.auth().onAuthStateChanged((user) => {
+        const path = window.location.pathname;
         if (!user && 
-            !window.location.pathname.includes('join-community.html') && 
-            window.location.pathname !== '/' && 
-            !window.location.pathname.includes('index.html')) {
+            !path.includes('join-community') && 
+            path !== '/' && 
+            !path.includes('index')) {
             window.location.href = 'join-community.html';
         } else if (user) {
             const updateBadges = async () => {
@@ -519,24 +557,54 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         // --- Borrow Requests ---
         createBorrowRequest: async function(requestData) {
             try {
-                let circleId = null;
-                let circleIds = [];
-                if (requestData.item_id) {
-                    const itemDoc = await firebase.firestore().collection('items').doc(requestData.item_id).get();
-                    if (itemDoc.exists) {
-                        const itemData = itemDoc.data();
-                        circleId = itemData.circle_id || null;
-                        circleIds = itemData.circle_ids || [];
+                const db = firebase.firestore();
+                const itemRef = db.collection('items').doc(requestData.item_id);
+                
+                return await db.runTransaction(async (transaction) => {
+                    const itemDoc = await transaction.get(itemRef);
+                    if (!itemDoc.exists) {
+                        throw new Error("Item does not exist.");
                     }
-                }
-                const ref = await firebase.firestore().collection('requests').add({
-                    ...requestData,
-                    circle_id: circleId,
-                    circle_ids: circleIds,
-                    status: 'pending',
-                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    const itemData = itemDoc.data();
+                    
+                    // Enforce ownership: owner cannot borrow their own item
+                    if (itemData.owner_id === requestData.borrower_id) {
+                        throw new Error("You cannot borrow your own item.");
+                    }
+
+                    // Enforce availability: item cannot be lent if status is approved/borrowed/returned or is_available is false
+                    if (itemData.is_available === false || ['approved', 'borrowed', 'returned'].includes(itemData.status)) {
+                        throw new Error("This item is currently not available for borrowing.");
+                    }
+
+                    // Check for existing pending or approved request from this borrower
+                    const existingRequestsSnap = await db.collection('requests')
+                        .where('item_id', '==', requestData.item_id)
+                        .where('borrower_id', '==', requestData.borrower_id)
+                        .get();
+                    
+                    const hasActiveRequest = existingRequestsSnap.docs.some(doc => 
+                        ['pending', 'approved'].includes(doc.data().status)
+                    );
+                    if (hasActiveRequest) {
+                        throw new Error("You already have an active request for this item.");
+                    }
+
+                    // Create the request
+                    const circleId = itemData.circle_id || null;
+                    const circleIds = itemData.circle_ids || [];
+                    
+                    const newRequestRef = db.collection('requests').doc();
+                    transaction.set(newRequestRef, {
+                        ...requestData,
+                        circle_id: circleId,
+                        circle_ids: circleIds,
+                        status: 'pending',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    return { id: newRequestRef.id };
                 });
-                return { id: ref.id };
             } catch (err) {
                 console.error("Error creating borrow request:", err);
                 throw err;
@@ -600,13 +668,47 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         // For giveaway listings, the item is automatically deleted after approval.
         confirmBorrowRequest: async function(requestId, itemId, listingType) {
             try {
-                await firebase.firestore().collection('requests').doc(requestId).update({
-                    status: 'approved',
-                    confirmed_at: firebase.firestore.FieldValue.serverTimestamp()
+                const db = firebase.firestore();
+                const requestRef = db.collection('requests').doc(requestId);
+                const itemRef = db.collection('items').doc(itemId);
+
+                await db.runTransaction(async (transaction) => {
+                    const itemDoc = await transaction.get(itemRef);
+                    if (!itemDoc.exists) {
+                        throw new Error("Item does not exist.");
+                    }
+                    const itemData = itemDoc.data();
+                    
+                    // Check if item is already lent/promised (i.e., is_available is false, or status is approved/borrowed/returned)
+                    if (itemData.is_available === false || ['approved', 'borrowed', 'returned'].includes(itemData.status)) {
+                        throw new Error("This item is already lent or promised to another user.");
+                    }
+
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) {
+                        throw new Error("Request does not exist.");
+                    }
+                    const requestData = requestDoc.data();
+                    if (requestData.status !== 'pending') {
+                        throw new Error("This request is no longer pending.");
+                    }
+
+                    // Update request status to approved
+                    transaction.update(requestRef, {
+                        status: 'approved',
+                        confirmed_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // Update item status to approved (reserved) and is_available to false
+                    if (listingType === 'giveaway') {
+                        transaction.delete(itemRef);
+                    } else {
+                        transaction.update(itemRef, {
+                            status: 'approved',
+                            is_available: false
+                        });
+                    }
                 });
-                if (listingType === 'giveaway') {
-                    await this.deleteItem(itemId);
-                }
             } catch (err) {
                 console.error("Error confirming borrow request:", err);
                 throw err;
@@ -615,9 +717,21 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         declineBorrowRequest: async function(requestId) {
             try {
-                await firebase.firestore().collection('requests').doc(requestId).update({
-                    status: 'declined',
-                    declined_at: firebase.firestore.FieldValue.serverTimestamp()
+                const db = firebase.firestore();
+                const requestRef = db.collection('requests').doc(requestId);
+                
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+                    if (requestData.status !== 'pending') {
+                        throw new Error("Only pending requests can be declined.");
+                    }
+                    
+                    transaction.update(requestRef, {
+                        status: 'declined',
+                        declined_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
                 });
             } catch (err) {
                 console.error("Error declining borrow request:", err);
@@ -777,17 +891,33 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         markPickedUp: async function(requestId, itemId) {
             try {
-                await firebase.firestore().collection('requests').doc(requestId).update({
-                    status: 'borrowed',
-                    picked_up_at: firebase.firestore.FieldValue.serverTimestamp()
-                });
-                const itemDoc = await firebase.firestore().collection('items').doc(itemId).get();
-                if (itemDoc.exists) {
-                    await firebase.firestore().collection('items').doc(itemId).update({
+                const db = firebase.firestore();
+                const requestRef = db.collection('requests').doc(requestId);
+                const itemRef = db.collection('items').doc(itemId);
+
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+                    if (requestData.status !== 'approved') {
+                        throw new Error("Request must be approved before pickup.");
+                    }
+
+                    const itemDoc = await transaction.get(itemRef);
+                    if (!itemDoc.exists) throw new Error("Item not found");
+
+                    // Update request status to borrowed
+                    transaction.update(requestRef, {
+                        status: 'borrowed',
+                        picked_up_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // Update item status to borrowed and is_available to false
+                    transaction.update(itemRef, {
                         status: 'borrowed',
                         is_available: false
                     });
-                }
+                });
             } catch (err) {
                 console.error("Error marking as picked up:", err);
                 throw err;
@@ -796,9 +926,32 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         markReturned: async function(requestId) {
             try {
-                await firebase.firestore().collection('requests').doc(requestId).update({
-                    status: 'returned',
-                    returned_at: firebase.firestore.FieldValue.serverTimestamp()
+                const db = firebase.firestore();
+                const requestRef = db.collection('requests').doc(requestId);
+
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+                    if (requestData.status !== 'borrowed') {
+                        throw new Error("Only borrowed items can be marked as returned.");
+                    }
+
+                    const itemRef = db.collection('items').doc(requestData.item_id);
+                    const itemDoc = await transaction.get(itemRef);
+
+                    // Update request status to returned
+                    transaction.update(requestRef, {
+                        status: 'returned',
+                        returned_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // Update item status to returned (if it exists)
+                    if (itemDoc.exists) {
+                        transaction.update(itemRef, {
+                            status: 'returned'
+                        });
+                    }
                 });
             } catch (err) {
                 console.error("Error marking as returned:", err);
@@ -808,45 +961,50 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         confirmReturn: async function(requestId) {
             try {
-                const reqDoc = await firebase.firestore().collection('requests').doc(requestId).get();
-                if (!reqDoc.exists) throw new Error("Request not found");
-                const reqData = reqDoc.data();
-                
-                // Set request completed
-                await firebase.firestore().collection('requests').doc(requestId).update({
-                    status: 'completed',
-                    completed_at: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                const db = firebase.firestore();
+                const requestRef = db.collection('requests').doc(requestId);
 
-                // Fetch item to know the owner (lender)
-                const itemDoc = await firebase.firestore().collection('items').doc(reqData.item_id).get();
-                if (itemDoc.exists) {
-                    const itemData = itemDoc.data();
-                    const lenderId = itemData.owner_id;
-                    const borrowerId = reqData.borrower_id;
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+                    if (requestData.status !== 'returned') {
+                        throw new Error("Return must be marked by borrower before confirmation.");
+                    }
 
-                    // Mark item as available again
-                    await firebase.firestore().collection('items').doc(reqData.item_id).update({
-                        status: 'available',
-                        is_available: true
+                    // Set request completed
+                    transaction.update(requestRef, {
+                        status: 'completed',
+                        completed_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
-                    // Increment carbon_saved_kg by 2 on lender profile
-                    const lenderProfileRef = firebase.firestore().collection('profiles').doc(lenderId);
-                    await firebase.firestore().runTransaction(async (transaction) => {
+                    // Fetch item to know the owner (lender)
+                    const itemRef = db.collection('items').doc(requestData.item_id);
+                    const itemDoc = await transaction.get(itemRef);
+                    if (itemDoc.exists) {
+                        const itemData = itemDoc.data();
+                        const lenderId = itemData.owner_id;
+                        const borrowerId = requestData.borrower_id;
+
+                        // Mark item as available again
+                        transaction.update(itemRef, {
+                            status: 'available',
+                            is_available: true
+                        });
+
+                        // Increment carbon_saved_kg by 2 on lender profile
+                        const lenderProfileRef = db.collection('profiles').doc(lenderId);
                         const lenderDoc = await transaction.get(lenderProfileRef);
                         const currentLenderCarbon = lenderDoc.exists ? (lenderDoc.data().carbon_saved_kg || 0) : 0;
                         transaction.update(lenderProfileRef, { carbon_saved_kg: currentLenderCarbon + 2 });
-                    });
 
-                    // Increment carbon_saved_kg by 2 on borrower profile as well
-                    const borrowerProfileRef = firebase.firestore().collection('profiles').doc(borrowerId);
-                    await firebase.firestore().runTransaction(async (transaction) => {
+                        // Increment carbon_saved_kg by 2 on borrower profile as well
+                        const borrowerProfileRef = db.collection('profiles').doc(borrowerId);
                         const borrowerDoc = await transaction.get(borrowerProfileRef);
                         const currentBorrowerCarbon = borrowerDoc.exists ? (borrowerDoc.data().carbon_saved_kg || 0) : 0;
                         transaction.update(borrowerProfileRef, { carbon_saved_kg: currentBorrowerCarbon + 2 });
-                    });
-                }
+                    }
+                });
             } catch (err) {
                 console.error("Error confirming return:", err);
                 throw err;
@@ -884,7 +1042,109 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
+        _ratingsSummaryCache: null,
+
+        getRatingsSummary: async function() {
+            if (this._ratingsSummaryCache) {
+                return this._ratingsSummaryCache;
+            }
+            try {
+                const [requestsSnap, ratingsSnap] = await Promise.all([
+                    firebase.firestore().collection('requests').get(),
+                    firebase.firestore().collection('ratings').get()
+                ]);
+                
+                const requestsMap = {};
+                requestsSnap.docs.forEach(doc => {
+                    requestsMap[doc.id] = { id: doc.id, ...doc.data() };
+                });
+                
+                const listingRatings = {}; // itemId -> { total: 0, count: 0, average: 0.0, reviews: [] }
+                const userRatings = {}; // userId -> { total: 0, count: 0, average: 0.0, reviews: [] }
+                
+                const profilesCache = {};
+                const getProfileLocal = async (profileId) => {
+                    if (profilesCache[profileId]) return profilesCache[profileId];
+                    const p = await this.getProfile(profileId);
+                    profilesCache[profileId] = p;
+                    return p;
+                };
+
+                const ratings = [];
+                for (const doc of ratingsSnap.docs) {
+                    const rating = { id: doc.id, ...doc.data() };
+                    ratings.push(rating);
+                }
+
+                // Populate rater profiles for these ratings
+                for (const r of ratings) {
+                    if (r.rater_id) {
+                        r.rater_profile = await getProfileLocal(r.rater_id);
+                    }
+                }
+
+                ratings.forEach(rating => {
+                    const score = Number(rating.score);
+                    const rateeId = rating.ratee_id;
+                    const raterId = rating.rater_id;
+                    const reqId = rating.request_id;
+                    const request = requestsMap[reqId];
+                    
+                    // User rating
+                    if (rateeId) {
+                        if (!userRatings[rateeId]) {
+                            userRatings[rateeId] = { total: 0, count: 0, average: 0, reviews: [] };
+                        }
+                        userRatings[rateeId].total += score;
+                        userRatings[rateeId].count += 1;
+                        userRatings[rateeId].reviews.push(rating);
+                    }
+                    
+                    // Listing rating
+                    if (request && request.item_id) {
+                        const itemId = request.item_id;
+                        if (raterId === request.borrower_id) {
+                            if (!listingRatings[itemId]) {
+                                listingRatings[itemId] = { total: 0, count: 0, average: 0, reviews: [] };
+                            }
+                            listingRatings[itemId].total += score;
+                            listingRatings[itemId].count += 1;
+                            listingRatings[itemId].reviews.push(rating);
+                        }
+                    }
+                });
+                
+                // Compute averages
+                for (const itemId in listingRatings) {
+                    const lr = listingRatings[itemId];
+                    lr.average = lr.count > 0 ? Number((lr.total / lr.count).toFixed(1)) : 0;
+                    lr.reviews.sort((a, b) => {
+                        const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
+                        const dateB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
+                        return dateB - dateA;
+                    });
+                }
+                for (const userId in userRatings) {
+                    const ur = userRatings[userId];
+                    ur.average = ur.count > 0 ? Number((ur.total / ur.count).toFixed(1)) : 0;
+                    ur.reviews.sort((a, b) => {
+                        const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
+                        const dateB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
+                        return dateB - dateA;
+                    });
+                }
+                
+                const summary = { listingRatings, userRatings, requestsMap };
+                this._ratingsSummaryCache = summary;
+                return summary;
+            } catch (err) {
+                console.error("Error getting ratings summary:", err);
+                return { listingRatings: {}, userRatings: {}, requestsMap: {} };
+            }
+        },
+
         createRating: async function(ratingData) {
+            this._ratingsSummaryCache = null; // Clear ratings cache
             try {
                 const ref = await firebase.firestore().collection('ratings').add({
                     ...ratingData,

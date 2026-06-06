@@ -90,36 +90,13 @@
     <!-- Items will be injected here -->
 </div>
 </section>
-
 <section class="mb-8">
 <h3 class="text-1.75rem font-headline font-bold text-on-surface mb-6">Past Activity</h3>
-<div class="space-y-3">
-<div class="flex items-center justify-between p-4 bg-surface rounded-lg opacity-70 hover:opacity-100 transition-opacity">
-<div class="flex items-center gap-4">
-<div class="bg-surface-container p-2 rounded-lg">
-<span class="material-symbols-outlined text-on-surface-variant">keyboard_return</span>
-</div>
-<div>
-<p class="font-semibold">Wheelbarrow</p>
-<p class="text-xs text-on-surface-variant">Returned Aug 12 • From David K.</p>
-</div>
-</div>
-<button class="text-sm font-bold text-primary">Rent Again</button>
-</div>
-<div class="flex items-center justify-between p-4 bg-surface rounded-lg opacity-70 hover:opacity-100 transition-opacity">
-<div class="flex items-center gap-4">
-<div class="bg-surface-container p-2 rounded-lg">
-<span class="material-symbols-outlined text-on-surface-variant">keyboard_return</span>
-</div>
-<div>
-<p class="font-semibold">Hand Saw</p>
-<p class="text-xs text-on-surface-variant">Returned Aug 08 • From Community Shed</p>
-</div>
-</div>
-<button class="text-sm font-bold text-primary">Rent Again</button>
-</div>
+<div id="past-activity-list" class="space-y-3">
+    <!-- Past activity items will be injected here dynamically -->
 </div>
 </section>
+
 </main>
 <!-- BottomNavBar -->
 <nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-2 pb-6 pt-3 bg-[#fbf9f6]/90 dark:bg-stone-900/90 backdrop-blur-xl z-50 rounded-t-3xl shadow-[0_-8px_30px_rgba(51,51,51,0.06)] md:hidden border-t border-outline-variant/10">
@@ -368,7 +345,13 @@
         const grid = document.getElementById('activity-grid');
         grid.innerHTML = '<div class="col-span-2 text-center py-12 text-stone-400">Loading activity...</div>';
 
+        const pastList = document.getElementById('past-activity-list');
+        if (pastList) {
+            pastList.innerHTML = '<div class="text-center py-6 text-stone-400 text-sm">Loading past activity...</div>';
+        }
+
         try {
+            const ratingsSummary = await window.db.getRatingsSummary();
             const requests = await window.db.getBorrowRequestsForUser(userSession.user.uid, currentView);
 
             // Fetch detail rating checks
@@ -380,168 +363,345 @@
                 return { ...req, isRated };
             }));
 
-            document.getElementById('item-count').textContent = `${requestsWithDetails.length} Item${requestsWithDetails.length !== 1 ? 's' : ''}`;
+            // Filter into In Progress vs Past Activity
+            const inProgressRequests = requestsWithDetails.filter(req => 
+                ['pending', 'approved', 'borrowed', 'returned'].includes(req.status)
+            );
+            const pastRequests = requestsWithDetails.filter(req => 
+                ['completed', 'declined'].includes(req.status)
+            );
 
-            if (requestsWithDetails.length === 0) {
-                grid.innerHTML = `<div class="col-span-2 text-center py-12 text-stone-400">No ${currentView} activity yet.</div>`;
-                return;
-            }
+            // Update item counts for Active section
+            document.getElementById('item-count').textContent = `${inProgressRequests.length} Item${inProgressRequests.length !== 1 ? 's' : ''}`;
 
-            grid.innerHTML = requestsWithDetails.map(req => {
-                const item = req.items;
-                const otherParty = currentView === 'borrowing' ? item.profiles : req.profiles;
-                
-                // Color codes & Status Label
-                let statusColor = 'bg-surface-container-highest text-on-surface-variant';
-                let statusLabel = req.status;
-                if (req.status === 'approved') {
-                    statusColor = 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300';
-                    statusLabel = 'Approved (Pending Pickup)';
-                } else if (req.status === 'borrowed') {
-                    statusColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300';
-                    statusLabel = 'Picked Up (Borrowed)';
-                } else if (req.status === 'returned') {
-                    statusColor = 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
-                    statusLabel = 'Returned (Pending Receipt)';
-                } else if (req.status === 'completed') {
-                    statusColor = 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300';
-                    statusLabel = 'Completed';
-                } else if (req.status === 'declined') {
-                    statusColor = 'bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300';
-                    statusLabel = 'Cancelled/Declined';
-                } else if (req.status === 'pending') {
-                    statusColor = 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400';
-                    statusLabel = 'Pending';
-                }
-
-                const isGiveaway = item.listing_type === 'giveaway';
-                const isOwnerView = currentView === 'lending';
-                const isPending  = req.status === 'pending';
-
-                // Date calculation & UI styling
-                let dateInfoHtml = '';
-                if (!isGiveaway && req.end_date) {
-                    const endDate = new Date(req.end_date);
-                    const dueDateStr = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+            if (inProgressRequests.length === 0) {
+                grid.innerHTML = `<div class="col-span-2 text-center py-12 text-stone-400">No active ${currentView} items in progress.</div>`;
+            } else {
+                grid.innerHTML = inProgressRequests.map(req => {
+                    const item = req.items;
+                    const otherParty = currentView === 'borrowing' ? item.profiles : req.profiles;
                     
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const endDay = new Date(endDate);
-                    endDay.setHours(0, 0, 0, 0);
-
-                    let dateColorClass = 'text-on-surface-variant';
-                    let dateTextPrefix = 'Due back by';
-
-                    if (req.status === 'completed') {
-                        dateColorClass = 'text-stone-400';
-                        dateTextPrefix = 'Borrowed until';
-                    } else if (endDay < today) {
-                        dateColorClass = 'text-red-600 dark:text-red-400 font-semibold';
-                        dateTextPrefix = '⚠️ Overdue since';
-                    } else if (endDay.getTime() === today.getTime()) {
-                        dateColorClass = 'text-amber-600 dark:text-amber-400 font-semibold';
-                        dateTextPrefix = '⏳ Due TODAY';
-                    } else {
-                        dateColorClass = 'text-green-600 dark:text-green-400';
+                    // Listing Rating badge
+                    const itemRating = ratingsSummary.listingRatings[item.id];
+                    let listingRatingHtml = '';
+                    if (itemRating && itemRating.count > 0) {
+                        listingRatingHtml = `
+                            <span class="text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-0.5 mt-0.5">
+                                <span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+                                <span>${itemRating.average.toFixed(1)} (${itemRating.count})</span>
+                            </span>
+                        `;
                     }
-                    dateInfoHtml = `<p class="text-xs ${dateColorClass} mt-2 flex items-center gap-1">
-                        <span class="material-symbols-outlined text-[16px]">calendar_today</span>
-                        ${dateTextPrefix} ${dueDateStr}
-                    </p>`;
-                }
 
-                // Action buttons logic
-                let actionButtons = '';
-                if (isOwnerView && isPending) {
-                    const approveLabel = isGiveaway ? '🎁 Confirm Give Away' : '✓ Approve';
-                    actionButtons = `
-                        <button
-                            onclick="handleApprove('${req.id}', '${item.id}', '${item.listing_type || 'free'}', this)"
-                            class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95">
-                            ${approveLabel}
-                        </button>
-                        <button
-                            onclick="handleDecline('${req.id}', this)"
-                            class="bg-surface-container text-on-surface-variant px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-200 transition-colors active:scale-95">
-                            ✕ Decline
-                        </button>`;
-                } else if (!isOwnerView && isPending) {
-                    actionButtons = `
-                        <button
-                            onclick="handleDecline('${req.id}', this)"
-                            class="bg-surface-container text-on-surface-variant px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-200 transition-colors active:scale-95">
-                            ✕ Cancel Request
-                        </button>`;
-                } else if (!isOwnerView && req.status === 'approved') {
-                    actionButtons = `
-                        <button
-                            onclick="handleMarkPickedUp('${req.id}', '${item.id}', this)"
-                            class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
-                            <span class="material-symbols-outlined text-[16px]">shopping_bag</span> Mark Picked Up
-                        </button>`;
-                } else if (!isOwnerView && req.status === 'borrowed') {
-                    actionButtons = `
-                        <button
-                            onclick="handleMarkReturned('${req.id}', this)"
-                            class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
-                            <span class="material-symbols-outlined text-[16px]">keyboard_return</span> Mark as Returned
-                        </button>`;
-                } else if (isOwnerView && req.status === 'returned') {
-                    actionButtons = `
-                        <button
-                            onclick="handleConfirmReturn('${req.id}', this)"
-                            class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95">
-                            ✓ Confirm Return Received
-                        </button>`;
-                } else if (req.status === 'completed') {
-                    if (!req.isRated) {
-                        const targetId = isOwnerView ? req.borrower_id : item.owner_id;
-                        const targetName = otherParty?.full_name || 'Neighbor';
+                    // Partner reputation rating badge
+                    const partnerId = otherParty?.id;
+                    let partnerRatingHtml = '';
+                    if (partnerId) {
+                        const partnerRating = ratingsSummary.userRatings[partnerId];
+                        const partnerRepVal = partnerRating ? partnerRating.average : (otherParty?.reputation_score || 5.0);
+                        partnerRatingHtml = `
+                            <span class="text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-0.5 ml-1">
+                                <span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+                                <span>${Number(partnerRepVal).toFixed(1)}</span>
+                            </span>
+                        `;
+                    }
+
+                    // Check if item is already lent to another user
+                    const isItemLent = item && (item.is_available === false || ['approved', 'borrowed', 'returned'].includes(item.status));
+
+                    // Color codes & Status Label
+                    let statusColor = 'bg-surface-container-highest text-on-surface-variant';
+                    let statusLabel = req.status;
+                    if (req.status === 'approved') {
+                        statusColor = 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300';
+                        statusLabel = 'Approved (Pending Pickup)';
+                    } else if (req.status === 'borrowed') {
+                        statusColor = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300';
+                        statusLabel = 'Picked Up (Borrowed)';
+                    } else if (req.status === 'returned') {
+                        statusColor = 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
+                        statusLabel = 'Returned (Pending Receipt)';
+                    } else if (req.status === 'completed') {
+                        statusColor = 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300';
+                        statusLabel = 'Completed';
+                    } else if (req.status === 'declined') {
+                        statusColor = 'bg-red-100 text-red-600 dark:bg-red-950/40 dark:text-red-300';
+                        statusLabel = 'Cancelled/Declined';
+                    } else if (req.status === 'pending') {
+                        statusColor = 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400';
+                        statusLabel = 'Pending';
+                    }
+
+                    const isGiveaway = item.listing_type === 'giveaway';
+                    const isOwnerView = currentView === 'lending';
+                    const isPending  = req.status === 'pending';
+
+                    // Date calculation & UI styling
+                    let dateInfoHtml = '';
+                    if (!isGiveaway && req.end_date) {
+                        const endDate = new Date(req.end_date);
+                        const dueDateStr = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                        
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const endDay = new Date(endDate);
+                        endDay.setHours(0, 0, 0, 0);
+
+                        let dateColorClass = 'text-on-surface-variant';
+                        let dateTextPrefix = 'Due back by';
+
+                        if (req.status === 'completed') {
+                            dateColorClass = 'text-stone-400';
+                            dateTextPrefix = 'Borrowed until';
+                        } else if (endDay < today) {
+                            dateColorClass = 'text-red-600 dark:text-red-400 font-semibold';
+                            dateTextPrefix = '⚠️ Overdue since';
+                        } else if (endDay.getTime() === today.getTime()) {
+                            dateColorClass = 'text-amber-600 dark:text-amber-400 font-semibold';
+                            dateTextPrefix = '⏳ Due TODAY';
+                        } else {
+                            dateColorClass = 'text-green-600 dark:text-green-400';
+                        }
+                        dateInfoHtml = `<p class="text-xs ${dateColorClass} mt-2 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                            ${dateTextPrefix} ${dueDateStr}
+                        </p>`;
+                    }
+
+                    // Action buttons logic
+                    let actionButtons = '';
+                    if (isOwnerView && isPending) {
+                        if (isItemLent) {
+                            actionButtons = `
+                                <span class="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 px-2.5 py-1 rounded-lg">
+                                    Item already lent
+                                </span>
+                                <button
+                                    onclick="handleDecline('${req.id}', this)"
+                                    class="bg-surface-container text-on-surface-variant px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-200 transition-colors active:scale-95">
+                                    ✕ Decline
+                                </button>`;
+                        } else {
+                            const approveLabel = isGiveaway ? '🎁 Confirm Give Away' : '✓ Approve';
+                            actionButtons = `
+                                <button
+                                    onclick="handleApprove('${req.id}', '${item.id}', '${item.listing_type || 'free'}', this)"
+                                    class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95">
+                                    ${approveLabel}
+                                </button>
+                                <button
+                                    onclick="handleDecline('${req.id}', this)"
+                                    class="bg-surface-container text-on-surface-variant px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-200 transition-colors active:scale-95">
+                                    ✕ Decline
+                                </button>`;
+                        }
+                    } else if (!isOwnerView && isPending) {
                         actionButtons = `
                             <button
-                                onclick="openRatingModal('${req.id}', '${targetId}', '${targetName}')"
-                                class="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors active:scale-95 flex items-center gap-1">
-                                <span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span> Rate Exchange
+                                onclick="handleDecline('${req.id}', this)"
+                                class="bg-surface-container text-on-surface-variant px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-200 transition-colors active:scale-95">
+                                ✕ Cancel Request
                             </button>`;
-                    } else {
-                        actionButtons = `<span class="text-xs text-stone-400 font-semibold italic flex items-center gap-1"><span class="material-symbols-outlined text-[16px] text-green-500">check_circle</span> Rated</span>`;
+                    } else if (!isOwnerView && req.status === 'approved') {
+                        actionButtons = `
+                            <button
+                                onclick="handleMarkPickedUp('${req.id}', '${item.id}', this)"
+                                class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[16px]">shopping_bag</span> Mark Picked Up
+                            </button>`;
+                    } else if (!isOwnerView && req.status === 'borrowed') {
+                        actionButtons = `
+                            <button
+                                onclick="handleMarkReturned('${req.id}', this)"
+                                class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[16px]">keyboard_return</span> Mark as Returned
+                            </button>`;
+                    } else if (isOwnerView && req.status === 'returned') {
+                        actionButtons = `
+                            <button
+                                onclick="handleConfirmReturn('${req.id}', this)"
+                                class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95">
+                                ✓ Confirm Return Received
+                            </button>`;
                     }
-                }
 
-                return `
-                <div id="req-card-${req.id}" class="bg-surface-container-lowest rounded-xl p-5 group hover:shadow-lg transition-shadow">
-                    <div class="flex gap-4 mb-4">
-                        <div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-                            <img class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/200x200'}" />
-                        </div>
-                        <div class="flex-1">
-                            <div class="flex justify-between items-start">
-                                <h4 class="font-bold text-lg leading-tight mb-1">${item.name}</h4>
-                                <span class="${statusColor} px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">${statusLabel}</span>
+                    return `
+                    <div id="req-card-${req.id}" class="bg-surface-container-lowest rounded-xl p-5 group hover:shadow-lg transition-shadow">
+                        <div class="flex gap-4 mb-4">
+                            <div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
+                                <img class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/200x200'}" />
                             </div>
-                            <p class="text-on-surface-variant text-sm flex items-center gap-1 mt-1">
-                                <span class="material-symbols-outlined text-sm">person</span> ${otherParty?.full_name || 'Neighbor'}
-                            </p>
-                            ${isGiveaway ? '<span class="inline-block mt-2 text-[10px] font-bold uppercase tracking-widest text-teal-600 bg-teal-50 dark:bg-teal-950/40 dark:text-teal-300 px-2 py-0.5 rounded-full">Give Away</span>' : ''}
-                            ${dateInfoHtml}
+                            <div class="flex-1 min-w-0">
+                                <div class="flex justify-between items-start">
+                                    <div class="min-w-0 flex-1">
+                                        <h4 class="font-bold text-lg leading-tight mb-1 truncate">${item.name}</h4>
+                                        ${listingRatingHtml}
+                                    </div>
+                                    <span class="${statusColor} px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0">${statusLabel}</span>
+                                </div>
+                                <p class="text-on-surface-variant text-sm flex items-center gap-1 mt-1 truncate">
+                                    <span class="material-symbols-outlined text-sm">person</span>
+                                    ${otherParty ? `<span class="hover:underline cursor-pointer font-medium" onclick="window.location.href='profile.html?userId=${otherParty.id}'">${otherParty.full_name || 'Neighbor'}</span>` : 'Neighbor'}
+                                    ${partnerRatingHtml}
+                                </p>
+                                ${isGiveaway ? '<span class="inline-block mt-2 text-[10px] font-bold uppercase tracking-widest text-teal-600 bg-teal-50 dark:bg-teal-950/40 dark:text-teal-300 px-2 py-0.5 rounded-full">Give Away</span>' : ''}
+                                ${dateInfoHtml}
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center pt-4 border-t border-surface-container-low gap-3 flex-wrap">
+                            <button onclick="window.location.href='chat.html?userId=${currentView === 'borrowing' ? item.owner_id : req.borrower_id}&itemId=${item.id}'"
+                                class="text-primary font-semibold text-sm hover:underline">
+                                Message
+                            </button>
+                            <div class="flex gap-2 flex-wrap">
+                                ${actionButtons}
+                            </div>
                         </div>
                     </div>
-                    <div class="flex justify-between items-center pt-4 border-t border-surface-container-low gap-3 flex-wrap">
-                        <button onclick="window.location.href='chat.html?userId=${currentView === 'borrowing' ? item.owner_id : req.borrower_id}&itemId=${item.id}'"
-                            class="text-primary font-semibold text-sm hover:underline">
-                            Message
-                        </button>
-                        <div class="flex gap-2 flex-wrap">
-                            ${actionButtons}
+                    `;
+                }).join('');
+            }
+
+            // Render past activity
+            if (pastList) {
+                if (pastRequests.length === 0) {
+                    pastList.innerHTML = `<div class="text-center py-6 text-stone-400 text-sm">No past activity.</div>`;
+                } else {
+                    pastList.innerHTML = pastRequests.map(req => {
+                        const item = req.items;
+                        const otherParty = currentView === 'borrowing' ? item?.profiles : req.profiles;
+                        const name = otherParty?.full_name || 'Neighbor';
+                        const isOwnerView = currentView === 'lending';
+
+                        let iconName = 'keyboard_return';
+                        if (req.status === 'completed' && item?.listing_type === 'giveaway') {
+                            iconName = 'redeem';
+                        } else if (req.status === 'declined') {
+                            iconName = 'cancel';
+                        }
+
+                        // Format relation/date text
+                        let relationText = '';
+                        let dateVal = null;
+                        if (req.status === 'completed') {
+                            dateVal = req.completed_at || req.returned_at || req.updated_at;
+                        } else {
+                            dateVal = req.declined_at || req.updated_at;
+                        }
+                        
+                        let dateStr = '';
+                        if (dateVal) {
+                            const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
+                            dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                        } else {
+                            dateStr = 'recent';
+                        }
+
+                        if (req.status === 'completed') {
+                            const actionPrefix = item?.listing_type === 'giveaway' ? 'Claimed' : 'Returned';
+                            const relation = currentView === 'borrowing' ? 'From' : 'To';
+                            relationText = `${actionPrefix} ${dateStr} • ${relation} ${name}`;
+                        } else {
+                            const actionPrefix = req.status === 'declined' ? (currentView === 'borrowing' ? 'Cancelled' : 'Declined') : 'Ended';
+                            const relation = currentView === 'borrowing' ? 'From' : 'To';
+                            relationText = `${actionPrefix} ${dateStr} • ${relation} ${name}`;
+                        }
+
+                        // Retrieve given and received ratings for this request
+                        let starsHtml = '';
+                        if (req.status === 'completed' && ratingsSummary) {
+                            const allReviews = [];
+                            for (const uid in ratingsSummary.userRatings) {
+                                allReviews.push(...ratingsSummary.userRatings[uid].reviews);
+                            }
+                            
+                            const requestRatings = allReviews.filter(r => r.request_id === req.id);
+                            
+                            // We might have rated them
+                            const ratingGiven = requestRatings.find(r => r.rater_id === userSession.user.uid);
+                            // They might have rated us
+                            const ratingReceived = requestRatings.find(r => r.ratee_id === userSession.user.uid);
+                            
+                            if (ratingGiven || ratingReceived) {
+                                starsHtml = '<div class="flex flex-col gap-1 mt-1.5">';
+                                if (ratingGiven) {
+                                    const fillStars = Array(5).fill(0).map((_, i) => {
+                                        const fillVal = i < ratingGiven.score ? 1 : 0;
+                                        const color = i < ratingGiven.score ? 'text-amber-500' : 'text-stone-300';
+                                        return `<span class="material-symbols-outlined text-[12px] flex items-center justify-center ${color}" style="font-variation-settings: 'FILL' ${fillVal};">star</span>`;
+                                    }).join('');
+                                    starsHtml += `
+                                        <div class="flex items-center gap-1.5 text-[11px] text-stone-500">
+                                            <span class="font-medium shrink-0">You rated:</span>
+                                            <div class="flex">${fillStars}</div>
+                                        </div>
+                                    `;
+                                }
+                                if (ratingReceived) {
+                                    const fillStars = Array(5).fill(0).map((_, i) => {
+                                        const fillVal = i < ratingReceived.score ? 1 : 0;
+                                        const color = i < ratingReceived.score ? 'text-amber-500' : 'text-stone-300';
+                                        return `<span class="material-symbols-outlined text-[12px] flex items-center justify-center ${color}" style="font-variation-settings: 'FILL' ${fillVal};">star</span>`;
+                                    }).join('');
+                                    starsHtml += `
+                                        <div class="flex items-center gap-1.5 text-[11px] text-stone-500">
+                                            <span class="font-medium shrink-0">Neighbor rated:</span>
+                                            <div class="flex">${fillStars}</div>
+                                        </div>
+                                    `;
+                                }
+                                starsHtml += '</div>';
+                            }
+                        }
+
+                        // Action button logic
+                        let pastActionBtn = '';
+                        if (req.status === 'completed' && item && item.id) {
+                            if (!req.isRated) {
+                                const targetId = isOwnerView ? req.borrower_id : item.owner_id;
+                                const targetName = name;
+                                pastActionBtn = `
+                                    <button
+                                        onclick="openRatingModal('${req.id}', '${targetId}', '${targetName}')"
+                                        class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors active:scale-95 flex items-center gap-1 shadow-sm shrink-0">
+                                        <span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span> Rate Exchange
+                                    </button>`;
+                            } else if (item.listing_type === 'giveaway') {
+                                pastActionBtn = `<span class="text-xs text-stone-400 font-medium italic bg-stone-100 dark:bg-stone-800 px-2 py-1 rounded shrink-0">Permanent Gift</span>`;
+                            } else {
+                                const btnText = item.listing_type === 'rental' ? 'Rent Again' : 'Borrow Again';
+                                pastActionBtn = `<button onclick="window.location.href='item-details.html?id=${item.id}'" class="text-sm font-bold text-primary hover:underline shrink-0">${btnText}</button>`;
+                            }
+                        } else {
+                            pastActionBtn = `<span class="text-xs text-stone-400 italic shrink-0">Inactive</span>`;
+                        }
+
+                        return `
+                        <div class="flex items-center justify-between p-4 bg-surface rounded-lg opacity-70 hover:opacity-100 transition-opacity border border-outline-variant/10 shadow-sm gap-4">
+                            <div class="flex items-center gap-4 min-w-0">
+                                <div class="bg-surface-container p-2 rounded-lg flex items-center justify-center shrink-0">
+                                    <span class="material-symbols-outlined text-on-surface-variant text-[20px]">${iconName}</span>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="font-semibold text-sm text-on-surface truncate">${item?.name || 'Unknown Item'}</p>
+                                    <p class="text-[11px] text-on-surface-variant mt-0.5 truncate">${relationText}</p>
+                                    ${starsHtml}
+                                </div>
+                            </div>
+                            ${pastActionBtn}
                         </div>
-                    </div>
-                </div>
-                `;
-            }).join('');
+                        `;
+                    }).join('');
+                }
+            }
 
         } catch (err) {
             console.error("Error fetching activity:", err);
             grid.innerHTML = '<div class="col-span-2 text-center py-12 text-error">Failed to load activity.</div>';
+            if (pastList) {
+                pastList.innerHTML = '<div class="text-center py-6 text-error text-sm">Failed to load past activity.</div>';
+            }
         }
     }
 

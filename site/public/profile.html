@@ -121,8 +121,8 @@
 <!-- My Active Inventory -->
 <section class="space-y-4">
 <div class="flex justify-between items-end px-2">
-<h3 class="text-xl font-bold tracking-tight">My Active Inventory</h3>
-<button onclick="window.location.href='explore.html'" class="text-primary font-bold text-sm">View All</button>
+<h3 id="inventory-header" class="text-xl font-bold tracking-tight">My Active Inventory</h3>
+<button id="view-all-inventory-btn" onclick="window.location.href='explore.html'" class="text-primary font-bold text-sm">View All</button>
 </div>
 <div class="space-y-4" id="my-items-list">
     <!-- Loading State -->
@@ -130,7 +130,7 @@
 </div>
 </section>
 <!-- Items I'm Borrowing -->
-<section class="space-y-4">
+<section id="borrowed-section-wrapper" class="space-y-4">
 <div class="flex justify-between items-end px-2">
 <h3 class="text-xl font-bold tracking-tight">Items I'm Borrowing</h3>
 </div>
@@ -139,8 +139,16 @@
     <div class="text-center py-4 text-stone-500 animate-pulse">Loading borrowed items...</div>
 </div>
 </section>
+<!-- Reviews Section -->
+<section id="profile-reviews-section" class="space-y-4 pt-4">
+    <h3 class="text-xl font-bold tracking-tight px-2">Reviews from Neighbors</h3>
+    <div id="profile-reviews-list" class="space-y-4">
+        <p class="text-stone-400 italic text-sm text-center py-4">No reviews yet for this neighbor.</p>
+    </div>
+</section>
 <!-- Actions -->
 <section class="flex flex-col gap-3">
+<div id="profile-actions-wrapper" class="flex flex-col gap-3">
 <button onclick="window.location.href = window.location.pathname.endsWith('.html') ? 'add-item.html' : 'add-item'" class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
 <span class="material-symbols-outlined" data-icon="add">add</span>
                 Add New Item
@@ -151,6 +159,13 @@
 <button id="logout-button" onclick="doLogout()" class="w-full border-2 border-error/50 text-error bg-error-container/20 py-5 rounded-xl font-bold transition-transform mt-4 relative z-10 cursor-pointer min-h-[52px]" style="touch-action: manipulation; -webkit-tap-highlight-color: rgba(0,0,0,0.1);">
                 Log Out
             </button>
+</div>
+<div id="public-profile-actions" class="hidden flex flex-col gap-3">
+    <button id="public-message-button" class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">
+        <span class="material-symbols-outlined">chat</span>
+        Message Neighbor
+    </button>
+</div>
 </section>
 <script>
     function doLogout() {
@@ -169,12 +184,26 @@
     }
 
 
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     async function fetchProfile() {
         const session = await requireAuth();
         if (!session) return;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetUserId = urlParams.get('userId') || session.user.uid;
+        const isSelf = targetUserId === session.user.uid;
         
         // Fetch Profile Data
-        const data = await window.db.getProfile(session.user.uid);
+        const data = await window.db.getProfile(targetUserId);
         let carbonSaved = 0;
             
         if (data) {
@@ -183,7 +212,7 @@
             const metaAvatar = session.user.photoURL;
             if (data.avatar_url) {
                 document.getElementById('profile-avatar').src = data.avatar_url;
-            } else if (metaAvatar) {
+            } else if (metaAvatar && isSelf) {
                 document.getElementById('profile-avatar').src = metaAvatar;
             }
             // Show nickname if set
@@ -191,12 +220,36 @@
                 document.getElementById('profile-nickname-text').textContent = data.nickname;
                 document.getElementById('profile-nickname-row').classList.remove('hidden');
                 document.getElementById('profile-nickname-row').classList.add('flex');
+            } else {
+                document.getElementById('profile-nickname-row').classList.remove('flex');
+                document.getElementById('profile-nickname-row').classList.add('hidden');
             }
             carbonSaved = data.carbon_saved_kg || 0;
         }
 
+        // Show/hide buttons based on viewing self vs others
+        if (isSelf) {
+            document.getElementById('profile-actions-wrapper').classList.remove('hidden');
+            document.getElementById('public-profile-actions').classList.add('hidden');
+            document.getElementById('borrowed-section-wrapper').classList.remove('hidden');
+            document.getElementById('inventory-header').textContent = 'My Active Inventory';
+            const viewAllBtn = document.getElementById('view-all-inventory-btn');
+            if (viewAllBtn) viewAllBtn.classList.remove('hidden');
+        } else {
+            document.getElementById('profile-actions-wrapper').classList.add('hidden');
+            document.getElementById('public-profile-actions').classList.remove('hidden');
+            document.getElementById('borrowed-section-wrapper').classList.add('hidden');
+            document.getElementById('inventory-header').textContent = `${(data && data.full_name) || 'Neighbor'}'s Active Inventory`;
+            const viewAllBtn = document.getElementById('view-all-inventory-btn');
+            if (viewAllBtn) viewAllBtn.classList.add('hidden');
+
+            document.getElementById('public-message-button').onclick = () => {
+                window.location.href = `chat.html?userId=${targetUserId}`;
+            };
+        }
+
         // Fetch User Items
-        const items = await window.db.getMyItems(session.user.uid);
+        const items = await window.db.getMyItems(targetUserId);
         const count = items.length;
 
         document.getElementById('profile-items-shared').textContent = count;
@@ -210,7 +263,7 @@
         }
 
         // Fetch Ratings and calculate average
-        const ratings = await window.db.getUserRatings(session.user.uid);
+        const ratings = await window.db.getUserRatings(targetUserId);
         if (ratings.length > 0) {
             const avg = (ratings.reduce((acc, r) => acc + r.score, 0) / ratings.length).toFixed(1);
             document.getElementById('profile-rating').textContent = avg;
@@ -221,108 +274,205 @@
         }
 
         // Fetch Lending Requests to count helped neighbors
-        const lendingRequests = await window.db.getBorrowRequestsForUser(session.user.uid, 'lending');
+        const lendingRequests = await window.db.getBorrowRequestsForUser(targetUserId, 'lending');
         const completedLending = lendingRequests.filter(req => req.status === 'completed');
         document.getElementById('profile-neighbors-helped').textContent = completedLending.length;
 
         // Set carbon saved
         document.getElementById('profile-carbon-saved').textContent = `${carbonSaved}kg`;
 
+        const formatDateStr = (dateStr) => {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        };
+
         const itemsList = document.getElementById('my-items-list');
         if (!items || items.length === 0) {
-            itemsList.innerHTML = `<div class="text-center py-6 text-stone-500 font-medium">You haven't shared any items yet.</div>`;
+            itemsList.innerHTML = `<div class="text-center py-6 text-stone-500 font-medium">No shared items yet.</div>`;
         } else {
             itemsList.innerHTML = items.map(item => {
                 const editUrl = window.location.pathname.endsWith('.html') ? `add-item.html?id=${item.id}` : `add-item?id=${item.id}`;
+                
+                // Check if this item has an active transaction request
+                const activeReq = lendingRequests.find(req => req.item_id === item.id && ['approved', 'borrowed', 'returned'].includes(req.status));
+                
+                let stateText = 'Ready to share';
+                let stateColorClass = 'text-on-surface-variant';
+                
+                if (activeReq) {
+                    const borrowerName = activeReq.profiles?.full_name || 'Neighbor';
+                    const d1 = formatDateStr(activeReq.start_date);
+                    const d2 = formatDateStr(activeReq.end_date);
+                    
+                    if (activeReq.status === 'borrowed') {
+                        stateText = `(lent to ${borrowerName} on ${d1}; Expected to be back on ${d2})`;
+                        stateColorClass = 'text-secondary font-semibold';
+                    } else if (activeReq.status === 'approved') {
+                        stateText = `(lent to ${borrowerName}; pending pickup on ${d1})`;
+                        stateColorClass = 'text-amber-600 dark:text-amber-400 font-semibold';
+                    } else if (activeReq.status === 'returned') {
+                        stateText = `(returned by ${borrowerName}; pending receipt)`;
+                        stateColorClass = 'text-blue-600 dark:text-blue-400 font-semibold';
+                    }
+                }
+
+                const actionButton = isSelf
+                    ? `<a href="${editUrl}" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold active:scale-[0.98]">
+                           <span class="material-symbols-outlined text-[16px] font-bold" data-icon="edit">edit</span>
+                           <span>Edit</span>
+                       </a>`
+                    : `<a href="item-details.html?id=${item.id}" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold active:scale-[0.98]">
+                           <span class="material-symbols-outlined text-[16px] font-bold">visibility</span>
+                           <span>View</span>
+                       </a>`;
+
                 return `
                 <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
                     <img alt="${item.name}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category)}"/>
                     <div class="flex-1">
                         <h4 class="font-bold text-on-surface">${item.name}</h4>
-                        <p class="text-on-surface-variant font-medium text-sm mt-1">Ready to share</p>
+                        <p class="${stateColorClass} text-sm mt-1">${stateText}</p>
                     </div>
-                    <a href="${editUrl}" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold active:scale-[0.98]">
-                        <span class="material-symbols-outlined text-[16px] font-bold" data-icon="edit">edit</span>
-                        <span>Edit</span>
-                    </a>
+                    ${actionButton}
                 </div>`;
             }).join('');
         }
 
-        // Fetch and display borrowed items
-        const borrowedList = document.getElementById('borrowed-items-list');
-        try {
-            const borrowingRequests = await window.db.getBorrowRequestsForUser(session.user.uid, 'borrowing');
-            const activeBorrows = borrowingRequests.filter(req => ['approved', 'borrowed', 'returned'].includes(req.status));
-            
-            if (activeBorrows.length === 0) {
-                borrowedList.innerHTML = `<div class="text-center py-6 text-stone-500 font-medium">You aren't borrowing any items right now.</div>`;
-            } else {
-                borrowedList.innerHTML = activeBorrows.map(req => {
-                    const item = req.items || {};
-                    const isGiveaway = item.listing_type === 'giveaway';
-                    
-                    let statusBadge = '';
-                    if (req.status === 'approved') {
-                        statusBadge = `<span class="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded">Approved (pending pickup)</span>`;
-                    } else if (req.status === 'borrowed') {
-                        statusBadge = `<span class="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] font-bold px-2 py-0.5 rounded">Picked Up</span>`;
-                    } else if (req.status === 'returned') {
-                        statusBadge = `<span class="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded">Returned (pending receipt)</span>`;
-                    }
-
-                    let dateInfoHtml = '';
-                    if (isGiveaway) {
-                        dateInfoHtml = `<p class="text-xs text-teal-600 dark:text-teal-400 mt-1 font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-xs">redeem</span> Giveaway item (permanent)</p>`;
-                    } else if (req.end_date) {
-                        const endDate = new Date(req.end_date);
-                        const dueDateStr = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-                        
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        const endDay = new Date(endDate);
-                        endDay.setHours(0, 0, 0, 0);
-
-                        let dateColorClass = 'text-on-surface-variant';
-                        let dateTextPrefix = 'Due back by';
-
-                        if (endDay < today) {
-                            dateColorClass = 'text-red-600 dark:text-red-400 font-semibold';
-                            dateTextPrefix = '⚠️ Overdue since';
-                        } else if (endDay.getTime() === today.getTime()) {
-                            dateColorClass = 'text-amber-600 dark:text-amber-400 font-semibold';
-                            dateTextPrefix = '⏳ Due TODAY';
-                        } else {
-                            dateColorClass = 'text-green-600 dark:text-green-400';
-                        }
-                        dateInfoHtml = `<p class="text-xs ${dateColorClass} mt-1.5 flex items-center gap-1">
-                            <span class="material-symbols-outlined text-[16px]">calendar_today</span>
-                            ${dateTextPrefix} ${dueDateStr}
-                        </p>`;
-                    }
-
-                    const chatUrl = `chat.html?userId=${item.owner_id}&itemId=${item.id}`;
-
-                    return `
-                    <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
-                        <img alt="${item.name || 'Item'}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category || 'Item')}"/>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <h4 class="font-bold text-on-surface truncate max-w-[200px]">${item.name || 'Unknown Item'}</h4>
-                                ${statusBadge}
-                            </div>
-                            <p class="text-xs text-on-surface-variant mt-1">Lender: ${item.profiles?.full_name || item.owner_name || 'Neighbor'}</p>
-                            ${dateInfoHtml}
-                        </div>
-                        <a href="${chatUrl}" class="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-all shrink-0">
-                            <span class="material-symbols-outlined text-[20px] font-bold" data-icon="chat">chat</span>
-                        </a>
-                    </div>`;
+        // Render reviews list
+        const reviewsListEl = document.getElementById('profile-reviews-list');
+        if (ratings && ratings.length > 0) {
+            reviewsListEl.innerHTML = ratings.map(r => {
+                const stars = Array(5).fill(0).map((_, i) => {
+                    const isFilled = i < r.score;
+                    const fillVal = isFilled ? 1 : 0;
+                    const colorClass = isFilled ? 'text-amber-500' : 'text-stone-300';
+                    return `<span class="material-symbols-outlined text-sm ${colorClass}" style="font-variation-settings: 'FILL' ${fillVal};">star</span>`;
                 }).join('');
+                
+                const raterName = r.rater_profile?.full_name || 'Neighbor';
+                const raterAvatar = r.rater_profile?.avatar_url || `https://i.pravatar.cc/150?u=${r.rater_id}`;
+                
+                const dateVal = r.created_at?.toDate ? r.created_at.toDate() : new Date(r.created_at || 0);
+                const dateStr = dateVal.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+                return `
+                <div class="bg-surface-container-low p-4 rounded-xl flex flex-col justify-between shadow-sm border border-outline-variant/10 text-left w-full">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='profile.html?userId=${r.rater_id}'">
+                                <img class="w-8 h-8 rounded-full object-cover" src="${raterAvatar}" />
+                                <span class="text-sm font-bold hover:underline">${escapeHtml(raterName)}</span>
+                            </div>
+                            <div class="flex">${stars}</div>
+                        </div>
+                        <p class="text-sm text-on-surface-variant leading-relaxed">${escapeHtml(r.comment || 'No comment left.')}</p>
+                    </div>
+                    <span class="text-[10px] text-stone-400 font-medium self-end mt-2">${dateStr}</span>
+                </div>`;
+            }).join('');
+        } else {
+            reviewsListEl.innerHTML = `<p class="text-stone-400 italic text-sm text-center py-4">No reviews yet for this neighbor.</p>`;
+        }
+
+        // Fetch and display borrowed items
+        if (isSelf) {
+            const borrowedList = document.getElementById('borrowed-items-list');
+            try {
+                const borrowingRequests = await window.db.getBorrowRequestsForUser(session.user.uid, 'borrowing');
+                const activeBorrows = borrowingRequests.filter(req => ['approved', 'borrowed', 'returned'].includes(req.status));
+                
+                if (activeBorrows.length === 0) {
+                    borrowedList.innerHTML = `<div class="text-center py-6 text-stone-500 font-medium">You aren't borrowing any items right now.</div>`;
+                } else {
+                    borrowedList.innerHTML = activeBorrows.map(req => {
+                        const item = req.items || {};
+                        const isGiveaway = item.listing_type === 'giveaway';
+                        
+                        let statusBadge = '';
+                        if (req.status === 'approved') {
+                            statusBadge = `<span class="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 text-[10px] font-bold px-2 py-0.5 rounded">Approved (pending pickup)</span>`;
+                        } else if (req.status === 'borrowed') {
+                            statusBadge = `<span class="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-[10px] font-bold px-2 py-0.5 rounded">Picked Up</span>`;
+                        } else if (req.status === 'returned') {
+                            statusBadge = `<span class="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded">Returned (pending receipt)</span>`;
+                        }
+
+                        const lenderName = item.profiles?.full_name || item.owner_name || 'Neighbor';
+                        const d1 = formatDateStr(req.end_date);
+                        const d2 = formatDateStr(req.start_date);
+
+                        let stateText = '';
+                        let stateColorClass = 'text-on-surface-variant';
+                        if (isGiveaway) {
+                            stateText = `(giveaway from ${lenderName}; permanent)`;
+                            stateColorClass = 'text-teal-600 dark:text-teal-400 font-medium';
+                        } else {
+                            if (req.status === 'borrowed') {
+                                stateText = `(borrowed from ${lenderName}; return date ${d1})`;
+                                stateColorClass = 'text-green-600 dark:text-green-400 font-medium';
+                            } else if (req.status === 'approved') {
+                                stateText = `(approved from ${lenderName}; pending pickup on ${d2})`;
+                                stateColorClass = 'text-amber-600 dark:text-amber-400 font-medium';
+                            } else if (req.status === 'returned') {
+                                stateText = `(returned to ${lenderName}; pending receipt)`;
+                                stateColorClass = 'text-blue-600 dark:text-blue-400 font-medium';
+                            }
+                        }
+
+                        let dateInfoHtml = '';
+                        if (isGiveaway) {
+                            dateInfoHtml = `<p class="text-xs text-teal-600 dark:text-teal-400 mt-1 font-semibold flex items-center gap-1"><span class="material-symbols-outlined text-xs">redeem</span> Giveaway item (permanent)</p>`;
+                        } else if (req.end_date) {
+                            const endDate = new Date(req.end_date);
+                            const dueDateStr = endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                            
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            const endDay = new Date(endDate);
+                            endDay.setHours(0, 0, 0, 0);
+
+                            let dateColorClass = 'text-on-surface-variant';
+                            let dateTextPrefix = 'Due back by';
+
+                            if (endDay < today) {
+                                dateColorClass = 'text-red-600 dark:text-red-400 font-semibold';
+                                dateTextPrefix = '⚠️ Overdue since';
+                            } else if (endDay.getTime() === today.getTime()) {
+                                dateColorClass = 'text-amber-600 dark:text-amber-400 font-semibold';
+                                dateTextPrefix = '⏳ Due TODAY';
+                            } else {
+                                dateColorClass = 'text-green-600 dark:text-green-400';
+                            }
+                            dateInfoHtml = `<p class="text-xs ${dateColorClass} mt-1.5 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                                ${dateTextPrefix} ${dueDateStr}
+                            </p>`;
+                        }
+
+                        const chatUrl = `chat.html?userId=${item.owner_id}&itemId=${item.id}`;
+
+                        return `
+                        <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
+                            <img alt="${item.name || 'Item'}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category || 'Item')}"/>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <h4 class="font-bold text-on-surface truncate max-w-[200px]">${item.name || 'Unknown Item'}</h4>
+                                    ${statusBadge}
+                                </div>
+                                <p class="text-sm ${stateColorClass} mt-1">${stateText}</p>
+                                ${dateInfoHtml}
+                            </div>
+                            <a href="${chatUrl}" class="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-all shrink-0">
+                                <span class="material-symbols-outlined text-[20px] font-bold" data-icon="chat">chat</span>
+                            </a>
+                        </div>`;
+                    }).join('');
+                }
+            } catch (err) {
+                console.error("Error fetching borrowed items:", err);
+                borrowedList.innerHTML = `<div class="text-center py-6 text-error font-medium">Failed to load borrowed items.</div>`;
             }
-        } catch (err) {
-            console.error("Error fetching borrowed items:", err);
-            borrowedList.innerHTML = `<div class="text-center py-6 text-error font-medium">Failed to load borrowed items.</div>`;
         }
     }
     

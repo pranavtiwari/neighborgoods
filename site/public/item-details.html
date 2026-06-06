@@ -57,6 +57,13 @@
 <div class="md:col-span-2 flex flex-col gap-8">
 <div>
 <h2 class="text-4xl font-bold tracking-tighter text-primary leading-tight mb-2">...</h2>
+<div id="listing-rating-summary" class="flex items-center gap-1.5 mb-2 hidden cursor-pointer hover:opacity-85 transition-opacity">
+    <div class="flex items-center gap-0.5 text-amber-500">
+        <span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">star</span>
+        <span id="listing-rating-val" class="text-sm font-black">0.0</span>
+    </div>
+    <span id="listing-rating-count" class="text-stone-500 text-xs font-semibold">(0 reviews)</span>
+</div>
 <p id="item-location" class="text-on-surface-variant flex items-center gap-2">
 <span class="material-symbols-outlined text-sm">location_on</span>
                         ...
@@ -66,12 +73,16 @@
 <div class="bg-surface-container-lowest p-6 rounded-xl shadow-[0_12px_40px_rgba(51,51,51,0.04)]">
 <div class="flex items-center justify-between">
 <div class="flex items-center gap-4">
-<div class="w-14 h-14 rounded-full overflow-hidden border-2 border-primary/10 relative">
+<div class="w-14 h-14 rounded-full overflow-hidden border-2 border-primary/10 relative cursor-pointer" id="owner-avatar-wrapper">
 <img id="owner-avatar" class="w-full h-full object-cover absolute inset-0" alt="Owner avatar" src=""/>
 </div>
 <div>
-<h3 id="owner-name" class="font-bold text-lg leading-none">...</h3>
-<p id="owner-location" class="text-on-surface-variant text-sm mt-1">...</p>
+<h3 id="owner-name" class="font-bold text-lg leading-none cursor-pointer hover:underline">...</h3>
+<div class="flex items-center gap-1 text-amber-600 dark:text-amber-400 text-xs font-black mt-1" id="owner-rating-row">
+    <span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+    <span id="owner-rating-val">New Neighbor</span>
+</div>
+<p id="owner-location" class="text-on-surface-variant text-xs mt-1">...</p>
 </div>
 </div>
 <button id="message-button" class="px-5 py-2 border-2 border-primary/20 text-primary font-semibold rounded-lg hover:bg-primary/5 transition-all active:scale-[0.98]">
@@ -120,6 +131,13 @@
 </div>
 </div>
 </div>
+<!-- Reviews Section -->
+<div id="reviews-section" class="mt-12 pt-8 border-t border-outline-variant/15 space-y-6">
+    <h3 class="text-2xl font-bold tracking-tight text-on-surface">Reviews from Neighbors</h3>
+    <div id="reviews-list" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <p class="text-stone-400 italic text-sm">No reviews yet for this listing.</p>
+    </div>
+</div>
 </main>
 <!-- Footer / Bottom CTA -->
 <footer class="fixed bottom-0 w-full rounded-t-2xl px-6 py-4 bg-stone-50/80 dark:bg-stone-900/80 backdrop-blur-xl border-t border-stone-200/30 dark:border-stone-700/30 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] z-50">
@@ -134,6 +152,16 @@
 </div>
 </footer>
 <script>
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     async function loadItemDetails() {
         const urlParams = new URLSearchParams(window.location.search);
         const itemId = urlParams.get('id');
@@ -157,12 +185,80 @@
             const distance = (Math.random() * 5 + 0.1).toFixed(1) + " mi";
             document.getElementById('item-location').innerHTML = `<span class="material-symbols-outlined text-sm">location_on</span> ${distance} away`;
 
+            // Load ratings summary
+            const ratingsSummary = await window.db.getRatingsSummary();
+            const { listingRatings, userRatings } = ratingsSummary;
+
+            // Display listing rating summary
+            const listingRating = listingRatings[itemId];
+            if (listingRating && listingRating.count > 0) {
+                document.getElementById('listing-rating-val').textContent = listingRating.average.toFixed(1);
+                document.getElementById('listing-rating-count').textContent = `(${listingRating.count} review${listingRating.count !== 1 ? 's' : ''})`;
+                const summaryEl = document.getElementById('listing-rating-summary');
+                summaryEl.classList.remove('hidden');
+                summaryEl.addEventListener('click', () => {
+                    document.getElementById('reviews-section').scrollIntoView({ behavior: 'smooth' });
+                });
+            }
+
             // Owner Info
             const owner = item.profiles;
             if (owner) {
                 document.getElementById('owner-name').textContent = owner.full_name || 'Anonymous Neighbor';
                 document.getElementById('owner-avatar').src = owner.avatar_url || 'https://i.pravatar.cc/150?u=' + owner.id;
                 document.getElementById('owner-location').innerHTML = `<span class="material-symbols-outlined text-xs align-middle mr-1">location_on</span>${owner.location || 'Nearby Neighborhood'}`;
+                
+                // Show owner reputation rating
+                const ownerRating = userRatings[owner.id];
+                if (ownerRating && ownerRating.count > 0) {
+                    document.getElementById('owner-rating-val').textContent = `${ownerRating.average.toFixed(1)} (${ownerRating.count} review${ownerRating.count !== 1 ? 's' : ''})`;
+                } else {
+                    document.getElementById('owner-rating-val').textContent = 'New Neighbor';
+                }
+
+                // Add navigation to profile page
+                const navigateToProfile = () => {
+                    window.location.href = `profile.html?userId=${owner.id}`;
+                };
+                document.getElementById('owner-name').addEventListener('click', navigateToProfile);
+                document.getElementById('owner-avatar-wrapper').addEventListener('click', navigateToProfile);
+            }
+
+            // Render reviews list
+            const reviewsListEl = document.getElementById('reviews-list');
+            const itemReviews = (listingRating && listingRating.reviews) || [];
+            if (itemReviews.length > 0) {
+                reviewsListEl.innerHTML = itemReviews.map(r => {
+                    const stars = Array(5).fill(0).map((_, i) => {
+                        const isFilled = i < r.score;
+                        const fillVal = isFilled ? 1 : 0;
+                        const colorClass = isFilled ? 'text-amber-500' : 'text-stone-300';
+                        return `<span class="material-symbols-outlined text-sm ${colorClass}" style="font-variation-settings: 'FILL' ${fillVal};">star</span>`;
+                    }).join('');
+                    
+                    const raterName = r.rater_profile?.full_name || 'Neighbor';
+                    const raterAvatar = r.rater_profile?.avatar_url || `https://i.pravatar.cc/150?u=${r.rater_id}`;
+                    
+                    const dateVal = r.created_at?.toDate ? r.created_at.toDate() : new Date(r.created_at || 0);
+                    const dateStr = dateVal.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+                    return `
+                    <div class="bg-surface-container-low p-5 rounded-xl flex flex-col justify-between shadow-sm border border-outline-variant/10 text-left">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='profile.html?userId=${r.rater_id}'">
+                                    <img class="w-8 h-8 rounded-full object-cover" src="${raterAvatar}" />
+                                    <span class="text-sm font-bold hover:underline">${escapeHtml(raterName)}</span>
+                                </div>
+                                <div class="flex">${stars}</div>
+                            </div>
+                            <p class="text-sm text-on-surface-variant leading-relaxed">${escapeHtml(r.comment || 'No comment left.')}</p>
+                        </div>
+                        <span class="text-[10px] text-stone-400 font-medium self-end mt-4">${dateStr}</span>
+                    </div>`;
+                }).join('');
+            } else {
+                reviewsListEl.innerHTML = `<p class="text-stone-400 italic text-sm col-span-2 py-4">No reviews yet for this listing.</p>`;
             }
 
             // Update condition

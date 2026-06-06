@@ -2,9 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     // Profiles: Everyone can read, authenticated users can write their own profile
+    // Profiles: Everyone can read, owner can write, or anyone logged in can update reputation_score
     match /profiles/{profileId} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == profileId;
+      allow create: if request.auth != null && request.auth.uid == profileId;
+      allow update: if request.auth != null && (request.auth.uid == profileId || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reputation_score']));
+      allow delete: if request.auth != null && request.auth.uid == profileId;
     }
     
     // Circles: Everyone can read, authenticated users can write
@@ -45,6 +48,13 @@ service cloud.firestore {
     // Circle Join Requests: authenticated users can read, create, and delete requests
     match /circle_join_requests/{requestId} {
       allow read, write: if request.auth != null;
+    }
+
+    // Ratings: Everyone can read, authenticated users can write (create ratings)
+    match /ratings/{ratingId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.rater_id;
+      allow update, delete: if false;
     }
   }
 }
