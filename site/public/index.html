@@ -566,8 +566,11 @@
                 <div onclick="window.location.href='circle-detail.html?id=${circle.id}'" class="bg-surface-container-low p-6 rounded-2xl shadow-sm border border-outline-variant/10 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer flex flex-col justify-between min-h-[160px]">
                     <div>
                         <div class="flex items-center gap-3 mb-3">
-                            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                                <span class="material-symbols-outlined">groups</span>
+                            <div class="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-primary/10 flex items-center justify-center text-primary border border-outline-variant/10 shadow-inner">
+                                ${circle.image_url 
+                                    ? `<img src="${circle.image_url}" class="w-full h-full object-cover" alt="${escapeHtml(circle.name)}">` 
+                                    : `<span class="material-symbols-outlined text-2xl">groups</span>`
+                                }
                             </div>
                             <div>
                                 <h3 class="font-bold text-base text-on-surface line-clamp-1">${escapeHtml(circle.name)}</h3>
