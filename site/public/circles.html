@@ -117,6 +117,32 @@
     <button onclick="window.location.href='create-circle.html'" class="fixed bottom-24 right-6 w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform z-40">
         <span class="material-symbols-outlined">add</span>
     </button>
+    <!-- Join Request Modal -->
+    <div id="join-request-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-md">
+        <div class="modal-content bg-surface w-full max-w-md rounded-xl shadow-2xl p-6">
+            <div class="flex items-center justify-between mb-4 pb-4 border-b border-surface-container">
+                <h3 class="text-lg font-bold flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">person_add</span>
+                    Request to Join
+                </h3>
+                <button onclick="closeJoinRequestModal()" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+            <p class="text-sm text-on-surface-variant mb-4 leading-relaxed">
+                This is a private circle. Please write a brief message introducing yourself (including your name) so the admin can approve your request.
+            </p>
+            <div class="mb-6">
+                <label class="block text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Message to Admin</label>
+                <textarea id="join-request-message-input" rows="4" required placeholder="Hi, I'm [Your Name], and..." class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-3 px-4 text-sm resize-none"></textarea>
+                <div id="join-request-error" class="hidden bg-error/10 text-error p-3 rounded-lg text-xs mt-2 font-medium"></div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="closeJoinRequestModal()" class="flex-1 py-3 rounded-xl font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-container transition-colors text-sm">Cancel</button>
+                <button id="confirm-request-btn" onclick="submitJoinRequest()" class="flex-1 py-3 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-all text-sm shadow-md">Send Request</button>
+            </div>
+        </div>
+    </div>
 </main>
 <!-- BottomNavBar -->
 <nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-2 pb-6 pt-3 bg-[#fbf9f6]/90 dark:bg-stone-900/90 backdrop-blur-xl z-50 rounded-t-3xl shadow-[0_-8px_30px_rgba(51,51,51,0.06)] md:hidden border-t border-outline-variant/10">
@@ -394,24 +420,64 @@
         }
     }
 
+    let pendingRequestCircleId = null;
+    let pendingRequestBtn = null;
+
+    function openJoinRequestModal(circleId, btn) {
+        pendingRequestCircleId = circleId;
+        pendingRequestBtn = btn;
+        document.getElementById('join-request-message-input').value = '';
+        document.getElementById('join-request-error').classList.add('hidden');
+        document.getElementById('join-request-modal').classList.remove('hidden');
+    }
+
+    function closeJoinRequestModal() {
+        document.getElementById('join-request-modal').classList.add('hidden');
+        pendingRequestCircleId = null;
+        pendingRequestBtn = null;
+    }
+
+    async function submitJoinRequest() {
+        const messageInput = document.getElementById('join-request-message-input');
+        const message = messageInput.value.trim();
+        const errorDiv = document.getElementById('join-request-error');
+
+        if (!message) {
+            errorDiv.textContent = 'Please enter a message including your name.';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        const confirmBtn = document.getElementById('confirm-request-btn');
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Sending...';
+        errorDiv.classList.add('hidden');
+
+        try {
+            await window.db.requestToJoinCircle(pendingRequestCircleId, firebase.auth().currentUser.uid, message);
+            closeJoinRequestModal();
+            if (pendingRequestBtn) {
+                pendingRequestBtn.disabled = true;
+                pendingRequestBtn.innerHTML = '<span class="material-symbols-outlined text-base">schedule</span> Request Sent';
+                pendingRequestBtn.className = pendingRequestBtn.className.replace('bg-primary/10 border border-primary text-primary', 'bg-stone-100 text-stone-400 border border-stone-200');
+            }
+        } catch (err) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Send Request';
+            errorDiv.textContent = 'Failed to send request: ' + err.message;
+            errorDiv.classList.remove('hidden');
+        }
+    }
+
     async function requestJoinCircle(circleId, btn) {
         const session = await requireAuth();
         if (!session) return;
-        if (btn) { btn.disabled = true; btn.innerHTML = 'Sending request...'; }
-
-        try {
-            await window.db.requestToJoinCircle(circleId, session.user.uid);
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<span class="material-symbols-outlined text-base">schedule</span> Request Sent';
-                btn.className = btn.className.replace('bg-primary/10 border border-primary text-primary', 'bg-stone-100 text-stone-400 border border-stone-200');
-            }
-        } catch (err) {
-            console.error("Error requesting to join circle:", err);
-            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined text-base">lock</span> Request to Join'; }
-            alert("Failed to send request. " + err.message);
-        }
+        openJoinRequestModal(circleId, btn);
     }
+
+    window.closeJoinRequestModal = closeJoinRequestModal;
+    window.submitJoinRequest = submitJoinRequest;
+    window.requestJoinCircle = requestJoinCircle;
 
     async function updateHeaderAvatar(user) {
         if (user) {

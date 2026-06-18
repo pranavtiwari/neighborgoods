@@ -116,9 +116,9 @@
                     <p id="circle-description" class="text-xl text-on-surface-variant leading-relaxed max-w-xl">...</p>
                 </div>
                 <div class="flex flex-col items-start md:items-end gap-6">
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" onclick="openMembersModal()">
                         <div id="member-avatars" class="flex -space-x-3"><!-- Avatars --></div>
-                        <span id="member-count-text" class="label-md text-on-surface-variant">Neighbors</span>
+                        <span id="member-count-text" class="label-md text-on-surface-variant hover:underline">Neighbors</span>
                     </div>
                     <!-- Member action buttons (shown when user is a member) -->
                     <div id="member-actions" class="hidden flex gap-4 w-full md:w-auto">
@@ -375,6 +375,53 @@
         </div>
     </div>
 
+    <!-- Join Request Modal -->
+    <div id="join-request-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-md">
+        <div class="modal-content bg-surface w-full max-w-md rounded-xl shadow-2xl p-6">
+            <div class="flex items-center justify-between mb-4 pb-4 border-b border-surface-container">
+                <h3 class="text-lg font-bold flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">person_add</span>
+                    Request to Join
+                </h3>
+                <button onclick="closeJoinRequestModal()" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+            <p class="text-sm text-on-surface-variant mb-4 leading-relaxed">
+                This is a private circle. Please write a brief message introducing yourself (including your name) so the admin can approve your request.
+            </p>
+            <div class="mb-6">
+                <label class="block text-xs font-bold uppercase tracking-wider text-stone-400 mb-2">Message to Admin</label>
+                <textarea id="join-request-message-input" rows="4" required placeholder="Hi, I'm [Your Name], and..." class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-3 px-4 text-sm resize-none"></textarea>
+                <div id="join-request-error" class="hidden bg-error/10 text-error p-3 rounded-lg text-xs mt-2 font-medium"></div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="closeJoinRequestModal()" class="flex-1 py-3 rounded-xl font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-container transition-colors text-sm">Cancel</button>
+                <button id="confirm-request-btn" onclick="submitJoinRequest()" class="flex-1 py-3 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-all text-sm shadow-md">Send Request</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Members Modal -->
+    <div id="members-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-md">
+        <div class="modal-content bg-surface w-full max-w-md rounded-xl shadow-2xl flex flex-col max-h-[80vh]">
+            <div class="p-6 border-b border-surface-container flex items-center justify-between shrink-0">
+                <h3 class="text-xl font-bold flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">groups</span>
+                    Circle Members
+                </h3>
+                <button onclick="closeMembersModal()" class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div id="members-list" class="space-y-4">
+                    <!-- Members list items will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const escapeHtml = window.db.escapeHtml;
         let currentCircleId = null;
@@ -382,6 +429,7 @@
         let currentUser = null;
         let currentUserRole = null; // 'admin' | 'member' | null
         let currentUserIsMember = false;
+        let currentCircleMembers = [];
         let editSelectedFile = null;
         let editSelectedCategories = [];
         let ratingsSummary = null;
@@ -758,6 +806,7 @@
 
                 // 2. Fetch Members & determine current user role
                 const members = await window.db.getCircleMembers(currentCircleId);
+                currentCircleMembers = members || [];
                 if (members) {
                     const displayMembers = members.slice(0, 4);
                     const avatarContainer = document.getElementById('member-avatars');
@@ -906,6 +955,16 @@
                 const location = profile.location ? profile.location.trim() : '';
                 const rating = profile.reputation_score !== undefined ? Number(profile.reputation_score).toFixed(1) : '5.0';
 
+                let messageHtml = '';
+                if (req.message) {
+                    messageHtml = `
+                        <div class="p-3 rounded-lg bg-stone-50 dark:bg-stone-950/40 border border-stone-100 dark:border-stone-850/50">
+                            <p class="text-[9px] font-black uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-1">Message from Requester</p>
+                            <p class="text-xs text-on-surface-variant italic leading-relaxed">"${escapeHtml(req.message)}"</p>
+                        </div>
+                    `;
+                }
+
                 let detailsHtml = '';
                 if (location || bio) {
                     detailsHtml = `
@@ -932,6 +991,7 @@
                             </div>
                         </div>
                     </div>
+                    ${messageHtml}
                     ${detailsHtml}
                     <div class="flex gap-2 mt-1">
                         <button onclick="handleApprove('${req.profile_id}')" class="flex-1 py-2 rounded-xl bg-primary text-on-primary text-xs font-bold active:scale-95 transition-all shadow-sm">Approve</button>
@@ -961,6 +1021,10 @@
             }
         }
         window.handleDeny = handleDeny;
+        window.submitJoinRequest = submitJoinRequest;
+        window.closeJoinRequestModal = closeJoinRequestModal;
+        window.openJoinRequestModal = openJoinRequestModal;
+        window.handleRequestJoin = handleRequestJoin;
 
         async function handleJoin() {
             if (!currentUser) return;
@@ -977,12 +1041,41 @@
             }
         }
 
-        async function handleRequestJoin() {
+        function handleRequestJoin() {
             if (!currentUser) return;
-            const btns = [document.getElementById('request-join-btn'), document.getElementById('gate-request-btn')];
-            btns.forEach(b => { if (b) { b.disabled = true; b.textContent = 'Sending...'; } });
+            openJoinRequestModal();
+        }
+
+        function openJoinRequestModal() {
+            document.getElementById('join-request-message-input').value = '';
+            document.getElementById('join-request-error').classList.add('hidden');
+            document.getElementById('join-request-modal').classList.remove('hidden');
+        }
+
+        function closeJoinRequestModal() {
+            document.getElementById('join-request-modal').classList.add('hidden');
+        }
+
+        async function submitJoinRequest() {
+            const messageInput = document.getElementById('join-request-message-input');
+            const message = messageInput.value.trim();
+            const errorDiv = document.getElementById('join-request-error');
+
+            if (!message) {
+                errorDiv.textContent = 'Please enter a message including your name.';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            const confirmBtn = document.getElementById('confirm-request-btn');
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Sending...';
+            errorDiv.classList.add('hidden');
+
             try {
-                await window.db.requestToJoinCircle(currentCircleId, currentUser.uid);
+                await window.db.requestToJoinCircle(currentCircleId, currentUser.uid, message);
+                closeJoinRequestModal();
+                
                 // Update UI to "pending" state
                 document.getElementById('request-join-btn').classList.add('hidden');
                 document.getElementById('request-join-btn').classList.remove('flex');
@@ -991,8 +1084,10 @@
                 document.getElementById('gate-request-btn').classList.add('hidden');
                 document.getElementById('gate-pending').classList.remove('hidden');
             } catch (err) {
-                btns.forEach(b => { if (b) { b.disabled = false; b.textContent = 'Request to Join'; } });
-                alert('Failed to send request: ' + err.message);
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Send Request';
+                errorDiv.textContent = 'Failed to send request: ' + err.message;
+                errorDiv.classList.remove('hidden');
             }
         }
 
@@ -1276,6 +1371,74 @@
                 btn.classList.remove('opacity-70');
             }
         };
+
+        // Members Modal Logic
+        function openMembersModal() {
+            if (!currentUserIsMember) return; // Only members can see the member list modal
+            renderMembersList();
+            document.getElementById('members-modal').classList.remove('hidden');
+        }
+
+        function closeMembersModal() {
+            document.getElementById('members-modal').classList.add('hidden');
+        }
+
+        function renderMembersList() {
+            const listEl = document.getElementById('members-list');
+            if (currentCircleMembers.length === 0) {
+                listEl.innerHTML = '<p class="text-stone-500 text-sm text-center py-4">No members in this circle.</p>';
+                return;
+            }
+
+            listEl.innerHTML = currentCircleMembers.map(m => {
+                const isMe = currentUser && m.id === currentUser.uid;
+                const isAdmin = m.role === 'admin';
+                const showRemoveBtn = currentUserRole === 'admin' && !isMe;
+                
+                return `
+                    <div class="flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-stone-50 dark:hover:bg-stone-850/50 transition-colors">
+                        <div class="flex items-center gap-3">
+                            <img class="h-10 w-10 rounded-full object-cover shrink-0" src="${m.avatar_url || 'https://i.pravatar.cc/150?u=' + m.id}" />
+                            <div>
+                                <div class="flex items-center gap-1.5 font-bold text-sm text-on-surface">
+                                    <span>${escapeHtml(m.full_name || 'Unknown')}</span>
+                                    ${isMe ? '<span class="text-[9px] bg-primary/10 text-primary font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider">You</span>' : ''}
+                                    ${isAdmin ? '<span class="text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider">Admin</span>' : ''}
+                                </div>
+                                <p class="text-xs text-stone-500">Joined ${new Date(m.joined_at).toLocaleDateString()}</p>
+                            </div>
+                        </div>
+                        ${showRemoveBtn ? `
+                            <button onclick="handleRemoveMember('${m.id}', '${escapeHtml(m.full_name || 'this member')}')" class="p-2 text-stone-400 hover:text-error dark:hover:text-error-container hover:bg-error/10 rounded-full transition-colors flex items-center justify-center" title="Remove member">
+                                <span class="material-symbols-outlined text-[20px]">person_remove</span>
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function handleRemoveMember(profileId, name) {
+            const confirmed = confirm(`Are you sure you want to remove ${name} from this circle?`);
+            if (!confirmed) return;
+
+            try {
+                // Remove the member from the circle_members collection
+                await window.db.leaveCircle(currentCircleId, profileId);
+                
+                // Refresh data
+                await loadCircleDetails();
+                
+                // Re-render members list in modal
+                renderMembersList();
+            } catch (err) {
+                alert('Failed to remove member: ' + err.message);
+            }
+        }
+
+        window.openMembersModal = openMembersModal;
+        window.closeMembersModal = closeMembersModal;
+        window.handleRemoveMember = handleRemoveMember;
 
         // Close dropdown on outside click
         document.addEventListener('pointerdown', (e) => {

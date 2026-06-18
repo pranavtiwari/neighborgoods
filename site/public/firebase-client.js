@@ -734,13 +734,14 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
-        requestToJoinCircle: async function(circleId, profileId) {
+        requestToJoinCircle: async function(circleId, profileId, message = '') {
             try {
                 const id = `${circleId}_${profileId}`;
                 await firebase.firestore().collection('circle_join_requests').doc(id).set({
                     circle_id: circleId,
                     profile_id: profileId,
                     status: 'pending',
+                    message: message,
                     requested_at: firebase.firestore.FieldValue.serverTimestamp()
                 });
             } catch (err) {
