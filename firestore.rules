@@ -20,12 +20,16 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.created_by == request.auth.uid;
     }
     
-    // Circle Members: Anyone logged in can read, but can only create/delete their own membership
+    // Circle Members: Anyone logged in can read, but can only create/delete their own membership OR if they are the circle creator
     match /circle_members/{membershipId} {
       allow read: if request.auth != null;
-      allow create, delete: if request.auth != null && (
+      allow create: if request.auth != null && (
         request.resource.data.profile_id == request.auth.uid ||
-        resource.data.profile_id == request.auth.uid
+        get(/databases/$(database)/documents/circles/$(request.resource.data.circle_id)).data.created_by == request.auth.uid
+      );
+      allow delete: if request.auth != null && (
+        resource.data.profile_id == request.auth.uid ||
+        get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid
       );
       allow update: if request.auth != null;
     }
