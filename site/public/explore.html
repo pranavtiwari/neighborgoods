@@ -10,6 +10,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 <script src="firebase-client.js"></script>
     <script>requireAuth();</script>
+    <!-- Leaflet.js map libraries -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -23,6 +26,28 @@
         .hide-scrollbar {
             -ms-overflow-style: none;
             scrollbar-width: none;
+        }
+        
+        /* Custom Leaflet Popup Styles */
+        .leaflet-popup-content-wrapper {
+            border-radius: 16px !important;
+            padding: 4px !important;
+            box-shadow: 0 10px 30px rgba(51,51,51,0.15) !important;
+            border: 1px solid rgba(0,0,0,0.05) !important;
+            font-family: 'Lexend', sans-serif !important;
+        }
+        .leaflet-popup-content {
+            margin: 8px !important;
+        }
+        .leaflet-popup-tip-container {
+            margin-top: -1px !important;
+        }
+        .leaflet-popup-tip {
+            box-shadow: 0 10px 30px rgba(51,51,51,0.15) !important;
+        }
+        .user-location-marker {
+            background: none !important;
+            border: none !important;
         }
     </style>
 
@@ -102,10 +127,20 @@
         </div>
     </div>
 </section>
-<!-- Category Chips -->
-<section class="mb-10">
-<div id="category-chips" class="flex gap-3 overflow-x-auto px-6 hide-scrollbar">
+<!-- Category Chips & View Toggle -->
+<section class="mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6">
+<div id="category-chips" class="flex gap-3 overflow-x-auto hide-scrollbar flex-1">
 <button data-category="all" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-primary-container text-on-primary font-semibold text-sm tracking-wide">All</button>
+</div>
+<div class="flex items-center bg-surface-container-low border border-outline-variant/10 rounded-xl p-1 shrink-0 self-start sm:self-auto shadow-sm">
+    <button id="view-grid-btn" onclick="setViewMode('grid')" class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-primary bg-surface shadow-sm transition-all border-none cursor-pointer">
+        <span class="material-symbols-outlined text-sm" style="font-size:16px;">grid_view</span>
+        <span>Grid</span>
+    </button>
+    <button id="view-map-btn" onclick="setViewMode('map')" class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-stone-500 hover:text-primary transition-all border-none bg-transparent cursor-pointer">
+        <span class="material-symbols-outlined text-sm" style="font-size:16px;">map</span>
+        <span>Map</span>
+    </button>
 </div>
 </section>
 <!-- Featured Carousel: Hot Near You -->
@@ -121,6 +156,11 @@
 <!-- Main Discovery Feed -->
 <section class="px-6">
 <h2 id="feed-title" class="text-2xl font-bold tracking-tight text-on-surface mb-8">Recently Added</h2>
+
+<!-- Map View container (hidden by default) -->
+<div id="explore-map-container" class="hidden w-full aspect-[16/9] min-h-[400px] md:min-h-[500px] rounded-2xl border border-outline-variant/10 shadow-md relative z-10 mb-8 overflow-hidden">
+    <div id="explore-map" class="w-full h-full"></div>
+</div>
 <!-- Asymmetric Staggered Grid -->
     <div id="items-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         <!-- Loading State -->
@@ -176,6 +216,10 @@
     
     let currentSearch = '';
     let currentCategory = 'all';
+    let allExploredItems = [];
+    let userLocation = null;
+    let mapInstance = null;
+    let mapMarkers = [];
 
     // Haversine distance calculator
     function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -257,6 +301,9 @@
                     item.distanceStr = mockDist.toFixed(1) + " mi";
                 }
             });
+
+            allExploredItems = items || [];
+            userLocation = userPos;
 
             // Get pending requests map
             const pendingRequestsMap = user ? await getPendingRequestsMap(user.uid) : {};
@@ -486,6 +533,26 @@
             }
         });
 
+        // Also filter map markers if map exists
+        if (mapInstance && mapMarkers.length > 0) {
+            mapMarkers.forEach(m => {
+                const item = m.item;
+                const itemCategories = item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other'];
+                const matchesSearch = window.db.matchesSearchFuzzy(item, currentSearch);
+                const matchesCategory = window.db.categoryMatches(itemCategories, currentCategory);
+
+                if (matchesSearch && matchesCategory) {
+                    if (!mapInstance.hasLayer(m.marker)) {
+                        m.marker.addTo(mapInstance);
+                    }
+                } else {
+                    if (mapInstance.hasLayer(m.marker)) {
+                        mapInstance.removeLayer(m.marker);
+                    }
+                }
+            });
+        }
+
         const noResults = document.getElementById('no-results');
         if (noResults) {
             if (visibleCount === 0) {
@@ -599,6 +666,116 @@
         });
     }
 
+    function setViewMode(mode) {
+        const gridBtn = document.getElementById('view-grid-btn');
+        const mapBtn = document.getElementById('view-map-btn');
+        const mapContainer = document.getElementById('explore-map-container');
+        const itemsGrid = document.getElementById('items-grid');
+        const hotCarouselSection = document.getElementById('hot-carousel-section');
+        const feedTitle = document.getElementById('feed-title');
+
+        if (mode === 'map') {
+            // Update button styles
+            gridBtn.className = "flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-stone-500 hover:text-primary transition-all border-none bg-transparent cursor-pointer";
+            mapBtn.className = "flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-primary bg-surface shadow-sm transition-all border-none cursor-pointer";
+            
+            // Toggle visibility
+            mapContainer.classList.remove('hidden');
+            itemsGrid.classList.add('hidden');
+            if (hotCarouselSection) hotCarouselSection.classList.add('hidden');
+            if (feedTitle) feedTitle.textContent = "Map View";
+
+            // Initialize Map
+            initExploreMap();
+        } else {
+            // Update button styles
+            gridBtn.className = "flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-primary bg-surface shadow-sm transition-all border-none cursor-pointer";
+            mapBtn.className = "flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-stone-500 hover:text-primary transition-all border-none bg-transparent cursor-pointer";
+
+            // Toggle visibility
+            mapContainer.classList.add('hidden');
+            itemsGrid.classList.remove('hidden');
+            if (hotCarouselSection) hotCarouselSection.classList.remove('hidden');
+            if (feedTitle) feedTitle.textContent = "Recently Added";
+        }
+    }
+
+    function initExploreMap() {
+        if (typeof L === 'undefined') {
+            console.error("Leaflet is not loaded.");
+            return;
+        }
+
+        const mapDiv = document.getElementById('explore-map');
+        if (!mapDiv) return;
+
+        if (mapInstance) {
+            setTimeout(() => {
+                mapInstance.invalidateSize();
+            }, 100);
+            return;
+        }
+
+        const centerLat = userLocation ? userLocation.lat : 37.7749;
+        const centerLng = userLocation ? userLocation.lng : -122.4194;
+
+        mapInstance = L.map('explore-map').setView([centerLat, centerLng], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(mapInstance);
+
+        // Add user marker
+        if (userLocation) {
+            const userIcon = L.divIcon({
+                className: 'user-location-marker',
+                html: `<div class="w-4 h-4 bg-primary ring-4 ring-white rounded-full shadow-lg"></div>`,
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+            L.marker([userLocation.lat, userLocation.lng], { icon: userIcon }).addTo(mapInstance).bindPopup('<b style="font-family:\'Lexend\';">Your Location</b>');
+        }
+
+        plotMapMarkers();
+    }
+
+    function plotMapMarkers() {
+        if (!mapInstance) return;
+
+        // Clear existing markers
+        mapMarkers.forEach(m => {
+            if (mapInstance.hasLayer(m.marker)) {
+                mapInstance.removeLayer(m.marker);
+            }
+        });
+        mapMarkers = [];
+
+        allExploredItems.forEach(item => {
+            const lat = item.latitude;
+            const lng = item.longitude;
+            if (lat === undefined || lng === undefined || lat === null || lng === null) return;
+
+            const popupContent = `
+                <div class="flex flex-col gap-2 p-1 min-w-[200px]" style="font-family: 'Lexend', sans-serif;">
+                    ${item.image_url ? `<img src="${item.image_url}" class="w-full h-24 object-cover rounded-lg bg-stone-100" />` : ''}
+                    <h4 class="font-bold text-sm text-stone-900 m-0 leading-tight">${escapeHtml(item.name)}</h4>
+                    <p class="text-xs text-stone-500 m-0">${item.distanceStr} away &bull; by ${escapeHtml(item.owner_name || 'Neighbor')}</p>
+                    <button onclick="window.location.href='item-details.html?id=${item.id}'" class="mt-2 w-full py-1.5 bg-primary text-white text-xs font-bold rounded-lg border-none active:scale-95 transition-all text-center cursor-pointer">View Details</button>
+                </div>
+            `;
+
+            const marker = L.marker([lat, lng]).addTo(mapInstance).bindPopup(popupContent);
+            mapMarkers.push({
+                item: item,
+                marker: marker
+            });
+        });
+
+        // Trigger filter markers immediately to apply current search/category
+        filterItems();
+    }
+
+    window.setViewMode = setViewMode;
+
     async function updateHeaderAvatar(user) {
         if (user) {
             const profile = await window.db.getProfile(user.uid);
@@ -648,7 +825,13 @@
             if (user) {
                 updateHeaderAvatar(user);
             }
-            fetchItems(user);
+            fetchItems(user).then(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const viewMode = urlParams.get('view');
+                if (viewMode === 'map') {
+                    setViewMode('map');
+                }
+            });
         });
     }
 
