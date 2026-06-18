@@ -103,18 +103,22 @@
         </div>
     </div>
 
-    <!-- Transaction State Bar -->
+    <!-- Transaction State Bar / Stepper -->
     <div id="transaction-bar" class="px-6 pb-3 sticky top-[148px] z-35 bg-surface/80 backdrop-blur-sm hidden">
-        <div class="bg-surface-container-low border border-outline-variant/10 rounded-xl p-3 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 max-w-xl mx-auto">
-            <div class="flex items-center gap-2.5">
-                <span id="transaction-status-icon" class="material-symbols-outlined text-primary text-[20px]">info</span>
+        <div class="bg-surface-container-low border border-outline-variant/10 rounded-xl p-4 shadow-sm max-w-xl mx-auto flex flex-col gap-4">
+            <!-- Dynamic Visual Stepper Container -->
+            <div id="transaction-stepper-visual" class="flex items-center justify-between w-full px-2">
+                <!-- Stepper circles and lines will be injected here -->
+            </div>
+            
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 border-t border-outline-variant/10">
                 <div class="min-w-0 flex-1">
                     <p id="transaction-status-text" class="text-xs font-bold text-on-surface truncate">Transaction Status: Loading...</p>
                     <p id="transaction-helper-text" class="text-[10px] text-on-surface-variant font-medium mt-0.5 leading-tight">...</p>
                 </div>
-            </div>
-            <div id="transaction-actions" class="flex gap-2 w-full sm:w-auto justify-end shrink-0">
-                <!-- Action buttons injected dynamically -->
+                <div id="transaction-actions" class="flex flex-wrap gap-2 w-full sm:w-auto justify-end shrink-0">
+                    <!-- Action buttons injected dynamically -->
+                </div>
             </div>
         </div>
     </div>
@@ -317,6 +321,159 @@
 
         let activeRequest = null;
 
+        function renderStepperVisual(steps, currentStepIndex, isLender, isBorrower, activeRequest, listingType) {
+            const container = document.getElementById('transaction-stepper-visual');
+            container.innerHTML = '';
+            
+            steps.forEach((step, idx) => {
+                // Step item wrapper
+                const stepWrapper = document.createElement('div');
+                stepWrapper.className = 'flex flex-col items-center relative flex-1';
+                
+                // Circle button/indicator
+                const circle = document.createElement('button');
+                circle.disabled = true; // Disabled by default, enabled if correct user action or undo is possible
+                
+                let circleClass = 'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all z-10 ';
+                let statusIcon = (idx + 1).toString();
+                
+                if (idx < currentStepIndex) {
+                    // Completed step
+                    circleClass += 'bg-green-500 text-white shadow-sm';
+                    statusIcon = 'check';
+                    // Allow undoing if it's the immediate previous step
+                    if (idx === currentStepIndex - 1) {
+                        const canUndo = getUndoActionDetails(step.statusKey, isLender, isBorrower, listingType);
+                        if (canUndo) {
+                            circle.disabled = false;
+                            circleClass += ' cursor-pointer hover:bg-red-500 hover:scale-105';
+                            circle.title = `Undo: ${step.label}`;
+                            circle.onclick = () => performUndo(step.statusKey);
+                        }
+                    }
+                } else if (idx === currentStepIndex) {
+                    // Active step
+                    circleClass += 'bg-primary text-white ring-4 ring-primary/20 animate-pulse';
+                    const canAdvance = getAdvanceActionDetails(step.statusKey, isLender, isBorrower, listingType);
+                    if (canAdvance) {
+                        circle.disabled = false;
+                        circleClass += ' cursor-pointer hover:scale-105';
+                        circle.title = `Action: ${step.label}`;
+                        circle.onclick = () => updateRequestStatus(canAdvance.nextStatus);
+                    }
+                } else {
+                    // Upcoming step
+                    circleClass += 'bg-stone-200 text-stone-500';
+                }
+                
+                circle.className = circleClass;
+                
+                if (statusIcon === 'check') {
+                    circle.innerHTML = '<span class="material-symbols-outlined text-sm">check</span>';
+                } else {
+                    circle.textContent = statusIcon;
+                }
+                
+                // Label
+                const label = document.createElement('span');
+                label.className = `text-[9px] font-bold mt-1.5 text-center ${idx === currentStepIndex ? 'text-primary' : 'text-stone-400'}`;
+                label.textContent = step.label;
+                
+                stepWrapper.appendChild(circle);
+                stepWrapper.appendChild(label);
+                
+                // Line to next step
+                if (idx < steps.length - 1) {
+                    const line = document.createElement('div');
+                    line.className = `absolute top-4 left-[50%] right-[-50%] h-[2px] -z-0 ${idx < currentStepIndex ? 'bg-green-500' : 'bg-stone-200'}`;
+                    stepWrapper.appendChild(line);
+                }
+                
+                container.appendChild(stepWrapper);
+            });
+        }
+
+        function getUndoActionDetails(statusKey, isLender, isBorrower, listingType) {
+            // Returns details if current user can undo this state
+            if (statusKey === 'pending' && isLender) {
+                // Undo from approved back to pending
+                return { actionName: 'Undo Approval', nextStatus: 'pending' };
+            }
+            if (statusKey === 'approved' && isBorrower && listingType !== 'giveaway') {
+                // Undo from borrowed back to approved
+                return { actionName: 'Undo Pick Up', nextStatus: 'approved' };
+            }
+            if (statusKey === 'borrowed' && isBorrower && listingType !== 'giveaway') {
+                // Undo from returned back to borrowed
+                return { actionName: 'Undo Return', nextStatus: 'borrowed' };
+            }
+            if (statusKey === 'returned' && isLender && listingType !== 'giveaway') {
+                // Undo from completed back to returned
+                return { actionName: 'Undo Confirm Receipt', nextStatus: 'returned' };
+            }
+            if (statusKey === 'approved' && isLender && listingType === 'giveaway') {
+                // Undo from completed back to approved for giveaway
+                return { actionName: 'Undo Completed Giveaway', nextStatus: 'approved' };
+            }
+            return null;
+        }
+
+        function getAdvanceActionDetails(statusKey, isLender, isBorrower, listingType) {
+            if (statusKey === 'pending' && isLender) {
+                return { label: 'Approve', nextStatus: 'approved' };
+            }
+            if (statusKey === 'approved') {
+                if (listingType === 'giveaway') {
+                    if (isLender) {
+                        return { label: 'Complete Giveaway', nextStatus: 'completed' };
+                    }
+                } else {
+                    if (isBorrower) {
+                        return { label: 'Mark Picked Up', nextStatus: 'borrowed' };
+                    }
+                }
+            }
+            if (statusKey === 'borrowed' && isBorrower && listingType !== 'giveaway') {
+                return { label: 'Mark Returned', nextStatus: 'returned' };
+            }
+            if (statusKey === 'returned' && isLender && listingType !== 'giveaway') {
+                return { label: 'Confirm Received', nextStatus: 'completed' };
+            }
+            return null;
+        }
+
+        async function performUndo(prevStatusKey) {
+            if (!activeRequest) return;
+            if (!confirm('Are you sure you want to undo this transaction step?')) return;
+            
+            try {
+                let autoMsg = '';
+                if (prevStatusKey === 'pending') {
+                    await window.db.undoConfirmBorrowRequest(activeRequest.id);
+                    autoMsg = '📢 *Transaction Update:* I reverted the approval (Back to Pending).';
+                } else if (prevStatusKey === 'approved') {
+                    // For borrowed -> approved
+                    await window.db.undoMarkPickedUp(activeRequest.id, contextItemId);
+                    autoMsg = '📢 *Transaction Update:* I reverted the pickup status (Back to Approved).';
+                } else if (prevStatusKey === 'borrowed') {
+                    await window.db.undoMarkReturned(activeRequest.id);
+                    autoMsg = '📢 *Transaction Update:* I reverted the return status (Back to Borrowed).';
+                } else if (prevStatusKey === 'returned' || prevStatusKey === 'approved') {
+                    // Revert from completed
+                    await window.db.undoConfirmReturn(activeRequest.id);
+                    autoMsg = '📢 *Transaction Update:* I reverted the completion confirmation.';
+                }
+
+                if (autoMsg) {
+                    await window.db.sendMessage(currentUser.uid, targetUserId, contextItemId, autoMsg);
+                }
+                await loadTransactionStatus();
+            } catch (err) {
+                alert('Error undoing step: ' + err.message);
+                loadTransactionStatus();
+            }
+        }
+
         async function loadTransactionStatus() {
             if (!currentUser || !targetUserId || !contextItemId) return;
             
@@ -325,6 +482,7 @@
                 if (!itemDoc.exists) return;
                 const itemData = itemDoc.data();
                 const itemOwnerId = itemData.owner_id;
+                const listingType = itemData.listing_type || 'free';
 
                 const snap = await firebase.firestore().collection('requests')
                     .where('item_id', '==', contextItemId)
@@ -346,19 +504,52 @@
                 const statusText = document.getElementById('transaction-status-text');
                 const helperText = document.getElementById('transaction-helper-text');
                 const actionsDiv = document.getElementById('transaction-actions');
-                const iconSpan = document.getElementById('transaction-status-icon');
 
                 actionsDiv.innerHTML = '';
                 
                 const isLender = itemOwnerId === currentUser.uid;
                 const isBorrower = activeRequest.borrower_id === currentUser.uid;
+
+                // Define step sequences
+                let steps = [];
+                if (listingType === 'giveaway') {
+                    steps = [
+                        { label: 'Requested', statusKey: 'pending' },
+                        { label: 'Approved', statusKey: 'approved' },
+                        { label: 'Completed', statusKey: 'completed' }
+                    ];
+                } else {
+                    steps = [
+                        { label: 'Requested', statusKey: 'pending' },
+                        { label: 'Approved', statusKey: 'approved' },
+                        { label: 'Picked Up', statusKey: 'borrowed' },
+                        { label: 'Returned', statusKey: 'returned' },
+                        { label: 'Completed', statusKey: 'completed' }
+                    ];
+                }
+
+                let currentStepIndex = steps.findIndex(s => s.statusKey === activeRequest.status);
+                if (currentStepIndex === -1 && activeRequest.status === 'declined') {
+                    // Handle declined status gracefully
+                    currentStepIndex = -1;
+                }
+
+                // Render visual stepper
+                if (currentStepIndex !== -1) {
+                    renderStepperVisual(steps, currentStepIndex, isLender, isBorrower, activeRequest, listingType);
+                } else {
+                    document.getElementById('transaction-stepper-visual').innerHTML = `
+                        <div class="text-xs font-bold text-red-500 flex items-center gap-1.5 py-1">
+                            <span class="material-symbols-outlined">cancel</span>
+                            <span>Transaction Cancelled or Declined</span>
+                        </div>
+                    `;
+                }
                 
                 if (activeRequest.status === 'pending') {
-                    iconSpan.textContent = 'pending';
-                    iconSpan.className = 'material-symbols-outlined text-amber-500 text-[20px]';
                     statusText.textContent = 'Request Pending';
                     if (isLender) {
-                        helperText.textContent = 'Borrower wants to borrow this item.';
+                        helperText.textContent = 'Borrower wants to borrow/claim this item.';
                         actionsDiv.innerHTML = `
                             <button onclick="updateRequestStatus('approved')" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all">Approve</button>
                             <button onclick="updateRequestStatus('declined')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Decline</button>
@@ -366,36 +557,46 @@
                     } else {
                         helperText.textContent = 'Waiting for lender approval.';
                         actionsDiv.innerHTML = `
-                            <button onclick="updateRequestStatus('declined')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Cancel</button>
+                            <button onclick="updateRequestStatus('declined')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Cancel Request</button>
                         `;
                     }
                 } else if (activeRequest.status === 'approved') {
-                    iconSpan.textContent = 'handshake';
-                    iconSpan.className = 'material-symbols-outlined text-primary text-[20px]';
                     statusText.textContent = 'Request Approved';
-                    if (isBorrower) {
-                        helperText.textContent = 'Agree on pickup. Click once you have the item.';
-                        actionsDiv.innerHTML = `
-                            <button onclick="updateRequestStatus('borrowed')" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all">Mark Picked Up</button>
-                        `;
+                    if (listingType === 'giveaway') {
+                        if (isLender) {
+                            helperText.textContent = 'Waiting for item handover. Confirm when completed.';
+                            actionsDiv.innerHTML = `
+                                <button onclick="updateRequestStatus('completed')" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all">Confirm Completed</button>
+                                <button onclick="performUndo('pending')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Undo Approval</button>
+                            `;
+                        } else {
+                            helperText.textContent = 'Approved. Please pick up the giveaway item.';
+                        }
                     } else {
-                        helperText.textContent = 'Approved. Waiting for borrower to pick up.';
+                        if (isBorrower) {
+                            helperText.textContent = 'Agree on pickup. Click once you have the item.';
+                            actionsDiv.innerHTML = `
+                                <button onclick="updateRequestStatus('borrowed')" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all">Mark Picked Up</button>
+                            `;
+                        } else {
+                            helperText.textContent = 'Approved. Waiting for borrower to pick up.';
+                            actionsDiv.innerHTML = `
+                                <button onclick="performUndo('pending')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Undo Approval</button>
+                            `;
+                        }
                     }
                 } else if (activeRequest.status === 'borrowed') {
-                    iconSpan.textContent = 'shopping_bag';
-                    iconSpan.className = 'material-symbols-outlined text-primary text-[20px]';
                     statusText.textContent = 'Borrowed (In Possession)';
                     if (isBorrower) {
                         helperText.textContent = 'You have this item. Mark as returned when done.';
                         actionsDiv.innerHTML = `
                             <button onclick="updateRequestStatus('returned')" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all">Mark Returned</button>
+                            <button onclick="performUndo('approved')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Undo Pick Up</button>
                         `;
                     } else {
                         helperText.textContent = 'Borrower has picked up the item.';
                     }
                 } else if (activeRequest.status === 'returned') {
-                    iconSpan.textContent = 'keyboard_return';
-                    iconSpan.className = 'material-symbols-outlined text-blue-500 text-[20px]';
                     statusText.textContent = 'Returned (Pending Receipt)';
                     if (isLender) {
                         helperText.textContent = 'Borrower marked item as returned. Confirm receipt.';
@@ -404,15 +605,27 @@
                         `;
                     } else {
                         helperText.textContent = 'You returned the item. Waiting for lender confirmation.';
+                        actionsDiv.innerHTML = `
+                            <button onclick="performUndo('borrowed')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Undo Return</button>
+                        `;
                     }
                 } else if (activeRequest.status === 'completed') {
-                    iconSpan.textContent = 'check_circle';
-                    iconSpan.className = 'material-symbols-outlined text-green-500 text-[20px]';
                     statusText.textContent = 'Transaction Completed';
                     helperText.textContent = 'Carbon saved and transaction finalized!';
+                    if (listingType === 'giveaway') {
+                        if (isLender) {
+                            actionsDiv.innerHTML = `
+                                <button onclick="performUndo('approved')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Undo Completion</button>
+                            `;
+                        }
+                    } else {
+                        if (isLender) {
+                            actionsDiv.innerHTML = `
+                                <button onclick="performUndo('returned')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Undo Confirm Receipt</button>
+                            `;
+                        }
+                    }
                 } else if (activeRequest.status === 'declined') {
-                    iconSpan.textContent = 'cancel';
-                    iconSpan.className = 'material-symbols-outlined text-red-500 text-[20px]';
                     statusText.textContent = 'Cancelled / Declined';
                     helperText.textContent = 'This request has been cancelled or declined.';
                 }
@@ -454,7 +667,7 @@
                 } else if (newStatus === 'returned') {
                     autoMsg = '📢 *Transaction Update:* I returned the item!';
                 } else if (newStatus === 'completed') {
-                    autoMsg = '📢 *Transaction Update:* I confirmed return received! The transaction is now complete.';
+                    autoMsg = '📢 *Transaction Update:* I confirmed completed! The transaction is now complete.';
                 }
 
                 if (autoMsg) {
@@ -470,6 +683,7 @@
 
         // Expose to window for inline onclick handlers
         window.updateRequestStatus = updateRequestStatus;
+        window.performUndo = performUndo;
 
         function appendMessage(msg) {
             const emptyState = document.getElementById('empty-state');

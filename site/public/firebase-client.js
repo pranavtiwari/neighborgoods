@@ -961,14 +961,10 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     });
 
                     // Update item status to approved (reserved) and is_available to false
-                    if (listingType === 'giveaway') {
-                        transaction.delete(itemRef);
-                    } else {
-                        transaction.update(itemRef, {
-                            status: 'approved',
-                            is_available: false
-                        });
-                    }
+                    transaction.update(itemRef, {
+                        status: 'approved',
+                        is_available: false
+                    });
                 });
             } catch (err) {
                 console.error("Error confirming borrow request:", err);
@@ -1247,11 +1243,18 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         const lenderId = itemData.owner_id;
                         const borrowerId = requestData.borrower_id;
 
-                        // Mark item as available again
-                        transaction.update(itemRef, {
-                            status: 'available',
-                            is_available: true
-                        });
+                        // Mark item as available again (or completed if giveaway)
+                        if (itemData.listing_type === 'giveaway') {
+                            transaction.update(itemRef, {
+                                status: 'completed',
+                                is_available: false
+                            });
+                        } else {
+                            transaction.update(itemRef, {
+                                status: 'available',
+                                is_available: true
+                            });
+                        }
 
                         // Increment carbon_saved_kg by 2 on lender profile
                         const lenderProfileRef = db.collection('profiles').doc(lenderId);
@@ -1269,6 +1272,181 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             } catch (err) {
                 console.error("Error confirming return:", err);
                 throw err;
+            }
+        },
+
+        undoConfirmBorrowRequest: async function(requestId) {
+            try {
+                const db = firebase.firestore();
+                const requestRef = db.collection('requests').doc(requestId);
+                
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+                    if (requestData.status !== 'approved') {
+                        throw new Error("Request is not in approved state.");
+                    }
+                    
+                    const itemRef = db.collection('items').doc(requestData.item_id);
+                    
+                    // Revert request status to pending
+                    transaction.update(requestRef, {
+                        status: 'pending',
+                        confirmed_at: null
+                    });
+                    
+                    // Revert item status to available
+                    transaction.update(itemRef, {
+                        status: 'available',
+                        is_available: true
+                    });
+                });
+            } catch (err) {
+                console.error("Error undoing confirm borrow request:", err);
+                throw err;
+            }
+        },
+
+        undoMarkPickedUp: async function(requestId, itemId) {
+            try {
+                const db = firebase.firestore();
+                const requestRef = db.collection('requests').doc(requestId);
+                const itemRef = db.collection('items').doc(itemId);
+                
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+                    if (requestData.status !== 'borrowed') {
+                        throw new Error("Request is not in borrowed state.");
+                    }
+                    
+                    // Revert request status to approved
+                    transaction.update(requestRef, {
+                        status: 'approved',
+                        picked_up_at: null
+                    });
+                    
+                    // Revert item status to approved
+                    transaction.update(itemRef, {
+                        status: 'approved',
+                        is_available: false
+                    });
+                });
+            } catch (err) {
+                console.error("Error undoing mark picked up:", err);
+                throw err;
+            }
+        },
+
+        undoMarkReturned: async function(requestId) {
+            try {
+                const db = firebase.firestore();
+                const requestRef = db.collection('requests').doc(requestId);
+                
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+                    if (requestData.status !== 'returned') {
+                        throw new Error("Request is not in returned state.");
+                    }
+                    
+                    const itemRef = db.collection('items').doc(requestData.item_id);
+                    
+                    // Revert request status to borrowed
+                    transaction.update(requestRef, {
+                        status: 'borrowed',
+                        returned_at: null
+                    });
+                    
+                    // Revert item status to borrowed
+                    transaction.update(itemRef, {
+                        status: 'borrowed',
+                        is_available: false
+                    });
+                });
+            } catch (err) {
+                console.error("Error undoing mark returned:", err);
+                throw err;
+            }
+        },
+
+        undoConfirmReturn: async function(requestId) {
+            try {
+                const db = firebase.firestore();
+                const requestRef = db.collection('requests').doc(requestId);
+                
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+                    if (requestData.status !== 'completed') {
+                        throw new Error("Request is not in completed state.");
+                    }
+                    
+                    const itemRef = db.collection('items').doc(requestData.item_id);
+                    const itemDoc = await transaction.get(itemRef);
+                    if (!itemDoc.exists) throw new Error("Item not found");
+                    const itemData = itemDoc.data();
+                    const isGiveaway = itemData.listing_type === 'giveaway';
+                    
+                    // Revert request status to returned (or approved if giveaway)
+                    const targetStatus = isGiveaway ? 'approved' : 'returned';
+                    transaction.update(requestRef, {
+                        status: targetStatus,
+                        completed_at: null
+                    });
+                    
+                    // Revert item status to returned (or approved if giveaway) and make unavailable
+                    transaction.update(itemRef, {
+                        status: targetStatus,
+                        is_available: false
+                    });
+                    
+                    // Revert carbon savings (-2 for both profiles)
+                    const lenderId = itemData.owner_id;
+                    const borrowerId = requestData.borrower_id;
+                    
+                    const lenderProfileRef = db.collection('profiles').doc(lenderId);
+                    const lenderDoc = await transaction.get(lenderProfileRef);
+                    const currentLenderCarbon = lenderDoc.exists ? (lenderDoc.data().carbon_saved_kg || 0) : 0;
+                    transaction.update(lenderProfileRef, { carbon_saved_kg: Math.max(0, currentLenderCarbon - 2) });
+                    
+                    const borrowerProfileRef = db.collection('profiles').doc(borrowerId);
+                    const borrowerDoc = await transaction.get(borrowerProfileRef);
+                    const currentBorrowerCarbon = borrowerDoc.exists ? (borrowerDoc.data().carbon_saved_kg || 0) : 0;
+                    transaction.update(borrowerProfileRef, { carbon_saved_kg: Math.max(0, currentBorrowerCarbon - 2) });
+                });
+            } catch (err) {
+                console.error("Error undoing confirm return:", err);
+                throw err;
+            }
+        },
+
+        getActiveRequest: async function(itemId, userId1, userId2) {
+            try {
+                const snap = await firebase.firestore().collection('requests')
+                    .where('item_id', '==', itemId)
+                    .get();
+                for (const doc of snap.docs) {
+                    const req = doc.data();
+                    const itemDoc = await firebase.firestore().collection('items').doc(itemId).get();
+                    if (itemDoc.exists) {
+                        const itemData = itemDoc.data();
+                        const ownerId = itemData.owner_id;
+                        const isMatch = (req.borrower_id === userId1 && ownerId === userId2) ||
+                                        (req.borrower_id === userId2 && ownerId === userId1);
+                        if (isMatch) {
+                            return { id: doc.id, ...req };
+                        }
+                    }
+                }
+                return null;
+            } catch (err) {
+                console.error("Error getting active request:", err);
+                return null;
             }
         },
 
