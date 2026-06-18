@@ -376,6 +376,7 @@
     </div>
 
     <script>
+        const escapeHtml = window.db.escapeHtml;
         let currentCircleId = null;
         let currentCircle = null;
         let currentUser = null;
@@ -610,8 +611,8 @@
                     </div>
                     <div class="p-4 flex-1 flex flex-col justify-between">
                         <div>
-                            <h4 class="font-bold text-base text-on-surface line-clamp-1 group-hover:text-primary transition-colors">${item.name}</h4>
-                            <p class="text-xs text-stone-500 dark:text-stone-400 line-clamp-2 mt-1 mb-2">${item.description || 'No description provided'}</p>
+                            <h4 class="font-bold text-base text-on-surface line-clamp-1 group-hover:text-primary transition-colors">${escapeHtml(item.name)}</h4>
+                            <p class="text-xs text-stone-500 dark:text-stone-400 line-clamp-2 mt-1 mb-2">${escapeHtml(item.description || 'No description provided')}</p>
                         </div>
                         <div class="flex items-center justify-between mt-auto pt-2 border-t border-outline-variant/10">
                             <div class="flex items-center gap-2">
@@ -901,7 +902,7 @@
             <div class="flex items-center gap-3 bg-white rounded-xl p-3 shadow-sm">
                 <img class="h-9 w-9 rounded-full object-cover" src="${req.profile?.avatar_url || 'https://i.pravatar.cc/150?u=' + req.profile_id}">
                 <div class="flex-1 min-w-0">
-                    <p class="font-bold text-sm truncate">${req.profile?.full_name || 'Unknown'}</p>
+                    <p class="font-bold text-sm truncate">${escapeHtml(req.profile?.full_name || 'Unknown')}</p>
                     <p class="text-xs text-stone-400">Wants to join</p>
                 </div>
                 <div class="flex gap-1.5">
@@ -1170,10 +1171,10 @@
                             <img class="h-6 w-6 rounded-full object-cover shrink-0 mt-0.5" src="${r.author_avatar || 'https://i.pravatar.cc/150?u=' + r.author_id}"/>
                             <div class="flex-1">
                                 <div class="flex items-baseline justify-between">
-                                    <span class="font-bold text-on-surface text-xs">${r.author_name}</span>
+                                    <span class="font-bold text-on-surface text-xs">${escapeHtml(r.author_name)}</span>
                                     <span class="text-[9px] text-outline">${new Date(r.created_at).toLocaleDateString([], {month: 'short', day: 'numeric'})}</span>
                                 </div>
-                                <p class="text-on-surface-variant mt-1 leading-snug">${r.content}</p>
+                                <p class="text-on-surface-variant mt-1 leading-snug">${escapeHtml(r.content)}</p>
                             </div>
                         </div>`).join('');
 
@@ -1182,11 +1183,11 @@
                         <div class="flex items-center gap-4 mb-6">
                             <img class="h-12 w-12 rounded-full object-cover" src="${post.profiles?.avatar_url || 'https://i.pravatar.cc/150?u=' + post.profile_id}"/>
                             <div>
-                                <p class="font-bold text-on-surface">${post.profiles?.full_name || 'Neighbor'}</p>
+                                <p class="font-bold text-on-surface">${escapeHtml(post.profiles?.full_name || 'Neighbor')}</p>
                                 <p class="text-[10px] text-on-surface-variant font-black uppercase tracking-widest">${timeStr}</p>
                             </div>
                         </div>
-                        <p class="text-xl leading-relaxed text-on-surface mb-8">${post.content}</p>
+                        <p class="text-xl leading-relaxed text-on-surface mb-8">${escapeHtml(post.content)}</p>
                         <div class="flex items-center gap-8 pt-6 border-t border-surface-container">
                             <button onclick="toggleHelpful('${post.id}')" class="group flex items-center gap-2 ${textColor} hover:text-primary transition-colors">
                                 <span class="material-symbols-outlined text-xl transition-transform group-active:scale-125" style="font-variation-settings: ${iconFill}">favorite</span>

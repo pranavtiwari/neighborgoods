@@ -131,6 +131,7 @@
 </nav>
 
     <script>
+        const escapeHtml = window.db.escapeHtml;
         document.addEventListener('DOMContentLoaded', async () => {
             const session = await requireAuth();
             if (!session) return;
@@ -191,10 +192,10 @@
                         </div>
                         <div class="flex-1 min-w-0">
                             <div class="flex justify-between items-baseline mb-0.5">
-                                <h2 class="font-bold text-base truncate ${thread.isUnread ? 'text-on-surface' : ''}">${name}</h2>
+                                <h2 class="font-bold text-base truncate ${thread.isUnread ? 'text-on-surface' : ''}">${escapeHtml(name)}</h2>
                                 <span class="text-[10px] font-bold text-on-surface-variant/40 uppercase tracking-widest">${timeString}</span>
                             </div>
-                            <p class="text-sm text-on-surface-variant truncate ${thread.isUnread ? 'font-bold text-on-surface' : ''}">${snippet}</p>
+                            <p class="text-sm text-on-surface-variant truncate ${thread.isUnread ? 'font-bold text-on-surface' : ''}">${escapeHtml(snippet)}</p>
                         </div>
                     </a>`;
                 }

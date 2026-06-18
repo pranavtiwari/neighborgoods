@@ -143,6 +143,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const targetUserId = urlParams.get('userId');
         let contextItemId = urlParams.get('itemId');
+        const escapeHtml = window.db.escapeHtml;
 
         const chatMessages = document.getElementById('chat-messages');
         const messageInput = document.getElementById('message-input');
@@ -484,7 +485,7 @@
                 chatMessages.innerHTML += `
                 <div class="flex flex-col items-end max-w-[85%] self-end w-full mt-4">
                     <div class="bg-primary text-white p-4 rounded-2xl rounded-tr-none leading-relaxed shadow-sm block break-words">
-                        ${msg.content}
+                        ${escapeHtml(msg.content)}
                     </div>
                     <div class="flex items-center gap-1 mt-1.5 mr-1 text-right">
                         <span class="text-[10px] text-on-surface-variant opacity-50 uppercase tracking-widest font-bold">Sent</span>
@@ -500,7 +501,7 @@
                     </div>
                     <div>
                         <div class="bg-stone-200/50 text-on-surface p-4 rounded-2xl rounded-tl-none leading-relaxed break-words">
-                            ${msg.content}
+                            ${escapeHtml(msg.content)}
                         </div>
                         <span class="text-[10px] text-on-surface-variant mt-1.5 ml-1 block opacity-50">${timeString}</span>
                     </div>

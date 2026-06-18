@@ -152,6 +152,7 @@
 <script>
     let currentView = 'borrowing';
     let userSession = null;
+    const escapeHtml = window.db.escapeHtml;
 
     // --- Approve / Decline handlers (called from inline onclick) ---
     async function handleApprove(requestId, itemId, listingType, btnEl) {
@@ -535,14 +536,14 @@
                             <div class="flex-1 min-w-0">
                                 <div class="flex justify-between items-start">
                                     <div class="min-w-0 flex-1">
-                                        <h4 class="font-bold text-lg leading-tight mb-1 truncate">${item.name}</h4>
+                                        <h4 class="font-bold text-lg leading-tight mb-1 truncate">${escapeHtml(item.name)}</h4>
                                         ${listingRatingHtml}
                                     </div>
                                     <span class="${statusColor} px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0">${statusLabel}</span>
                                 </div>
                                 <p class="text-on-surface-variant text-sm flex items-center gap-1 mt-1 truncate">
                                     <span class="material-symbols-outlined text-sm">person</span>
-                                    ${otherParty ? `<span class="hover:underline cursor-pointer font-medium" onclick="window.location.href='profile.html?userId=${otherParty.id}'">${otherParty.full_name || 'Neighbor'}</span>` : 'Neighbor'}
+                                    ${otherParty ? `<span class="hover:underline cursor-pointer font-medium" onclick="window.location.href='profile.html?userId=${otherParty.id}'">${escapeHtml(otherParty.full_name || 'Neighbor')}</span>` : 'Neighbor'}
                                     ${partnerRatingHtml}
                                 </p>
                                 ${isGiveaway ? '<span class="inline-block mt-2 text-[10px] font-bold uppercase tracking-widest text-teal-600 bg-teal-50 dark:bg-teal-950/40 dark:text-teal-300 px-2 py-0.5 rounded-full">Give Away</span>' : ''}
@@ -571,7 +572,7 @@
                     pastList.innerHTML = pastRequests.map(req => {
                         const item = req.items;
                         const otherParty = currentView === 'borrowing' ? item?.profiles : req.profiles;
-                        const name = otherParty?.full_name || 'Neighbor';
+                        const name = escapeHtml(otherParty?.full_name || 'Neighbor');
                         const isOwnerView = currentView === 'lending';
 
                         let iconName = 'keyboard_return';
@@ -684,7 +685,7 @@
                                     <span class="material-symbols-outlined text-on-surface-variant text-[20px]">${iconName}</span>
                                 </div>
                                 <div class="min-w-0">
-                                    <p class="font-semibold text-sm text-on-surface truncate">${item?.name || 'Unknown Item'}</p>
+                                    <p class="font-semibold text-sm text-on-surface truncate">${escapeHtml(item?.name || 'Unknown Item')}</p>
                                     <p class="text-[11px] text-on-surface-variant mt-0.5 truncate">${relationText}</p>
                                     ${starsHtml}
                                 </div>

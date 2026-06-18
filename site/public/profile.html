@@ -301,7 +301,7 @@
                 let stateColorClass = 'text-on-surface-variant';
                 
                 if (activeReq) {
-                    const borrowerName = activeReq.profiles?.full_name || 'Neighbor';
+                    const borrowerName = escapeHtml(activeReq.profiles?.full_name || 'Neighbor');
                     const d1 = formatDateStr(activeReq.start_date);
                     const d2 = formatDateStr(activeReq.end_date);
                     
@@ -329,9 +329,9 @@
 
                 return `
                 <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
-                    <img alt="${item.name}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category)}"/>
+                    <img alt="${escapeHtml(item.name)}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category)}"/>
                     <div class="flex-1">
-                        <h4 class="font-bold text-on-surface">${item.name}</h4>
+                        <h4 class="font-bold text-on-surface">${escapeHtml(item.name)}</h4>
                         <p class="${stateColorClass} text-sm mt-1">${stateText}</p>
                     </div>
                     ${actionButton}
@@ -398,7 +398,7 @@
                             statusBadge = `<span class="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded">Returned (pending receipt)</span>`;
                         }
 
-                        const lenderName = item.profiles?.full_name || item.owner_name || 'Neighbor';
+                        const lenderName = escapeHtml(item.profiles?.full_name || item.owner_name || 'Neighbor');
                         const d1 = formatDateStr(req.end_date);
                         const d2 = formatDateStr(req.start_date);
 
@@ -454,10 +454,10 @@
 
                         return `
                         <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
-                            <img alt="${item.name || 'Item'}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category || 'Item')}"/>
+                            <img alt="${escapeHtml(item.name || 'Item')}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category || 'Item')}"/>
                             <div class="flex-1 min-w-0">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <h4 class="font-bold text-on-surface truncate max-w-[200px]">${item.name || 'Unknown Item'}</h4>
+                                    <h4 class="font-bold text-on-surface truncate max-w-[200px]">${escapeHtml(item.name || 'Unknown Item')}</h4>
                                     ${statusBadge}
                                 </div>
                                 <p class="text-sm ${stateColorClass} mt-1">${stateText}</p>

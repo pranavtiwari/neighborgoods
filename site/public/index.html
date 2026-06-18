@@ -388,9 +388,9 @@
                             </div>
                             <div class="flex-1 min-w-0">
                                 <div class="flex justify-between items-start gap-2">
-                                    <h4 class="font-bold text-base text-on-surface leading-snug truncate">${action.title}</h4>
+                                    <h4 class="font-bold text-base text-on-surface leading-snug truncate">${escapeHtml(action.title)}</h4>
                                 </div>
-                                <p class="text-sm text-on-surface-variant mt-1 leading-relaxed break-words line-clamp-2">${action.desc}</p>
+                                <p class="text-sm text-on-surface-variant mt-1 leading-relaxed break-words line-clamp-2">${escapeHtml(action.desc)}</p>
                                 <span class="text-[10px] text-stone-400 mt-2 block font-medium uppercase tracking-wider">${relativeTime}</span>
                             </div>
                         </div>
@@ -454,11 +454,11 @@
                 return '<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group cursor-pointer relative" onclick="window.location.href=\'item-details.html?id=' + item.id + '\'">' +
                         badgeHtml +
                         '<div class="h-48 overflow-hidden">' +
-                            '<img class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 group-hover:scale-105 transition-transform duration-500" src="' + imageUrl + '" alt="' + item.name + '" />' +
+                            '<img class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 group-hover:scale-105 transition-transform duration-500" src="' + imageUrl + '" alt="' + escapeHtml(item.name) + '" />' +
                         '</div>' +
                         '<div class="p-5">' +
                             '<div class="flex justify-between items-start mb-2">' +
-                                '<h4 class="font-bold text-lg leading-tight">' + item.name + '</h4>' +
+                                '<h4 class="font-bold text-lg leading-tight">' + escapeHtml(item.name) + '</h4>' +
                                 '<span class="bg-secondary-fixed text-on-secondary-fixed px-2 py-1 rounded text-[10px] font-bold uppercase">' + catDisplay + '</span>' +
                             '</div>' +
                             '<p class="text-on-surface-variant text-sm mb-4 flex items-center gap-1">' +

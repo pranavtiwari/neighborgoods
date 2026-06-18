@@ -206,7 +206,7 @@
             if (owner) {
                 document.getElementById('owner-name').textContent = owner.full_name || 'Anonymous Neighbor';
                 document.getElementById('owner-avatar').src = owner.avatar_url || 'https://i.pravatar.cc/150?u=' + owner.id;
-                document.getElementById('owner-location').innerHTML = `<span class="material-symbols-outlined text-xs align-middle mr-1">location_on</span>${owner.location || 'Nearby Neighborhood'}`;
+                document.getElementById('owner-location').innerHTML = `<span class="material-symbols-outlined text-xs align-middle mr-1">location_on</span>${escapeHtml(owner.location || 'Nearby Neighborhood')}`;
                 
                 // Show owner reputation rating
                 const ownerRating = userRatings[owner.id];

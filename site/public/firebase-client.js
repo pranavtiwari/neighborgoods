@@ -17,6 +17,16 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     firebase.initializeApp(firebaseConfig);
     console.log('Firebase initialized successfully.');
 
+    // Enable offline persistence
+    firebase.firestore().enablePersistence()
+        .catch((err) => {
+            if (err.code === 'failed-precondition') {
+                console.warn('Firestore persistence failed-precondition (multiple tabs open)');
+            } else if (err.code === 'unimplemented') {
+                console.warn('Firestore persistence is not supported by this browser');
+            }
+        });
+
     // Helper function to handle Google Login with profile picker
     window.loginWithGoogle = async function(redirectTo = 'explore.html') {
         const provider = new firebase.auth.GoogleAuthProvider();
@@ -26,19 +36,23 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             const user = result.user;
             
             // Check if profile exists, if not create one
-            const profileRef = firebase.firestore().collection('profiles').doc(user.uid);
-            const doc = await profileRef.get();
-            if (!doc.exists) {
-                await profileRef.set({
-                    full_name: user.displayName || 'Neighbor',
-                    avatar_url: user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
-                    bio: '',
-                    reputation_score: 5.0,
-                    carbon_saved_kg: 0,
-                    location: '',
-                    created_at: firebase.firestore.FieldValue.serverTimestamp(),
-                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
-                });
+            try {
+                const profileRef = firebase.firestore().collection('profiles').doc(user.uid);
+                const doc = await profileRef.get();
+                if (!doc.exists) {
+                    await profileRef.set({
+                        full_name: user.displayName || 'Neighbor',
+                        avatar_url: user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
+                        bio: '',
+                        reputation_score: 5.0,
+                        carbon_saved_kg: 0,
+                        location: '',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            } catch (profileError) {
+                console.warn('Profile fetch/creation failed during Google Auth. User is still authenticated:', profileError);
             }
             window.location.href = redirectTo;
         } catch (error) {
@@ -144,6 +158,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
     // --- Unified Database (Firestore) & Storage API ---
     window.db = {
+        escapeHtml: function(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        },
         // --- Category Taxonomy and Fuzzy Matching ---
         CATEGORY_TAXONOMY: {
             garden: {
