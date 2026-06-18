@@ -392,25 +392,7 @@
             // Clear existing chips
             container.querySelectorAll('.edit-category-chip-el').forEach(el => el.remove());
             
-            const CATEGORIES = [
-              { value: 'garden', label: 'Garden Tools' },
-              { value: 'power', label: 'Power Tools' },
-              { value: 'kitchen', label: 'Kitchen Gear' },
-              { value: 'electronics/computers', label: 'Electronics & Computers' },
-              { value: 'books', label: 'Books' },
-              { value: 'skills', label: 'Experience & Skills' },
-              { value: 'neighbour-helping-neighbour', label: 'Neighbour helping Neighbour' },
-              { value: 'outdoor', label: 'Outdoor Adventure' },
-              { value: 'party', label: 'Party & Event Supplies' },
-              { value: 'baby', label: 'Baby & Kids Gear' },
-              { value: 'sports', label: 'Sports & Recreation' },
-              { value: 'camping', label: 'Camping & Travel' },
-              { value: 'games', label: 'Board Games, Toys & Puzzles' },
-              { value: 'crafts', label: 'Arts, Crafts & Sewing' },
-              { value: 'automotive', label: 'Automotive Tools & Care' },
-              { value: 'music', label: 'Music & Instruments' },
-              { value: 'other', label: 'Other' }
-            ];
+            const CATEGORIES = window.db.getCategoryOptions();
 
             if (editSelectedCategories.length === 0) {
                 placeholder.classList.remove('hidden');
@@ -441,25 +423,7 @@
             const searchInput = document.getElementById('edit-category-search-input');
             const dropdown = document.getElementById('edit-category-autocomplete-dropdown');
             
-            const CATEGORIES = [
-              { value: 'garden', label: 'Garden Tools' },
-              { value: 'power', label: 'Power Tools' },
-              { value: 'kitchen', label: 'Kitchen Gear' },
-              { value: 'electronics/computers', label: 'Electronics & Computers' },
-              { value: 'books', label: 'Books' },
-              { value: 'skills', label: 'Experience & Skills' },
-              { value: 'neighbour-helping-neighbour', label: 'Neighbour helping Neighbour' },
-              { value: 'outdoor', label: 'Outdoor Adventure' },
-              { value: 'party', label: 'Party & Event Supplies' },
-              { value: 'baby', label: 'Baby & Kids Gear' },
-              { value: 'sports', label: 'Sports & Recreation' },
-              { value: 'camping', label: 'Camping & Travel' },
-              { value: 'games', label: 'Board Games, Toys & Puzzles' },
-              { value: 'crafts', label: 'Arts, Crafts & Sewing' },
-              { value: 'automotive', label: 'Automotive Tools & Care' },
-              { value: 'music', label: 'Music & Instruments' },
-              { value: 'other', label: 'Other' }
-            ];
+            const CATEGORIES = window.db.getCategoryOptions();
 
             function showDropdown() {
                 const query = searchInput.value.toLowerCase().trim();
@@ -539,25 +503,7 @@
             // Sort by count descending
             const sortedCats = Object.keys(categoryCounts).sort((a, b) => categoryCounts[b] - categoryCounts[a]);
             
-            const CATEGORIES = [
-              { value: 'garden', label: 'Garden Tools' },
-              { value: 'power', label: 'Power Tools' },
-              { value: 'kitchen', label: 'Kitchen Gear' },
-              { value: 'electronics/computers', label: 'Electronics & Computers' },
-              { value: 'books', label: 'Books' },
-              { value: 'skills', label: 'Experience & Skills' },
-              { value: 'neighbour-helping-neighbour', label: 'Neighbour helping Neighbour' },
-              { value: 'outdoor', label: 'Outdoor Adventure' },
-              { value: 'party', label: 'Party & Event Supplies' },
-              { value: 'baby', label: 'Baby & Kids Gear' },
-              { value: 'sports', label: 'Sports & Recreation' },
-              { value: 'camping', label: 'Camping & Travel' },
-              { value: 'games', label: 'Board Games, Toys & Puzzles' },
-              { value: 'crafts', label: 'Arts, Crafts & Sewing' },
-              { value: 'automotive', label: 'Automotive Tools & Care' },
-              { value: 'music', label: 'Music & Instruments' },
-              { value: 'other', label: 'Other' }
-            ];
+            const CATEGORIES = window.db.getCategoryOptions();
 
             let html = `
                 <button data-category="all" class="category-filter-chip whitespace-nowrap px-4 py-2 rounded-full font-semibold text-xs tracking-wide transition-all ${activeCategoryFilter === 'all' ? 'bg-primary text-on-primary shadow-md' : 'bg-surface-container-high text-on-surface-variant hover:bg-stone-200 dark:hover:bg-stone-800'}">
@@ -692,7 +638,7 @@
                     const cats = item.categories && Array.isArray(item.categories)
                         ? item.categories
                         : (item.category ? [item.category] : ['other']);
-                    return cats.includes(activeCategoryFilter);
+                    return window.db.categoryMatches(cats, activeCategoryFilter);
                 });
             } else {
                 results = [...allInventoryItems];
@@ -840,8 +786,12 @@
                 
                 // Initialize Fuse
                 if (window.Fuse) {
-                    fuseIndex = new Fuse(allInventoryItems, {
-                        keys: ['name', 'description'],
+                    const mappedItems = allInventoryItems.map(item => ({
+                        ...item,
+                        semantic_tags: window.db.getSemanticTerms(item)
+                    }));
+                    fuseIndex = new Fuse(mappedItems, {
+                        keys: ['name', 'description', 'semantic_tags'],
                         threshold: 0.4,
                         includeScore: true
                     });

@@ -144,6 +144,245 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
     // --- Unified Database (Firestore) & Storage API ---
     window.db = {
+        // --- Category Taxonomy and Fuzzy Matching ---
+        CATEGORY_TAXONOMY: {
+            garden: {
+                label: 'Garden Tools',
+                subcategories: ['lawn mower', 'rake', 'shovel', 'hose', 'shear', 'seeds', 'pots', 'soil', 'gardening', 'lawn', 'plants', 'yard'],
+                parents: ['outdoor', 'home maintenance'],
+                synonyms: ['garden', 'gardening', 'yardwork', 'yard work', 'landscaping']
+            },
+            power: {
+                label: 'Power Tools',
+                subcategories: ['drill', 'saw', 'sander', 'grinder', 'compressor', 'generator', 'nail gun', 'router'],
+                parents: ['tools', 'workshop', 'hardware'],
+                synonyms: ['power tools', 'machinery', 'electric tools']
+            },
+            kitchen: {
+                label: 'Kitchen Gear',
+                subcategories: ['blender', 'mixer', 'air fryer', 'dehydrator', 'slow cooker', 'waffle maker', 'juicer', 'pots', 'pans', 'espresso machine', 'coffee maker', 'toaster', 'food processor'],
+                parents: ['home', 'cooking', 'appliances'],
+                synonyms: ['kitchen', 'cooking gear', 'baking', 'culinary']
+            },
+            'electronics/computers': {
+                label: 'Electronics & Computers',
+                subcategories: ['laptop', 'monitor', 'keyboard', 'mouse', 'printer', 'projector', 'camera', 'headphones', 'speaker', 'charger', 'tablet', 'phone', 'router', 'cable', 'tv', 'television', 'audio'],
+                parents: ['electronics', 'technology', 'office', 'entertainment'],
+                synonyms: ['electronics', 'computers', 'tech', 'gadgets']
+            },
+            books: {
+                label: 'Books',
+                subcategories: ['fiction', 'non-fiction', 'textbook', 'novel', 'biography', 'comic', 'manga', 'cookbook', 'dictionary', 'encyclopedia', 'magazine'],
+                parents: ['education', 'reading', 'entertainment'],
+                synonyms: ['books', 'literature', 'novels', 'reading material']
+            },
+            skills: {
+                label: 'Experience & Skills',
+                subcategories: ['tutoring', 'lessons', 'coaching', 'consulting', 'cooking class', 'music lesson', 'mentoring', 'advising'],
+                parents: ['services', 'education'],
+                synonyms: ['skills', 'experience', 'services', 'lessons', 'classes']
+            },
+            'neighbour-helping-neighbour': {
+                label: 'Neighbour helping Neighbour',
+                subcategories: ['volunteering', 'lending a hand', 'moving help', 'yard work', 'babysitting', 'pet sitting', 'errands', 'dog walking', 'chores'],
+                parents: ['services', 'community'],
+                synonyms: ['help', 'helping', 'assistance', 'volunteer', 'community service']
+            },
+            outdoor: {
+                label: 'Outdoor Adventure',
+                subcategories: ['hiking', 'climbing', 'kayak', 'canoe', 'paddleboard', 'backpack', 'sleeping bag', 'tent', 'binoculars', 'surfboard', 'skis', 'snowboard'],
+                parents: ['sports', 'recreation', 'entertainment', 'travel'],
+                synonyms: ['outdoor', 'adventure', 'nature', 'recreation', 'sports equipment']
+            },
+            party: {
+                label: 'Party & Event Supplies',
+                subcategories: ['tent', 'folding table', 'folding chair', 'speaker', 'lights', 'projector', 'cooler', 'decorations', 'costumes', 'karaoke', 'balloons', 'disco ball'],
+                parents: ['entertainment', 'events'],
+                synonyms: ['party', 'event', 'supplies', 'celebration', 'gathering']
+            },
+            baby: {
+                label: 'Baby & Kids Gear',
+                subcategories: ['stroller', 'car seat', 'crib', 'toys', 'baby carrier', 'high chair', 'playpen', 'baby monitor', 'diaper bag'],
+                parents: ['family', 'kids'],
+                synonyms: ['baby', 'kids', 'toddler', 'infant', 'children']
+            },
+            sports: {
+                label: 'Sports & Recreation',
+                subcategories: ['soccer', 'football', 'basketball', 'tennis', 'badminton', 'hockey', 'golf', 'gym', 'fitness', 'workout', 'weights', 'bicycle', 'skateboard', 'yoga mat', 'dumbbell', 'treadmill', 'sports equipment', 'cleats'],
+                parents: ['entertainment', 'recreation', 'fitness', 'outdoor'],
+                synonyms: ['sports', 'recreation', 'athletics', 'fitness', 'workout', 'sports equipment', 'exercise']
+            },
+            camping: {
+                label: 'Camping & Travel',
+                subcategories: ['tent', 'sleeping bag', 'camping stove', 'backpack', 'cooler', 'lantern', 'luggage', 'sleeping pad', 'tarp', 'compass'],
+                parents: ['outdoor', 'travel'],
+                synonyms: ['camping', 'travel', 'hiking', 'backpacking']
+            },
+            games: {
+                label: 'Board Games, Toys & Puzzles',
+                subcategories: ['board game', 'card game', 'chess', 'puzzle', 'lego', 'action figure', 'doll', 'monopoly', 'catan', 'scrabble', 'jigsaw'],
+                parents: ['entertainment', 'toys'],
+                synonyms: ['board games', 'toys', 'puzzles', 'games', 'gaming']
+            },
+            crafts: {
+                label: 'Arts, Crafts & Sewing',
+                subcategories: ['sewing machine', 'easel', 'knitting', 'yarn', 'paint', 'brushes', 'craft supplies', 'clay', 'canvas', 'thread'],
+                parents: ['hobbies', 'art', 'entertainment'],
+                synonyms: ['arts', 'crafts', 'sewing', 'diy', 'knitting', 'art supplies']
+            },
+            automotive: {
+                label: 'Automotive Tools & Care',
+                subcategories: ['jack', 'wrench', 'car wash', 'jumper cables', 'tire inflator', 'motor oil', 'car vacuum', 'buffer'],
+                parents: ['tools', 'vehicles'],
+                synonyms: ['automotive', 'car care', 'car tools', 'auto']
+            },
+            music: {
+                label: 'Music & Instruments',
+                subcategories: ['guitar', 'keyboard', 'piano', 'violin', 'drums', 'ukulele', 'microphone', 'amplifier', 'synthesizer', 'flute', 'trumpet', 'accordion'],
+                parents: ['entertainment', 'art', 'audio'],
+                synonyms: ['music', 'instruments', 'musical instruments', 'audio gear']
+            },
+            other: {
+                label: 'Other',
+                subcategories: [],
+                parents: [],
+                synonyms: []
+            }
+        },
+
+        CATEGORIES: [
+            { value: 'garden', label: 'Garden Tools' },
+            { value: 'power', label: 'Power Tools' },
+            { value: 'kitchen', label: 'Kitchen Gear' },
+            { value: 'electronics/computers', label: 'Electronics & Computers' },
+            { value: 'books', label: 'Books' },
+            { value: 'skills', label: 'Experience & Skills' },
+            { value: 'neighbour-helping-neighbour', label: 'Neighbour helping Neighbour' },
+            { value: 'outdoor', label: 'Outdoor Adventure' },
+            { value: 'party', label: 'Party & Event Supplies' },
+            { value: 'baby', label: 'Baby & Kids Gear' },
+            { value: 'sports', label: 'Sports & Recreation' },
+            { value: 'camping', label: 'Camping & Travel' },
+            { value: 'games', label: 'Board Games, Toys & Puzzles' },
+            { value: 'crafts', label: 'Arts, Crafts & Sewing' },
+            { value: 'automotive', label: 'Automotive Tools & Care' },
+            { value: 'music', label: 'Music & Instruments' },
+            { value: 'other', label: 'Other' }
+        ],
+
+        getParentCategoryKey: function(subcat) {
+            if (!subcat) return null;
+            const sub = subcat.toLowerCase().trim();
+            for (const [key, details] of Object.entries(this.CATEGORY_TAXONOMY)) {
+                if (key === sub) return null;
+                if (details.subcategories && details.subcategories.map(s => s.toLowerCase()).includes(sub)) {
+                    return key;
+                }
+            }
+            return null;
+        },
+
+        categoryMatches: function(itemCategories, targetCategory) {
+            if (!targetCategory || targetCategory === 'all') return true;
+            const target = targetCategory.toLowerCase().trim();
+            const cats = Array.isArray(itemCategories) ? itemCategories : [itemCategories];
+            
+            for (const cat of cats) {
+                if (!cat) continue;
+                const c = cat.toLowerCase().trim();
+                if (c === target) return true;
+                
+                const details = this.CATEGORY_TAXONOMY[c];
+                if (details) {
+                    if (details.parents && details.parents.map(p => p.toLowerCase()).includes(target)) {
+                        return true;
+                    }
+                    if (details.synonyms && details.synonyms.map(s => s.toLowerCase()).includes(target)) {
+                        return true;
+                    }
+                } else {
+                    const targetDetails = this.CATEGORY_TAXONOMY[target];
+                    if (targetDetails) {
+                        if (targetDetails.subcategories && targetDetails.subcategories.map(s => s.toLowerCase()).includes(c)) {
+                            return true;
+                        }
+                        if (targetDetails.synonyms && targetDetails.synonyms.map(s => s.toLowerCase()).includes(c)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        },
+
+        getSemanticTerms: function(item) {
+            const terms = new Set();
+            if (item.name) terms.add(item.name.toLowerCase());
+            if (item.description) terms.add(item.description.toLowerCase());
+            
+            const itemCats = [];
+            if (item.category) itemCats.push(item.category.toLowerCase().trim());
+            if (item.categories && Array.isArray(item.categories)) {
+                item.categories.forEach(c => {
+                    if (c) itemCats.push(c.toLowerCase().trim());
+                });
+            }
+            
+            itemCats.forEach(cat => {
+                terms.add(cat);
+                const details = this.CATEGORY_TAXONOMY[cat];
+                if (details) {
+                    terms.add(details.label.toLowerCase());
+                    (details.synonyms || []).forEach(s => terms.add(s.toLowerCase()));
+                    (details.subcategories || []).forEach(s => terms.add(s.toLowerCase()));
+                    (details.parents || []).forEach(p => terms.add(p.toLowerCase()));
+                } else {
+                    for (const [key, d] of Object.entries(this.CATEGORY_TAXONOMY)) {
+                        if (d.subcategories && d.subcategories.map(s => s.toLowerCase()).includes(cat)) {
+                            terms.add(key);
+                            terms.add(d.label.toLowerCase());
+                            (d.parents || []).forEach(p => terms.add(p.toLowerCase()));
+                            (d.synonyms || []).forEach(s => terms.add(s.toLowerCase()));
+                        }
+                    }
+                }
+            });
+            return Array.from(terms);
+        },
+
+        matchesSearchFuzzy: function(item, searchPattern) {
+            if (!searchPattern) return true;
+            const pattern = searchPattern.toLowerCase().trim();
+            if (pattern === '') return true;
+
+            const name = (item.name || '').toLowerCase();
+            const desc = (item.description || '').toLowerCase();
+            if (name.includes(pattern) || desc.includes(pattern)) return true;
+
+            const terms = this.getSemanticTerms(item);
+            return terms.some(term => term.includes(pattern) || pattern.includes(term));
+        },
+
+        getCategoryOptions: function() {
+            const options = [];
+            for (const [key, details] of Object.entries(this.CATEGORY_TAXONOMY)) {
+                options.push({ value: key, label: details.label });
+                if (details.subcategories) {
+                    details.subcategories.forEach(sub => {
+                        if (!options.some(opt => opt.value === sub)) {
+                            const displayLabel = sub.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                            options.push({
+                                value: sub,
+                                label: `${details.label} > ${displayLabel}`,
+                                parentValue: key
+                            });
+                        }
+                    });
+                }
+            }
+            return options;
+        },
+
         // --- Profiles ---
         getProfile: async function(profileId) {
             try {

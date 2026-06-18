@@ -96,7 +96,7 @@
 </div>
 </div>
 <div class="relative aspect-[4/5] md:aspect-square rounded-3xl overflow-hidden shadow-2xl">
-<img class="w-full h-full object-cover" alt="Indian neighbors sharing fresh vegetables and household tools in a warm, sunny apartment courtyard during golden hour" src="/indian_sharing_neighbors.png"/>
+<img class="w-full h-full object-cover" alt="Indian community neighborhood with kids riding bikes and families chatting outdoors in a sunny suburban street" src="/indian_sharing_neighbors.jpg"/>
 <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
 </div>
 </div>
@@ -104,6 +104,23 @@
 <div class="absolute -top-24 -right-24 w-96 h-96 bg-primary/5 rounded-full blur-3xl"></div>
 <div class="absolute bottom-0 -left-24 w-80 h-80 bg-secondary-fixed/10 rounded-full blur-3xl"></div>
 </section>
+
+<!-- My Circles Section (shown if logged in and has circles) -->
+<section id="my-circles-section" class="hidden px-6 py-12 bg-surface-container-lowest border-y border-outline-variant/10">
+  <div class="max-w-7xl mx-auto">
+    <div class="flex justify-between items-end mb-6">
+      <div>
+        <span class="label-md tracking-widest text-primary font-bold uppercase block mb-1">Your Communities</span>
+        <h2 class="text-2xl font-bold tracking-tight text-on-surface">Your Circles</h2>
+      </div>
+      <button onclick="window.location.href='circles.html'" class="text-primary font-semibold text-sm hover:underline">Manage Circles</button>
+    </div>
+    <div id="my-circles-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <!-- Dynamically filled with circle cards -->
+    </div>
+  </div>
+</section>
+
 <!-- Feature Grid: Bento Style -->
 <section class="px-6 py-20 bg-surface-container-low">
 <div class="max-w-7xl mx-auto">
@@ -513,12 +530,82 @@
         }
     });
 
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    async function fetchMyCircles(user) {
+        const section = document.getElementById('my-circles-section');
+        const grid = document.getElementById('my-circles-grid');
+        if (!section || !grid) return;
+
+        try {
+            const memberships = await window.db.getMyMemberships(user.uid);
+            if (!memberships || memberships.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            const circlePromises = memberships.map(m => window.db.getCircle(m.circle_id));
+            const circles = (await Promise.all(circlePromises)).filter(c => c !== null);
+
+            if (circles.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            grid.innerHTML = circles.map(circle => {
+                return `
+                <div onclick="window.location.href='circle-detail.html?id=${circle.id}'" class="bg-surface-container-low p-6 rounded-2xl shadow-sm border border-outline-variant/10 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer flex flex-col justify-between min-h-[160px]">
+                    <div>
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                <span class="material-symbols-outlined">groups</span>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-base text-on-surface line-clamp-1">${escapeHtml(circle.name)}</h3>
+                                <span class="text-[10px] bg-secondary/15 text-secondary px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">${circle.is_public ? 'Public' : 'Private'}</span>
+                            </div>
+                        </div>
+                        <p class="text-xs text-on-surface-variant line-clamp-2 leading-relaxed mb-4">${escapeHtml(circle.description || 'No description provided.')}</p>
+                    </div>
+                    <div class="flex items-center justify-between border-t border-outline-variant/10 pt-3">
+                        <span class="text-[10px] text-stone-500 font-bold uppercase flex items-center gap-1">
+                            <span class="material-symbols-outlined text-xs">location_on</span>
+                            ${escapeHtml(circle.location || 'Local')}
+                        </span>
+                        <span class="text-primary font-bold text-xs flex items-center gap-0.5 hover:underline">
+                            Enter Circle
+                            <span class="material-symbols-outlined text-sm">chevron_right</span>
+                        </span>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            section.classList.remove('hidden');
+        } catch (err) {
+            console.error("Error loading user circles:", err);
+            section.classList.add('hidden');
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         firebase.auth().onAuthStateChanged(async (user) => {
             updateHeader(user);
             await fetchGems(user);
             if (user) {
                 fetchPendingActions(user);
+                await fetchMyCircles(user);
+            } else {
+                const section = document.getElementById('my-circles-section');
+                if (section) section.classList.add('hidden');
             }
         });
     });

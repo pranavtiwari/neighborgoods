@@ -208,25 +208,7 @@
         const circleId = urlParams.get('circleId');
         let currentItemImageUrl = null;
 
-        const CATEGORIES = [
-          { value: 'garden', label: 'Garden Tools' },
-          { value: 'power', label: 'Power Tools' },
-          { value: 'kitchen', label: 'Kitchen Gear' },
-          { value: 'electronics/computers', label: 'Electronics & Computers' },
-          { value: 'books', label: 'Books' },
-          { value: 'skills', label: 'Experience & Skills' },
-          { value: 'neighbour-helping-neighbour', label: 'Neighbour helping Neighbour' },
-          { value: 'outdoor', label: 'Outdoor Adventure' },
-          { value: 'party', label: 'Party & Event Supplies' },
-          { value: 'baby', label: 'Baby & Kids Gear' },
-          { value: 'sports', label: 'Sports & Recreation' },
-          { value: 'camping', label: 'Camping & Travel' },
-          { value: 'games', label: 'Board Games, Toys & Puzzles' },
-          { value: 'crafts', label: 'Arts, Crafts & Sewing' },
-          { value: 'automotive', label: 'Automotive Tools & Care' },
-          { value: 'music', label: 'Music & Instruments' },
-          { value: 'other', label: 'Other' }
-        ];
+        const CATEGORIES = window.db.getCategoryOptions();
 
         let selectedCategories = [];
         let userCircles = [];
@@ -299,7 +281,10 @@
                     ? circleObj.allowed_categories
                     : CATEGORIES.map(c => c.value);
                     
-                const supportsAll = selectedCategories.every(cat => allowed.includes(cat));
+                const supportsAll = selectedCategories.every(cat => 
+                    allowed.includes(cat) || 
+                    allowed.some(allowedCat => window.db.categoryMatches(cat, allowedCat))
+                );
                 
                 const labelEl = cb.closest('label');
                 if (supportsAll) {
@@ -326,7 +311,8 @@
                 
                 const filtered = CATEGORIES.filter(cat => {
                     const matchesQuery = cat.label.toLowerCase().includes(query) || cat.value.toLowerCase().includes(query);
-                    const isAllowed = allowedCats.includes(cat.value);
+                    const isAllowed = allowedCats.includes(cat.value) || 
+                                      allowedCats.some(ac => window.db.categoryMatches(cat.value, ac));
                     const notSelected = !selectedCategories.includes(cat.value);
                     return matchesQuery && isAllowed && notSelected;
                 });
@@ -829,10 +815,19 @@
                 const checkedCircles = document.querySelectorAll('input[name="selected-circles"]:checked');
                 const selectedCircles = Array.from(checkedCircles).map(cb => cb.value);
 
+                // Ensure parent categories are also included in the saved categories list for subcategories
+                const categoriesToSave = [...selectedCategories];
+                selectedCategories.forEach(cat => {
+                    const parentKey = window.db.getParentCategoryKey(cat);
+                    if (parentKey && !categoriesToSave.includes(parentKey)) {
+                        categoriesToSave.push(parentKey);
+                    }
+                });
+
                 const payload = {
                     name: name,
                     category: selectedCategories[0] || 'other',
-                    categories: selectedCategories,
+                    categories: categoriesToSave,
                     description: description,
                     image_url: imageUrl,
                     listing_type: listingType,

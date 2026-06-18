@@ -106,22 +106,6 @@
 <section class="mb-10">
 <div id="category-chips" class="flex gap-3 overflow-x-auto px-6 hide-scrollbar">
 <button data-category="all" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-primary-container text-on-primary font-semibold text-sm tracking-wide">All</button>
-<button data-category="garden" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Garden Tools</button>
-<button data-category="power" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Power Tools</button>
-<button data-category="kitchen" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Kitchen Gear</button>
-<button data-category="electronics/computers" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Electronics/Computers</button>
-<button data-category="books" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Books</button>
-<button data-category="skills" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Experience/Skills</button>
-<button data-category="neighbour-helping-neighbour" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Neighbour helping Neighbour</button>
-<button data-category="outdoor" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Outdoor Adventure</button>
-<button data-category="party" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Party & Event</button>
-<button data-category="baby" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Baby & Kids</button>
-<button data-category="sports" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Sports & Rec</button>
-<button data-category="camping" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Camping & Travel</button>
-<button data-category="games" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Board Games & Toys</button>
-<button data-category="crafts" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Arts & Crafts</button>
-<button data-category="automotive" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Automotive Tools</button>
-<button data-category="music" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 transition-colors font-medium text-sm tracking-wide">Music & Instruments</button>
 </div>
 </section>
 <!-- Featured Carousel: Hot Near You -->
@@ -188,7 +172,6 @@
     }
 
     const searchInput = document.getElementById('search-input');
-    const categoryChips = document.querySelectorAll('.category-chip');
     const grid = document.getElementById('items-grid');
     
     let currentSearch = '';
@@ -464,13 +447,11 @@
                         }
                     </div>
                 </div>`;
-            }).join('') + `
-            <div id="no-results" class="col-span-1 sm:col-span-2 md:col-span-3 flex flex-col items-center justify-center py-12 hidden">
-                <span class="material-symbols-outlined text-outline text-4xl mb-4" style="font-variation-settings: 'FILL' 0;">search_off</span>
-                <p class="text-on-surface-variant font-medium">No matching items found.</p>
-                <p class="text-sm text-outline mt-1">Try adjusting your search or category filters.</p>
-            </div>`;
+            // Call dynamic categories rendering
+            renderCategoryChips(items);
             
+            const noResults = document.getElementById('no-results');
+            if (noResults) noResults.classList.add('hidden');
         } catch (err) {
             console.error("Error fetching items:", err);
             grid.innerHTML = `<div class="col-span-2 md:col-span-3 text-error font-medium text-center">Failed to load items.</div>`;
@@ -486,15 +467,16 @@
             const descAttr = card.getAttribute('data-description');
             const categoriesAttr = card.getAttribute('data-categories');
             
-            const name = (nameAttr || '').toLowerCase();
-            const desc = (descAttr || '').toLowerCase();
             const categories = (categoriesAttr || '').split(',').map(c => c.trim().toLowerCase());
             
-            const searchPattern = currentSearch.toLowerCase();
-            const matchesSearch = name.includes(searchPattern) || 
-                                  desc.includes(searchPattern) || 
-                                  categories.some(cat => cat.includes(searchPattern));
-            const matchesCategory = currentCategory === 'all' || categories.includes(currentCategory.toLowerCase());
+            const dummyItem = {
+                name: nameAttr,
+                description: descAttr,
+                categories: categories
+            };
+
+            const matchesSearch = window.db.matchesSearchFuzzy(dummyItem, currentSearch);
+            const matchesCategory = window.db.categoryMatches(categories, currentCategory);
 
             if (matchesSearch && matchesCategory) {
                 card.style.display = 'flex';
@@ -537,19 +519,85 @@
         filterItems();
     });
 
-    categoryChips.forEach(chip => {
-        chip.addEventListener('click', () => {
-            categoryChips.forEach(c => {
-                c.classList.remove('bg-primary-container', 'text-on-primary');
-                c.classList.add('bg-surface-container-high', 'text-on-surface-variant');
-            });
-            chip.classList.remove('bg-surface-container-high', 'text-on-surface-variant');
-            chip.classList.add('bg-primary-container', 'text-on-primary');
+    function renderCategoryChips(items) {
+        const container = document.getElementById('category-chips');
+        if (!container) return;
 
-            currentCategory = chip.getAttribute('data-category');
-            filterItems();
+        // Count listings per category/subcategory and their parents
+        const categoryCounts = {};
+        items.forEach(item => {
+            const itemCats = [];
+            if (item.category) itemCats.push(item.category);
+            if (item.categories && Array.isArray(item.categories)) {
+                item.categories.forEach(c => itemCats.push(c));
+            }
+            
+            // Add all categories, subcategories, and their parents to categoryCounts
+            const uniqueCatsInItem = new Set();
+            itemCats.forEach(cat => {
+                if (!cat) return;
+                const cLower = cat.toLowerCase().trim();
+                uniqueCatsInItem.add(cLower);
+                const parent = window.db.getParentCategoryKey(cLower);
+                if (parent) {
+                    uniqueCatsInItem.add(parent.toLowerCase().trim());
+                }
+            });
+            
+            uniqueCatsInItem.forEach(cat => {
+                categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+            });
         });
-    });
+
+        // Always show 'All' chip
+        let html = `<button data-category="all" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full ${currentCategory === 'all' ? 'bg-primary-container text-on-primary font-semibold' : 'bg-surface-container-high text-on-surface-variant hover:bg-stone-200 font-medium'} text-sm tracking-wide transition-colors">All</button>`;
+
+        // Render chips only for categories that actually have listings, sorted by count descending
+        const activeCats = Object.keys(categoryCounts).filter(cat => categoryCounts[cat] > 0);
+        
+        // Map category keys to labels from taxonomy or custom labels
+        const catList = activeCats.map(cat => {
+            const taxonomyObj = window.db.CATEGORY_TAXONOMY[cat];
+            let label = cat;
+            if (taxonomyObj) {
+                label = taxonomyObj.label;
+            } else {
+                // If it's a subcategory, let's title case it
+                label = cat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            }
+            return {
+                key: cat,
+                label: label,
+                count: categoryCounts[cat]
+            };
+        });
+
+        // Sort by count descending
+        catList.sort((a, b) => b.count - a.count);
+
+        catList.forEach(cat => {
+            const isActive = currentCategory === cat.key;
+            html += `<button data-category="${cat.key}" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full ${isActive ? 'bg-primary-container text-on-primary font-semibold' : 'bg-surface-container-high text-on-surface-variant hover:bg-stone-200 font-medium'} text-sm tracking-wide transition-colors">${cat.label} (${cat.count})</button>`;
+        });
+
+        container.innerHTML = html;
+
+        // Re-bind listeners
+        const chips = container.querySelectorAll('.category-chip');
+        chips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                chips.forEach(c => {
+                    c.classList.remove('bg-primary-container', 'text-on-primary', 'font-semibold');
+                    c.classList.add('bg-surface-container-high', 'text-on-surface-variant', 'font-medium');
+                });
+                chip.classList.remove('bg-surface-container-high', 'text-on-surface-variant', 'font-medium');
+                chip.classList.add('bg-primary-container', 'text-on-primary', 'font-semibold');
+
+                currentCategory = chip.getAttribute('data-category');
+                filterItems();
+            });
+        });
+    }
 
     async function updateHeaderAvatar(user) {
         if (user) {
