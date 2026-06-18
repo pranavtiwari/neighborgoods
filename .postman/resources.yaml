@@ -1,0 +1,24 @@
+workspace:
+  id: 6be90e34-101d-4213-9141-8f40d3162f67
+localResources:
+  collections:
+    - ../postman/collections/auth
+    - ../postman/collections/borrow-requests
+    - ../postman/collections/circle-posts-ratings
+    - ../postman/collections/circles
+    - ../postman/collections/items
+    - ../postman/collections/messages
+    - ../postman/collections/profiles
+  environments:
+    - ../postman/environments/MyEnv.environment.yaml
+cloudResources:
+  collections:
+    ../postman/collections/auth: 43955049-b60f64b2-5b06-45fc-a5d0-899479c2b609
+    ../postman/collections/borrow-requests: 43955049-ce2f90f3-5998-474c-820e-5f7e85eb502d
+    ../postman/collections/circle-posts-ratings: 43955049-c311746d-938a-4736-978b-cd1c08b53a5c
+    ../postman/collections/circles: 43955049-924a4ffa-c1e2-41e8-a4ac-bb698335b5cc
+    ../postman/collections/items: 43955049-ac683468-4c91-427b-8110-9f851741f0ea
+    ../postman/collections/messages: 43955049-fe3b7eb6-442a-4dee-b890-cf627743056b
+    ../postman/collections/profiles: 43955049-de9bcd25-a78e-4197-ad6c-cb74f60594ad
+  environments:
+    ../postman/environments/MyEnv.environment.yaml: 43955049-6f322f82-decd-4afc-8d14-c511a69ea3ed

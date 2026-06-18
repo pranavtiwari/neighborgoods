@@ -1,0 +1,27 @@
+$kind: http-request
+name: Get Item
+method: GET
+url: '{{firestoreBaseUrl}}/items/{{itemId}}'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 2000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.name exists", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields).to.have.property("name");
+      });
+      pm.test("fields.status exists", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields).to.have.property("status");
+      });
+      pm.test("fields.owner_id exists", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields).to.have.property("owner_id");
+      });

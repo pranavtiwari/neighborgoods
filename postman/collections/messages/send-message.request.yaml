@@ -1,0 +1,40 @@
+$kind: http-request
+name: Send Message
+method: POST
+url: '{{firestoreBaseUrl}}/messages'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 1000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "sender_id": { "stringValue": "{{profileId}}" },
+        "receiver_id": { "stringValue": "{{targetProfileId}}" },
+        "item_id": { "stringValue": "{{itemId}}" },
+        "content": { "stringValue": "Hi, is this item still available?" },
+        "is_read": { "booleanValue": false }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.content.stringValue equals 'Hi, is this item still available?'", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields.content.stringValue).to.eql("Hi, is this item still available?");
+      });
+      pm.test("fields.is_read.booleanValue equals false", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields.is_read.booleanValue).to.eql(false);
+      });
+      const json = pm.response.json();
+      if (json.name) {
+        const messageId = json.name.split('/').pop();
+        pm.collectionVariables.set("messageId", messageId);
+      }

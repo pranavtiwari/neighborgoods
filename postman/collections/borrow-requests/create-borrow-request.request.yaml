@@ -1,0 +1,37 @@
+$kind: http-request
+name: Create Borrow Request
+method: POST
+url: '{{firestoreBaseUrl}}/requests'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 1000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "item_id": { "stringValue": "{{itemId}}" },
+        "borrower_id": { "stringValue": "{{profileId}}" },
+        "status": { "stringValue": "pending" },
+        "start_date": { "stringValue": "2026-07-01" },
+        "end_date": { "stringValue": "2026-07-07" },
+        "note": { "stringValue": "I need this for a weekend project" }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.status.stringValue equals 'pending'", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields.status.stringValue).to.eql("pending");
+      });
+      const json = pm.response.json();
+      if (json.name) {
+        const borrowRequestId = json.name.split('/').pop();
+        pm.collectionVariables.set("borrowRequestId", borrowRequestId);
+      }

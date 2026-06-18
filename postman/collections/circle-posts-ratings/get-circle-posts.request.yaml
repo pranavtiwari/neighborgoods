@@ -1,0 +1,44 @@
+$kind: http-request
+name: Get Circle Posts
+method: POST
+url: '{{firestoreBaseUrl}}:runQuery'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 2000
+body:
+  type: json
+  content: |-
+    {
+      "structuredQuery": {
+        "from": [{ "collectionId": "circle_posts" }],
+        "where": {
+          "fieldFilter": {
+            "field": { "fieldPath": "circle_id" },
+            "op": "EQUAL",
+            "value": { "stringValue": "{{circleId}}" }
+          }
+        },
+        "orderBy": [{ "field": { "fieldPath": "created_at" }, "direction": "DESCENDING" }]
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response is an array", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.be.an("array");
+      });
+      pm.test("Each result has matching circle_id", function() {
+        const json = pm.response.json();
+        const circleId = pm.collectionVariables.get("circleId");
+        json.forEach(function(result) {
+          if (result.document) {
+            pm.expect(result.document.fields.circle_id.stringValue).to.eql(circleId);
+          }
+        });
+      });

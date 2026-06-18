@@ -1,0 +1,26 @@
+$kind: http-request
+name: List Circles
+method: GET
+url: '{{firestoreBaseUrl}}/circles'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 1000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response has documents array or is empty", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.satisfy(function(r) {
+          return r.hasOwnProperty("documents") || Object.keys(r).length === 0;
+        });
+      });
+      const json = pm.response.json();
+      if (json.documents && json.documents.length > 0) {
+        const circleId = json.documents[0].name.split('/').pop();
+        pm.collectionVariables.set("circleId", circleId);
+      }

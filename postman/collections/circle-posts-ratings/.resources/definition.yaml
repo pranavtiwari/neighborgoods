@@ -1,0 +1,8 @@
+$kind: collection
+name: 'Circle Posts & Ratings'
+description: 'Community circle posts/activity feed and user reputation ratings'
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{firebaseIdToken}}'

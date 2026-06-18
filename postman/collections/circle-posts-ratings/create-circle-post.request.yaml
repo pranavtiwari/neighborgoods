@@ -1,0 +1,34 @@
+$kind: http-request
+name: Create Circle Post
+method: POST
+url: '{{firestoreBaseUrl}}/circle_posts'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 1000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "circle_id": { "stringValue": "{{circleId}}" },
+        "profile_id": { "stringValue": "{{profileId}}" },
+        "content": { "stringValue": "Hello neighbors! Testing the community feed." }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.content.stringValue equals 'Hello neighbors! Testing the community feed.'", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields.content.stringValue).to.eql("Hello neighbors! Testing the community feed.");
+      });
+      const json = pm.response.json();
+      if (json.name) {
+        const circlePostId = json.name.split('/').pop();
+        pm.collectionVariables.set("circlePostId", circlePostId);
+      }

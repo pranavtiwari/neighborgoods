@@ -1,0 +1,36 @@
+$kind: http-request
+name: Create Rating
+method: POST
+url: '{{firestoreBaseUrl}}/ratings'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 3000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "rater_id": { "stringValue": "{{profileId}}" },
+        "ratee_id": { "stringValue": "{{targetProfileId}}" },
+        "request_id": { "stringValue": "{{borrowRequestId}}" },
+        "score": { "integerValue": "5" },
+        "comment": { "stringValue": "Great neighbor, very reliable!" }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.score.integerValue equals '5'", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields.score.integerValue).to.eql("5");
+      });
+      const json = pm.response.json();
+      if (json.name) {
+        const ratingId = json.name.split('/').pop();
+        pm.collectionVariables.set("ratingId", ratingId);
+      }

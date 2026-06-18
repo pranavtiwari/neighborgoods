@@ -1,0 +1,33 @@
+$kind: http-request
+name: List Items
+method: GET
+url: '{{firestoreBaseUrl}}/items'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 1000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response has documents array", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.have.property("documents");
+        pm.expect(json.documents).to.be.an("array");
+      });
+      pm.test("Each document has fields object", function() {
+        const json = pm.response.json();
+        if (json.documents && json.documents.length > 0) {
+          json.documents.forEach(function(doc) {
+            pm.expect(doc).to.have.property("fields");
+          });
+        }
+      });
+      const json = pm.response.json();
+      if (json.documents && json.documents.length > 0) {
+        const itemId = json.documents[0].name.split('/').pop();
+        pm.collectionVariables.set("itemId", itemId);
+      }

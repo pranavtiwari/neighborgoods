@@ -1,0 +1,51 @@
+$kind: http-request
+name: Get Unread Count
+method: POST
+url: '{{firestoreBaseUrl}}:runQuery'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 3000
+body:
+  type: json
+  content: |-
+    {
+      "structuredQuery": {
+        "from": [{ "collectionId": "messages" }],
+        "where": {
+          "compositeFilter": {
+            "op": "AND",
+            "filters": [
+              {
+                "fieldFilter": {
+                  "field": { "fieldPath": "receiver_id" },
+                  "op": "EQUAL",
+                  "value": { "stringValue": "{{profileId}}" }
+                }
+              },
+              {
+                "fieldFilter": {
+                  "field": { "fieldPath": "is_read" },
+                  "op": "EQUAL",
+                  "value": { "booleanValue": false }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response is an array", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.be.an("array");
+      });
+      const json = pm.response.json();
+      const unreadCount = json.filter(function(r) { return r.document; }).length;
+      pm.collectionVariables.set("unreadCount", unreadCount);

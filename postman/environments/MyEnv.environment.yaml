@@ -1,0 +1,53 @@
+name: MyEnv
+values:
+  - key: googleClientId
+    value: ''
+  - key: googleClientSecret
+    value: ''
+  - key: firebaseProjectId
+    value: shareinstead
+  - key: firebaseApiKey
+    value: ''
+  - key: firebaseAuthDomain
+    value: shareinstead.firebaseapp.com
+  - key: firebaseStorageBucket
+    value: shareinstead.appspot.com
+  - key: firebaseMessagingSenderId
+    value: ''
+  - key: firebaseAppId
+    value: ''
+  - key: firebaseAuthBaseUrl
+    value: 'https://identitytoolkit.googleapis.com/v1'
+  - key: firestoreBaseUrl
+    value: 'https://firestore.googleapis.com/v1/projects/{{firebaseProjectId}}/databases/(default)/documents'
+  - key: firebaseIdToken
+    value: ''
+  - key: firebaseRefreshToken
+    value: ''
+  - key: firebaseUserId
+    value: ''
+  - key: profileId
+    value: ''
+  - key: targetProfileId
+    value: ''
+  - key: itemId
+    value: ''
+  - key: newItemId
+    value: ''
+  - key: circleId
+    value: ''
+  - key: newCircleId
+    value: ''
+  - key: borrowRequestId
+    value: ''
+  - key: messageId
+    value: ''
+  - key: circlePostId
+    value: ''
+  - key: ratingId
+    value: ''
+  - key: userEmail
+    value: ''
+  - key: userPassword
+    value: ''
+color: 0

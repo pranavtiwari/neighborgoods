@@ -1,0 +1,34 @@
+$kind: http-request
+name: Get Ratings for User
+method: POST
+url: '{{firestoreBaseUrl}}:runQuery'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 4000
+body:
+  type: json
+  content: |-
+    {
+      "structuredQuery": {
+        "from": [{ "collectionId": "ratings" }],
+        "where": {
+          "fieldFilter": {
+            "field": { "fieldPath": "ratee_id" },
+            "op": "EQUAL",
+            "value": { "stringValue": "{{targetProfileId}}" }
+          }
+        }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response is an array", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.be.an("array");
+      });

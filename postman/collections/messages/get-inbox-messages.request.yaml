@@ -1,0 +1,35 @@
+$kind: http-request
+name: Get Inbox Messages
+method: POST
+url: '{{firestoreBaseUrl}}:runQuery'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 2000
+body:
+  type: json
+  content: |-
+    {
+      "structuredQuery": {
+        "from": [{ "collectionId": "messages" }],
+        "where": {
+          "fieldFilter": {
+            "field": { "fieldPath": "receiver_id" },
+            "op": "EQUAL",
+            "value": { "stringValue": "{{profileId}}" }
+          }
+        },
+        "orderBy": [{ "field": { "fieldPath": "created_at" }, "direction": "DESCENDING" }]
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response is an array", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.be.an("array");
+      });

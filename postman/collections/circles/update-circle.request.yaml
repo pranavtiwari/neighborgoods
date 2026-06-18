@@ -1,0 +1,27 @@
+$kind: http-request
+name: Update Circle
+method: PATCH
+url: '{{firestoreBaseUrl}}/circles/{{newCircleId}}?updateMask.fieldPaths=description'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 4000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "description": { "stringValue": "Updated description from Postman" }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.description.stringValue equals 'Updated description from Postman'", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields.description.stringValue).to.eql("Updated description from Postman");
+      });

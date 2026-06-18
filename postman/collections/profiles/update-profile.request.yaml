@@ -1,0 +1,28 @@
+$kind: http-request
+name: Update Profile
+method: PATCH
+url: '{{firestoreBaseUrl}}/profiles/{{profileId}}?updateMask.fieldPaths=bio&updateMask.fieldPaths=location'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 2000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "bio": { "stringValue": "Test bio from Postman" },
+        "location": { "stringValue": "Test City" }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.bio.stringValue equals 'Test bio from Postman'", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields.bio.stringValue).to.eql("Test bio from Postman");
+      });

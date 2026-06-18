@@ -1,0 +1,27 @@
+$kind: http-request
+name: Decline Borrow Request
+method: PATCH
+url: '{{firestoreBaseUrl}}/requests/{{borrowRequestId}}?updateMask.fieldPaths=status'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 5000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "status": { "stringValue": "declined" }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.status.stringValue equals 'declined'", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields.status.stringValue).to.eql("declined");
+      });

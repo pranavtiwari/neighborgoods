@@ -1,0 +1,8 @@
+$kind: collection
+name: Profiles
+description: 'CRUD operations for user profiles stored in Firestore (profiles collection)'
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{firebaseIdToken}}'

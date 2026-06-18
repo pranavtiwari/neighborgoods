@@ -1,0 +1,9 @@
+$kind: collection
+name: Borrow Requests
+description: Lifecycle management for item borrow requests - create, approve, decline, pickup, return
+variables:
+  borrowRequestId: ""
+auth:
+  type: bearer
+  credentials:
+    token: "{{firebaseIdToken}}"

@@ -1,0 +1,19 @@
+$kind: http-request
+name: Delete Item
+method: DELETE
+url: '{{firestoreBaseUrl}}/items/{{newItemId}}'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 5000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response body is empty object", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.eql({});
+      });

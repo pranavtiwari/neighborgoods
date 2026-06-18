@@ -1,0 +1,9 @@
+$kind: collection
+name: Circles
+description: Community circles - create, join, manage neighborhood groups
+variables:
+  circleId: ""
+auth:
+  type: bearer
+  credentials:
+    token: "{{firebaseIdToken}}"

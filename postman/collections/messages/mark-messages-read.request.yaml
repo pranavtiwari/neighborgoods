@@ -1,0 +1,27 @@
+$kind: http-request
+name: Mark Messages Read
+method: PATCH
+url: '{{firestoreBaseUrl}}/messages/{{messageId}}?updateMask.fieldPaths=is_read'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 4000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "is_read": { "booleanValue": true }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.is_read.booleanValue equals true", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields.is_read.booleanValue).to.eql(true);
+      });

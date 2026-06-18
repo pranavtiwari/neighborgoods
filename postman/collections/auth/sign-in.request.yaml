@@ -1,0 +1,29 @@
+$kind: http-request
+name: Sign In (Get ID Token)
+method: POST
+url: "{{firebaseAuthBaseUrl}}/accounts:signInWithPassword?key={{firebaseApiKey}}"
+order: 1000
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{userEmail}}",
+      "password": "{{userPassword}}",
+      "returnSecureToken": true
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Sign in successful", function () {
+        pm.response.to.have.status(200);
+      });
+
+      if (pm.response.code === 200) {
+        const json = pm.response.json();
+        pm.environment.set("firebaseIdToken", json.idToken);
+        pm.environment.set("firebaseRefreshToken", json.refreshToken);
+        pm.environment.set("firebaseUserId", json.localId);
+        pm.environment.set("profileId", json.localId);
+        console.log("✅ ID token saved to environment. User ID:", json.localId);
+      }
+    language: text/javascript

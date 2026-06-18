@@ -1,0 +1,8 @@
+$kind: collection
+name: Messages
+description: 'Direct messaging between neighbors, tied to items and borrow requests'
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{firebaseIdToken}}'

@@ -1,0 +1,43 @@
+$kind: http-request
+name: Get Borrow Requests (Borrowing)
+method: POST
+url: '{{firestoreBaseUrl}}:runQuery'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 2000
+body:
+  type: json
+  content: |-
+    {
+      "structuredQuery": {
+        "from": [{ "collectionId": "requests" }],
+        "where": {
+          "fieldFilter": {
+            "field": { "fieldPath": "borrower_id" },
+            "op": "EQUAL",
+            "value": { "stringValue": "{{profileId}}" }
+          }
+        }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response is an array", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.be.an("array");
+      });
+      pm.test("Each result has matching borrower_id", function() {
+        const json = pm.response.json();
+        const profileId = pm.collectionVariables.get("profileId");
+        json.forEach(function(result) {
+          if (result.document) {
+            pm.expect(result.document.fields.borrower_id.stringValue).to.eql(profileId);
+          }
+        });
+      });

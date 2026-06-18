@@ -1,0 +1,28 @@
+$kind: http-request
+name: Update Item
+method: PATCH
+url: '{{firestoreBaseUrl}}/items/{{newItemId}}?updateMask.fieldPaths=status&updateMask.fieldPaths=condition'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 4000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "status": { "stringValue": "available" },
+        "condition": { "stringValue": "Good" }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.status.stringValue equals 'available'", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields.status.stringValue).to.eql("available");
+      });

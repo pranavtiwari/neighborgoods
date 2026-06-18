@@ -1,0 +1,35 @@
+$kind: http-request
+name: Create Circle
+method: POST
+url: '{{firestoreBaseUrl}}/circles'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 3000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "name": { "stringValue": "Test Circle" },
+        "description": { "stringValue": "A test community circle" },
+        "created_by": { "stringValue": "{{profileId}}" },
+        "is_private": { "booleanValue": false }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response has name field", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.have.property("name");
+      });
+      const json = pm.response.json();
+      if (json.name) {
+        const newCircleId = json.name.split('/').pop();
+        pm.collectionVariables.set("newCircleId", newCircleId);
+      }

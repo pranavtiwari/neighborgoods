@@ -1,0 +1,34 @@
+$kind: http-request
+name: Get My Memberships
+method: POST
+url: '{{firestoreBaseUrl}}:runQuery'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 7000
+body:
+  type: json
+  content: |-
+    {
+      "structuredQuery": {
+        "from": [{ "collectionId": "circle_members" }],
+        "where": {
+          "fieldFilter": {
+            "field": { "fieldPath": "profile_id" },
+            "op": "EQUAL",
+            "value": { "stringValue": "{{profileId}}" }
+          }
+        }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response is an array", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.be.an("array");
+      });

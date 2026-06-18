@@ -539,18 +539,16 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         getCircleItems: async function(circleId) {
             try {
-                // Try querying array-contains on circle_ids
-                const snapshot1 = await firebase.firestore().collection('items')
-                    .where('circle_ids', 'array-contains', circleId).get();
-                
-                // Fallback to single circle_id
-                const snapshot2 = await firebase.firestore().collection('items')
-                    .where('circle_id', '==', circleId).get();
-                
+                const snapshot = await firebase.firestore().collection('items').get();
                 const itemsMap = {};
-                snapshot1.docs.forEach(doc => { itemsMap[doc.id] = { id: doc.id, ...doc.data() }; });
-                snapshot2.docs.forEach(doc => { itemsMap[doc.id] = { id: doc.id, ...doc.data() }; });
-                
+                snapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    const inArray = data.circle_ids && Array.isArray(data.circle_ids) && data.circle_ids.includes(circleId);
+                    const isSingle = data.circle_id === circleId;
+                    if (inArray || isSingle) {
+                        itemsMap[doc.id] = { id: doc.id, ...data };
+                    }
+                });
                 return Object.values(itemsMap);
             } catch (err) {
                 console.error("Error getting circle items:", err);

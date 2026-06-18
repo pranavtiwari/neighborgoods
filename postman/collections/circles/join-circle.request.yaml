@@ -1,0 +1,30 @@
+$kind: http-request
+name: Join Circle
+method: POST
+url: '{{firestoreBaseUrl}}/circle_members'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 5000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "circle_id": { "stringValue": "{{circleId}}" },
+        "profile_id": { "stringValue": "{{profileId}}" },
+        "role": { "stringValue": "member" },
+        "joined_at": { "stringValue": "{{$isoTimestamp}}" }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.role.stringValue equals 'member'", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields.role.stringValue).to.eql("member");
+      });

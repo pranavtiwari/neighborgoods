@@ -1,0 +1,23 @@
+$kind: http-request
+name: Get Circle
+method: GET
+url: '{{firestoreBaseUrl}}/circles/{{circleId}}'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 2000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("fields.name exists", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields).to.have.property("name");
+      });
+      pm.test("fields.created_by exists", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields).to.have.property("created_by");
+      });

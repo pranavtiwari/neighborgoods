@@ -1,0 +1,9 @@
+$kind: collection
+name: Items
+description: Manage shareable items (tools, surplus, skills) in Firestore
+variables:
+  itemId: ""
+auth:
+  type: bearer
+  credentials:
+    token: "{{firebaseIdToken}}"

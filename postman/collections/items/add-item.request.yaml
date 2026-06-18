@@ -1,0 +1,38 @@
+$kind: http-request
+name: Add Item
+method: POST
+url: '{{firestoreBaseUrl}}/items'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 3000
+body:
+  type: json
+  content: |-
+    {
+      "fields": {
+        "name": { "stringValue": "Test Ladder" },
+        "description": { "stringValue": "A sturdy 6-foot ladder" },
+        "category": { "stringValue": "Garden Tools" },
+        "status": { "stringValue": "available" },
+        "condition": { "stringValue": "Good" },
+        "owner_id": { "stringValue": "{{profileId}}" },
+        "is_available": { "booleanValue": true }
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response has name field", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.have.property("name");
+      });
+      const json = pm.response.json();
+      if (json.name) {
+        const newItemId = json.name.split('/').pop();
+        pm.collectionVariables.set("newItemId", newItemId);
+      }

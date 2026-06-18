@@ -1,0 +1,32 @@
+$kind: http-request
+name: Get Profile
+method: GET
+url: '{{firestoreBaseUrl}}/profiles/{{profileId}}'
+headers:
+  - key: Authorization
+    value: 'Bearer {{firebaseIdToken}}'
+order: 1000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status is 200", function() {
+        pm.response.to.have.status(200);
+      });
+      pm.test("Response has name field", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.have.property("name");
+      });
+      pm.test("Response has fields object", function() {
+        const json = pm.response.json();
+        pm.expect(json).to.have.property("fields");
+      });
+      pm.test("fields.full_name exists", function() {
+        const json = pm.response.json();
+        pm.expect(json.fields).to.have.property("full_name");
+      });
+      if (!pm.collectionVariables.get("profileId")) {
+        const json = pm.response.json();
+        const docId = json.name.split('/').pop();
+        pm.collectionVariables.set("profileId", docId);
+      }
