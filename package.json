@@ -3,7 +3,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node post-build.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node tests/run-tests.js"
   },
   "dependencies": {
     "24": "^0.0.0"
