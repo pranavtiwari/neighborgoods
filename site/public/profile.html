@@ -329,7 +329,7 @@
 
                 return `
                 <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
-                    <img alt="${escapeHtml(item.name)}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category)}"/>
+                    <img alt="${escapeHtml(item.name)}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${db.sanitizeUrl(item.image_url) || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category)}"/>
                     <div class="flex-1">
                         <h4 class="font-bold text-on-surface">${escapeHtml(item.name)}</h4>
                         <p class="${stateColorClass} text-sm mt-1">${stateText}</p>
@@ -360,8 +360,8 @@
                 <div class="bg-surface-container-low p-4 rounded-xl flex flex-col justify-between shadow-sm border border-outline-variant/10 text-left w-full">
                     <div>
                         <div class="flex items-center justify-between mb-2">
-                            <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='profile.html?userId=${r.rater_id}'">
-                                <img class="w-8 h-8 rounded-full object-cover" src="${raterAvatar}" />
+                            <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='profile.html?userId=' + encodeURIComponent(this.dataset.userId)" data-user-id="${db.escapeAttr(r.rater_id)}">
+                                <img class="w-8 h-8 rounded-full object-cover" src="${db.sanitizeUrl(raterAvatar)}" />
                                 <span class="text-sm font-bold hover:underline">${escapeHtml(raterName)}</span>
                             </div>
                             <div class="flex">${stars}</div>
@@ -454,7 +454,7 @@
 
                         return `
                         <div class="bg-surface-container-lowest p-4 rounded-xl shadow-sm flex gap-4 items-center group text-left w-full">
-                            <img alt="${escapeHtml(item.name || 'Item')}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category || 'Item')}"/>
+                            <img alt="${escapeHtml(item.name || 'Item')}" class="w-20 h-20 rounded-lg object-contain bg-stone-100 dark:bg-stone-900" src="${db.sanitizeUrl(item.image_url) || 'https://placehold.co/100x100?text=' + encodeURIComponent(item.category || 'Item')}"/>
                             <div class="flex-1 min-w-0">
                                 <div class="flex flex-wrap items-center gap-2">
                                     <h4 class="font-bold text-on-surface truncate max-w-[200px]">${escapeHtml(item.name || 'Unknown Item')}</h4>

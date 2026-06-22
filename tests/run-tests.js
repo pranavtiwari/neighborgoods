@@ -71,7 +71,7 @@ async function test(name, fn) {
 // --- FLOW 1: Authentication & Profile Creation ---
 await test('Flow 1: Email Registration, Profile Creation, Login, RequireAuth', async () => {
     // 1. Register a new user
-    await window.registerWithEmail('alice@test.com', 'password123', 'Alice');
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
     
     const user = firebase.auth().currentUser;
     assert.ok(user, 'User should be logged in after registration');
@@ -89,7 +89,7 @@ await test('Flow 1: Email Registration, Profile Creation, Login, RequireAuth', a
     assert.strictEqual(firebase.auth().currentUser, null, 'User should be null after logout');
 
     // 4. Login again
-    await window.loginWithEmail('alice@test.com', 'password123');
+    await window.loginWithEmail('alice@test.com', 'SecurePassword123');
     assert.ok(firebase.auth().currentUser, 'User should be logged back in');
 
     // 5. RequireAuth route protection
@@ -106,10 +106,10 @@ await test('Flow 1: Email Registration, Profile Creation, Login, RequireAuth', a
 // --- FLOW 2: Circles, memberships, and join requests ---
 await test('Flow 2: Circles Creation, Memberships, Join Requests, Approval/Deny', async () => {
     // Register Alice (creator) and Bob (joining user)
-    await window.registerWithEmail('alice@test.com', 'password', 'Alice');
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
     const aliceUid = firebase.auth().currentUser.uid;
     
-    await window.registerWithEmail('bob@test.com', 'password', 'Bob');
+    await window.registerWithEmail('bob@test.com', 'SecurePassword123', 'Bob');
     const bobUid = firebase.auth().currentUser.uid;
 
     // Alice creates a circle
@@ -161,7 +161,7 @@ await test('Flow 2: Circles Creation, Memberships, Join Requests, Approval/Deny'
 // --- FLOW 3: Item Listings and Category Taxonomy (Fuzzy Matches) ---
 await test('Flow 3: Category Taxonomy, Fuzzy Match, Item Operations', async () => {
     // Register Alice
-    await window.registerWithEmail('alice@test.com', 'password', 'Alice');
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
     const aliceUid = firebase.auth().currentUser.uid;
 
     // 1. Test taxonomy matching functions
@@ -199,10 +199,10 @@ await test('Flow 3: Category Taxonomy, Fuzzy Match, Item Operations', async () =
 // --- FLOW 4: Transaction Lifecycle State Machine & Undo Operations ---
 await test('Flow 4: Transaction State Machine (Requested -> Approved -> Picked Up -> Returned -> Completed), Undos, and Carbon Credits', async () => {
     // 1. Setup Alice (lender) and Bob (borrower)
-    await window.registerWithEmail('alice@test.com', 'password', 'Alice');
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
     const aliceUid = firebase.auth().currentUser.uid;
 
-    await window.registerWithEmail('bob@test.com', 'password', 'Bob');
+    await window.registerWithEmail('bob@test.com', 'SecurePassword123', 'Bob');
     const bobUid = firebase.auth().currentUser.uid;
 
     // Alice lists a lawn mower for borrowing
@@ -316,10 +316,10 @@ await test('Flow 4: Transaction State Machine (Requested -> Approved -> Picked U
 // --- FLOW 5: Chat Messaging & Inbox ---
 await test('Flow 5: Send Messages, Unread Badges, Read Marking, Realtime Subscription', async () => {
     // Setup users
-    await window.registerWithEmail('alice@test.com', 'password', 'Alice');
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
     const aliceUid = firebase.auth().currentUser.uid;
 
-    await window.registerWithEmail('bob@test.com', 'password', 'Bob');
+    await window.registerWithEmail('bob@test.com', 'SecurePassword123', 'Bob');
     const bobUid = firebase.auth().currentUser.uid;
 
     // Alice sends a message to Bob

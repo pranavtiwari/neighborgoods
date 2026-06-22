@@ -171,9 +171,14 @@
                 inboxList.innerHTML = ''; // clear loading state
                 
                 // Expose step progression & undo functions globally in messages.html so they are clickable
-                window.inboxUpdateStatus = async function(e, requestId, contextItemId, nextStatus, partnerId, currentUserId) {
+                window.inboxUpdateStatus = async function(e, btnEl) {
                     e.preventDefault();
                     e.stopPropagation();
+                    const requestId = btnEl.dataset.requestId;
+                    const contextItemId = btnEl.dataset.itemId;
+                    const nextStatus = btnEl.dataset.nextStatus;
+                    const partnerId = btnEl.dataset.partnerId;
+                    const currentUserId = btnEl.dataset.userId;
                     try {
                         if (nextStatus === 'approved') {
                             const itemData = await window.db.getItem(contextItemId);
@@ -197,9 +202,14 @@
                     }
                 };
 
-                window.inboxUndoStatus = async function(e, prevStatusKey, requestId, contextItemId, partnerId, currentUserId) {
+                window.inboxUndoStatus = async function(e, btnEl) {
                     e.preventDefault();
                     e.stopPropagation();
+                    const prevStatusKey = btnEl.dataset.prevStatusKey;
+                    const requestId = btnEl.dataset.requestId;
+                    const contextItemId = btnEl.dataset.itemId;
+                    const partnerId = btnEl.dataset.partnerId;
+                    const currentUserId = btnEl.dataset.userId;
                     if (!confirm('Revert this transaction step?')) return;
                     try {
                         let autoMsg = '';
@@ -226,6 +236,9 @@
                     }
                 };
 
+                // Prepare data arrays to trigger fetches in parallel
+                const stepperLoadPromises = [];
+
                 // Render inbox cards
                 for (const [partnerId, thread] of threads.entries()) {
                     const profile = thread.partner;
@@ -246,7 +259,7 @@
                         <a href="chat.html?userId=${partnerId}" class="flex items-center gap-4">
                             <div class="relative">
                                 <div class="w-14 h-14 rounded-full overflow-hidden bg-stone-200">
-                                    <img src="${avatarUrl}" class="w-full h-full object-cover">
+                                    <img src="${db.sanitizeUrl(avatarUrl)}" class="w-full h-full object-cover">
                                 </div>
                                 ${thread.isUnread ? `<div class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary border-2 border-surface"></div>` : ''}
                             </div>
@@ -260,104 +273,112 @@
                         </a>
                         <!-- Mini Stepper Container -->
                         <div id="${threadContainerId}" class="mt-3 pt-3 border-t border-outline-variant/5 hidden">
-                            <!-- Injected by inline async function -->
+                            <!-- Injected by async loader -->
                         </div>
                     </div>`;
 
-                    // Load active request dynamically for this card
+                    // Push load operation to parallel execution array
                     if (lastMsg.item_id) {
-                        (async () => {
-                            const activeRequest = await window.db.getActiveRequest(lastMsg.item_id, currentUser.id, partnerId);
-                            if (activeRequest && activeRequest.status !== 'declined') {
-                                const stepperDiv = document.getElementById(threadContainerId);
-                                stepperDiv.classList.remove('hidden');
-                                
-                                const itemData = await window.db.getItem(lastMsg.item_id);
-                                if (!itemData) return;
-                                
-                                const listingType = itemData.listing_type || 'free';
-                                const isLender = itemData.owner_id === currentUser.id;
-                                const isBorrower = activeRequest.borrower_id === currentUser.id;
-                                
-                                let steps = [];
-                                if (listingType === 'giveaway') {
-                                    steps = [
-                                        { label: 'Req', statusKey: 'pending' },
-                                        { label: 'Appr', statusKey: 'approved' },
-                                        { label: 'Done', statusKey: 'completed' }
-                                    ];
-                                } else {
-                                    steps = [
-                                        { label: 'Req', statusKey: 'pending' },
-                                        { label: 'Appr', statusKey: 'approved' },
-                                        { label: 'Pick', statusKey: 'borrowed' },
-                                        { label: 'Ret', statusKey: 'returned' },
-                                        { label: 'Done', statusKey: 'completed' }
-                                    ];
-                                }
-                                
-                                const currentStepIndex = steps.findIndex(s => s.statusKey === activeRequest.status);
-                                if (currentStepIndex !== -1) {
-                                    let html = `<div class="flex items-center justify-between w-full px-2 max-w-sm mx-auto">`;
-                                    steps.forEach((step, idx) => {
-                                        let stepClass = 'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold transition-all z-10 ';
-                                        let clickableAttr = 'disabled';
-                                        let clickAction = '';
-                                        
-                                        if (idx < currentStepIndex) {
-                                            // Completed
-                                            stepClass += 'bg-green-500 text-white';
-                                            if (idx === currentStepIndex - 1) {
-                                                // Undoable
-                                                let canUndo = false;
-                                                if (step.statusKey === 'pending' && isLender) canUndo = true;
-                                                if (step.statusKey === 'approved' && isBorrower && listingType !== 'giveaway') canUndo = true;
-                                                if (step.statusKey === 'borrowed' && isBorrower && listingType !== 'giveaway') canUndo = true;
-                                                if (step.statusKey === 'returned' && isLender && listingType !== 'giveaway') canUndo = true;
-                                                if (step.statusKey === 'approved' && isLender && listingType === 'giveaway') canUndo = true;
-                                                
-                                                if (canUndo) {
-                                                    clickableAttr = '';
-                                                    stepClass += ' cursor-pointer hover:bg-red-500 hover:scale-105';
-                                                    clickAction = `onclick="window.inboxUndoStatus(event, '${step.statusKey}', '${activeRequest.id}', '${lastMsg.item_id}', '${partnerId}', '${currentUser.id}')"`;
-                                                }
-                                            }
-                                        } else if (idx === currentStepIndex) {
-                                            // Active
-                                            stepClass += 'bg-primary text-white ring-2 ring-primary/20 animate-pulse';
-                                            let nextStatus = null;
-                                            if (step.statusKey === 'pending' && isLender) nextStatus = 'approved';
-                                            if (step.statusKey === 'approved') {
-                                                if (listingType === 'giveaway' && isLender) nextStatus = 'completed';
-                                                else if (listingType !== 'giveaway' && isBorrower) nextStatus = 'borrowed';
-                                            }
-                                            if (step.statusKey === 'borrowed' && isBorrower && listingType !== 'giveaway') nextStatus = 'returned';
-                                            if (step.statusKey === 'returned' && isLender && listingType !== 'giveaway') nextStatus = 'completed';
+                        stepperLoadPromises.push((async () => {
+                            try {
+                                const activeRequest = await window.db.getActiveRequest(lastMsg.item_id, currentUser.id, partnerId);
+                                if (activeRequest && activeRequest.status !== 'declined') {
+                                    const stepperDiv = document.getElementById(threadContainerId);
+                                    if (!stepperDiv) return;
+                                    stepperDiv.classList.remove('hidden');
+                                    
+                                    const itemData = await window.db.getItem(lastMsg.item_id);
+                                    if (!itemData) return;
+                                    
+                                    const listingType = itemData.listing_type || 'free';
+                                    const isLender = itemData.owner_id === currentUser.id;
+                                    const isBorrower = activeRequest.borrower_id === currentUser.id;
+                                    
+                                    let steps = [];
+                                    if (listingType === 'giveaway') {
+                                        steps = [
+                                            { label: 'Req', statusKey: 'pending' },
+                                            { label: 'Appr', statusKey: 'approved' },
+                                            { label: 'Done', statusKey: 'completed' }
+                                        ];
+                                    } else {
+                                        steps = [
+                                            { label: 'Req', statusKey: 'pending' },
+                                            { label: 'Appr', statusKey: 'approved' },
+                                            { label: 'Pick', statusKey: 'borrowed' },
+                                            { label: 'Ret', statusKey: 'returned' },
+                                            { label: 'Done', statusKey: 'completed' }
+                                        ];
+                                    }
+                                    
+                                    const currentStepIndex = steps.findIndex(s => s.statusKey === activeRequest.status);
+                                    if (currentStepIndex !== -1) {
+                                        let html = `<div class="flex items-center justify-between w-full px-2 max-w-sm mx-auto">`;
+                                        steps.forEach((step, idx) => {
+                                            let stepClass = 'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold transition-all z-10 ';
+                                            let clickableAttr = 'disabled';
+                                            let clickAction = '';
                                             
-                                            if (nextStatus) {
-                                                clickableAttr = '';
-                                                stepClass += ' cursor-pointer hover:scale-105';
-                                                clickAction = `onclick="window.inboxUpdateStatus(event, '${activeRequest.id}', '${lastMsg.item_id}', '${nextStatus}', '${partnerId}', '${currentUser.id}')"`;
+                                            if (idx < currentStepIndex) {
+                                                // Completed
+                                                stepClass += 'bg-green-500 text-white';
+                                                if (idx === currentStepIndex - 1) {
+                                                    // Undoable
+                                                    let canUndo = false;
+                                                    if (step.statusKey === 'pending' && isLender) canUndo = true;
+                                                    if (step.statusKey === 'approved' && isBorrower && listingType !== 'giveaway') canUndo = true;
+                                                    if (step.statusKey === 'borrowed' && isBorrower && listingType !== 'giveaway') canUndo = true;
+                                                    if (step.statusKey === 'returned' && isLender && listingType !== 'giveaway') canUndo = true;
+                                                    if (step.statusKey === 'approved' && isLender && listingType === 'giveaway') canUndo = true;
+                                                    
+                                                    if (canUndo) {
+                                                        clickableAttr = '';
+                                                        stepClass += ' cursor-pointer hover:bg-red-500 hover:scale-105';
+                                                        clickAction = `onclick="window.inboxUndoStatus(event, this)" data-prev-status-key="${db.escapeAttr(step.statusKey)}" data-request-id="${db.escapeAttr(activeRequest.id)}" data-item-id="${db.escapeAttr(lastMsg.item_id)}" data-partner-id="${db.escapeAttr(partnerId)}" data-user-id="${db.escapeAttr(currentUser.id)}"`;
+                                                    }
+                                                }
+                                            } else if (idx === currentStepIndex) {
+                                                // Active
+                                                stepClass += 'bg-primary text-white ring-2 ring-primary/20 animate-pulse';
+                                                let nextStatus = null;
+                                                if (step.statusKey === 'pending' && isLender) nextStatus = 'approved';
+                                                if (step.statusKey === 'approved') {
+                                                    if (listingType === 'giveaway' && isLender) nextStatus = 'completed';
+                                                    else if (listingType !== 'giveaway' && isBorrower) nextStatus = 'borrowed';
+                                                }
+                                                if (step.statusKey === 'borrowed' && isBorrower && listingType !== 'giveaway') nextStatus = 'returned';
+                                                if (step.statusKey === 'returned' && isLender && listingType !== 'giveaway') nextStatus = 'completed';
+                                                
+                                                if (nextStatus) {
+                                                    clickableAttr = '';
+                                                    stepClass += ' cursor-pointer hover:scale-105';
+                                                    clickAction = `onclick="window.inboxUpdateStatus(event, this)" data-request-id="${db.escapeAttr(activeRequest.id)}" data-item-id="${db.escapeAttr(lastMsg.item_id)}" data-next-status="${db.escapeAttr(nextStatus)}" data-partner-id="${db.escapeAttr(partnerId)}" data-user-id="${db.escapeAttr(currentUser.id)}"`;
+                                                }
+                                            } else {
+                                                // Upcoming
+                                                stepClass += 'bg-stone-200 text-stone-500';
                                             }
-                                        } else {
-                                            // Upcoming
-                                            stepClass += 'bg-stone-200 text-stone-500';
-                                        }
-                                        
-                                        html += `
-                                        <div class="flex flex-col items-center relative flex-1">
-                                            <button ${clickableAttr} ${clickAction} class="${stepClass}">${idx < currentStepIndex ? '✓' : idx + 1}</button>
-                                            <span class="text-[8px] font-bold text-stone-400 mt-1">${step.label}</span>
-                                            ${idx < steps.length - 1 ? `<div class="absolute top-3 left-[50%] right-[-50%] h-[1.5px] -z-0 ${idx < currentStepIndex ? 'bg-green-500' : 'bg-stone-200'}"></div>` : ''}
-                                        </div>`;
-                                    });
-                                    html += `</div>`;
-                                    stepperDiv.innerHTML = html;
+                                            
+                                            html += `
+                                            <div class="flex flex-col items-center relative flex-1">
+                                                <button ${clickableAttr} ${clickAction} class="${stepClass}">${idx < currentStepIndex ? '✓' : idx + 1}</button>
+                                                <span class="text-[8px] font-bold text-stone-400 mt-1">${step.label}</span>
+                                                ${idx < steps.length - 1 ? `<div class="absolute top-3 left-[50%] right-[-50%] h-[1.5px] -z-0 ${idx < currentStepIndex ? 'bg-green-500' : 'bg-stone-200'}"></div>` : ''}
+                                            </div>`;
+                                        });
+                                        html += `</div>`;
+                                        stepperDiv.innerHTML = html;
+                                    }
                                 }
+                            } catch (e) {
+                                console.error("Error loading stepper thread data:", e);
                             }
-                        })();
+                        })());
                     }
                 }
+
+                // Execute all stepper requests in parallel
+                await Promise.all(stepperLoadPromises);
 
             } catch (err) {
                 console.error(err);

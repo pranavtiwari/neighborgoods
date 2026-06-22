@@ -394,7 +394,7 @@
                                 <span class="text-[10px] text-stone-400 mt-2 block font-medium uppercase tracking-wider">${relativeTime}</span>
                             </div>
                         </div>
-                        <button onclick="window.location.href='${action.actionUrl}'" class="mt-auto w-full py-2.5 bg-primary-container hover:bg-primary text-on-primary font-bold rounded-lg text-sm transition-colors active:scale-95 duration-100">
+                        <button onclick="window.location.href=this.dataset.url" data-url="${db.escapeAttr(action.actionUrl)}" class="mt-auto w-full py-2.5 bg-primary-container hover:bg-primary text-on-primary font-bold rounded-lg text-sm transition-colors active:scale-95 duration-100">
                             ${action.actionText}
                         </button>
                     </div>
@@ -451,10 +451,10 @@
                     ? `<span class="absolute top-3 right-3 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md z-10 animate-bounce" title="${pendingCount} borrow request(s) waiting for approval">${pendingCount}</span>` 
                     : '';
                 
-                return '<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group cursor-pointer relative" onclick="window.location.href=\'item-details.html?id=' + item.id + '\'">' +
+                return '<div class="snap-start flex-shrink-0 w-72 bg-surface-container-low rounded-xl overflow-hidden group cursor-pointer relative" onclick="window.location.href=\'item-details.html?id=\' + encodeURIComponent(this.dataset.itemId)" data-item-id="' + db.escapeAttr(item.id) + '">' +
                         badgeHtml +
                         '<div class="h-48 overflow-hidden">' +
-                            '<img class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 group-hover:scale-105 transition-transform duration-500" src="' + imageUrl + '" alt="' + escapeHtml(item.name) + '" />' +
+                            '<img class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 group-hover:scale-105 transition-transform duration-500" src="' + db.sanitizeUrl(imageUrl) + '" alt="' + escapeHtml(item.name) + '" />' +
                         '</div>' +
                         '<div class="p-5">' +
                             '<div class="flex justify-between items-start mb-2">' +
@@ -563,12 +563,12 @@
 
             grid.innerHTML = circles.map(circle => {
                 return `
-                <div onclick="window.location.href='circle-detail.html?id=${circle.id}'" class="bg-surface-container-low p-6 rounded-2xl shadow-sm border border-outline-variant/10 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer flex flex-col justify-between min-h-[160px]">
+                <div onclick="window.location.href='circle-detail.html?id=' + encodeURIComponent(this.dataset.circleId)" data-circle-id="${db.escapeAttr(circle.id)}" class="bg-surface-container-low p-6 rounded-2xl shadow-sm border border-outline-variant/10 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer flex flex-col justify-between min-h-[160px]">
                     <div>
                         <div class="flex items-center gap-3 mb-3">
                             <div class="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-primary/10 flex items-center justify-center text-primary border border-outline-variant/10 shadow-inner">
                                 ${circle.image_url 
-                                    ? `<img src="${circle.image_url}" class="w-full h-full object-cover" alt="${escapeHtml(circle.name)}">` 
+                                    ? `<img src="${db.sanitizeUrl(circle.image_url)}" class="w-full h-full object-cover" alt="${escapeHtml(circle.name)}">` 
                                     : `<span class="material-symbols-outlined text-2xl">groups</span>`
                                 }
                             </div>

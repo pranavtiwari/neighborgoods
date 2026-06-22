@@ -246,8 +246,8 @@
                     <div class="bg-surface-container-low p-5 rounded-xl flex flex-col justify-between shadow-sm border border-outline-variant/10 text-left">
                         <div>
                             <div class="flex items-center justify-between mb-3">
-                                <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='profile.html?userId=${r.rater_id}'">
-                                    <img class="w-8 h-8 rounded-full object-cover" src="${raterAvatar}" />
+                                <div class="flex items-center gap-2 cursor-pointer" onclick="window.location.href='profile.html?userId=' + encodeURIComponent(this.dataset.userId)" data-user-id="${db.escapeAttr(r.rater_id)}">
+                                    <img class="w-8 h-8 rounded-full object-cover" src="${db.sanitizeUrl(raterAvatar)}" />
                                     <span class="text-sm font-bold hover:underline">${escapeHtml(raterName)}</span>
                                 </div>
                                 <div class="flex">${stars}</div>

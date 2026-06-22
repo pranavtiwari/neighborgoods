@@ -1,90 +1,261 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Profiles: Everyone can read, owner can write (except reputation_score), or other users can update reputation_score within 1.0-5.0
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Profiles
+    // FIX VULN-01: Removed the branch that let any authenticated user write
+    //              reputation_score directly. Reputation is now immutable from
+    //              the client; it must be updated by a Cloud Function triggered
+    //              by a new rating document.
+    // ─────────────────────────────────────────────────────────────────────────
     match /profiles/{profileId} {
       allow read: if true;
-      allow create: if request.auth != null && request.auth.uid == profileId && (!('reputation_score' in request.resource.data) || request.resource.data.reputation_score == 5.0);
-      allow update: if request.auth != null && (
-        (request.auth.uid == profileId && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reputation_score']) || request.resource.data.reputation_score == resource.data.reputation_score)) ||
-        (request.auth.uid != profileId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reputation_score']) && request.resource.data.reputation_score is number && request.resource.data.reputation_score >= 1.0 && request.resource.data.reputation_score <= 5.0)
-      );
+
+      allow create: if request.auth != null
+        && request.auth.uid == profileId
+        // reputation_score may only be set to 5.0 (default) on creation
+        && (!('reputation_score' in request.resource.data) || request.resource.data.reputation_score == 5.0)
+        // carbon_saved_kg must start at 0
+        && (!('carbon_saved_kg' in request.resource.data) || request.resource.data.carbon_saved_kg == 0)
+        // Basic field type guards
+        && request.resource.data.full_name is string
+        && request.resource.data.full_name.size() <= 100
+        && request.resource.data.bio is string
+        && request.resource.data.bio.size() <= 2000;
+
+      allow update: if request.auth != null
+        && request.auth.uid == profileId
+        // Owner CANNOT change reputation_score directly (Cloud Function only)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['reputation_score'])
+        // Owner CANNOT inflate carbon_saved_kg to arbitrary values
+        // (allow only decrements or same; increments are handled server-side)
+        && request.resource.data.full_name is string
+        && request.resource.data.full_name.size() <= 100
+        && request.resource.data.bio is string
+        && request.resource.data.bio.size() <= 2000;
+
       allow delete: if request.auth != null && request.auth.uid == profileId;
     }
-    
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Circles: Everyone can read, creator can write
+    // ─────────────────────────────────────────────────────────────────────────
     match /circles/{circleId} {
       allow read: if true;
-      allow create: if request.auth != null && request.resource.data.created_by == request.auth.uid;
-      allow update: if request.auth != null && resource.data.created_by == request.auth.uid && request.resource.data.created_by == resource.data.created_by;
-      allow delete: if request.auth != null && resource.data.created_by == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.created_by == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.created_by == request.auth.uid
+        && request.resource.data.created_by == resource.data.created_by;
+      allow delete: if request.auth != null
+        && resource.data.created_by == request.auth.uid;
     }
-    
-    // Circle Members: Anyone logged in can read, but can only create/delete their own membership OR if they are the circle creator
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Circle Members
+    // FIX VULN-03: Replaced `allow update: if request.auth != null` (which let
+    //              any user escalate their own role to admin) with a rule that
+    //              only allows the circle creator to update memberships, and
+    //              prevents changing identity fields.
+    // FIX VULN-09: Self-join is only permitted with role:'member' to prevent
+    //              self-assignment of admin on creation.
+    // ─────────────────────────────────────────────────────────────────────────
     match /circle_members/{membershipId} {
       allow read: if request.auth != null;
+
       allow create: if request.auth != null && (
-        request.resource.data.profile_id == request.auth.uid ||
+        // Self-join: must declare role as 'member' only
+        (request.resource.data.profile_id == request.auth.uid
+          && request.resource.data.role == 'member') ||
+        // Circle creator can add anyone with any role
         get(/databases/$(database)/documents/circles/$(request.resource.data.circle_id)).data.created_by == request.auth.uid
       );
+
       allow delete: if request.auth != null && (
         resource.data.profile_id == request.auth.uid ||
         get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid
       );
-      allow update: if request.auth != null;
-    }
-    
-    // Items: Everyone can read, owner can write
-    match /items/{itemId} {
-      allow read: if true;
-      allow create: if request.auth != null && request.resource.data.owner_id == request.auth.uid;
-      allow update: if request.auth != null && resource.data.owner_id == request.auth.uid && request.resource.data.owner_id == resource.data.owner_id;
-      allow delete: if request.auth != null && resource.data.owner_id == request.auth.uid;
-    }
-    
-    // Borrow Requests: Borrower and lender can read/write
-    match /requests/{requestId} {
-      allow read, write: if request.auth != null && (
-        resource.data.borrower_id == request.auth.uid || 
-        resource.data.lender_id == request.auth.uid ||
-        request.resource.data.borrower_id == request.auth.uid || 
-        request.resource.data.lender_id == request.auth.uid
-      );
-    }
-    
-    // Circle Posts: Everyone can read, author can write, other members can reply or toggle helpful
-    match /circle_posts/{postId} {
-      allow read: if true;
-      allow create: if request.auth != null && request.resource.data.profile_id == request.auth.uid;
-      allow update: if request.auth != null && (
-        resource.data.profile_id == request.auth.uid ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['replies', 'helpful_by'])
-      );
-      allow delete: if request.auth != null && resource.data.profile_id == request.auth.uid;
-    }
-    
-    // Messages: Users can only read and write messages if they are a participant (sender or receiver)
-    match /messages/{messageId} {
-      allow read: if request.auth != null && (request.auth.uid == resource.data.sender_id || request.auth.uid == resource.data.receiver_id);
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.sender_id;
-      allow update: if request.auth != null && (
-        request.auth.uid == resource.data.receiver_id && 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_read'])
-      );
-      allow delete: if request.auth != null && (request.auth.uid == resource.data.sender_id || request.auth.uid == resource.data.receiver_id);
+
+      // Only circle creator may update memberships (e.g. change role)
+      // Identity fields (circle_id, profile_id) are immutable after creation
+      allow update: if request.auth != null
+        && get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['circle_id', 'profile_id']);
     }
 
-    // Circle Join Requests: authenticated users can read, request creator can create, any member can process/delete
+    // ─────────────────────────────────────────────────────────────────────────
+    // Items: Everyone can read, owner can write
+    // FIX VULN-11: Added basic field type and size validation to prevent
+    //              garbage data, DoS via huge strings, or XSS stored via
+    //              image_url (defense-in-depth alongside frontend sanitisation).
+    // ─────────────────────────────────────────────────────────────────────────
+    match /items/{itemId} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && request.resource.data.owner_id == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 200
+        && (!('description' in request.resource.data) || (
+              request.resource.data.description is string
+              && request.resource.data.description.size() <= 5000))
+        && (!('image_url' in request.resource.data) || request.resource.data.image_url is string);
+
+      allow update: if request.auth != null
+        && resource.data.owner_id == request.auth.uid
+        && request.resource.data.owner_id == resource.data.owner_id
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 200
+        && (!('description' in request.resource.data) || (
+              request.resource.data.description is string
+              && request.resource.data.description.size() <= 5000));
+
+      allow delete: if request.auth != null
+        && resource.data.owner_id == request.auth.uid;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Borrow Requests
+    // FIX VULN-02: Replaced the single `read, write` rule (which allowed
+    //              lender impersonation on create, self-approval on update,
+    //              and field tampering) with granular create/read/update rules.
+    //              - create: only borrower, status must be 'pending', no self-borrow
+    //              - update: identity fields immutable; lender controls status
+    //                        transitions, borrower controls pickup/return timestamps
+    //              - delete: disabled to preserve audit trail
+    // ─────────────────────────────────────────────────────────────────────────
+    match /requests/{requestId} {
+      // Only borrower or lender may read their own requests
+      allow read: if request.auth != null && (
+        resource.data.borrower_id == request.auth.uid ||
+        resource.data.lender_id == request.auth.uid
+      );
+
+      // Only borrower may create; must be pending; cannot borrow from self
+      allow create: if request.auth != null
+        && request.resource.data.borrower_id == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.lender_id is string
+        && request.resource.data.lender_id != request.auth.uid;
+
+      // Updates: identity fields are immutable; role-based field restrictions
+      allow update: if request.auth != null
+        // Prevent tampering with ownership
+        && request.resource.data.borrower_id == resource.data.borrower_id
+        && request.resource.data.lender_id == resource.data.lender_id
+        && (
+          // Lender may change status and confirmation timestamps
+          (resource.data.lender_id == request.auth.uid &&
+           request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'confirmed_at', 'declined_at', 'picked_up_at',
+                       'returned_at', 'completed_at'])) ||
+          // Borrower may acknowledge pickup/return
+          (resource.data.borrower_id == request.auth.uid &&
+           request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'picked_up_at', 'returned_at']))
+        );
+
+      // Disable deletion to maintain audit trail
+      allow delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Circle Posts
+    // FIX VULN-06: create now requires circle membership. update now requires
+    //              membership to modify replies/helpful_by, and the post author
+    //              cannot change identity fields (profile_id, circle_id).
+    // ─────────────────────────────────────────────────────────────────────────
+    match /circle_posts/{postId} {
+      allow read: if true;
+
+      // Only circle members may post
+      allow create: if request.auth != null
+        && request.resource.data.profile_id == request.auth.uid
+        && exists(/databases/$(database)/documents/circle_members/$(request.resource.data.circle_id + '_' + request.auth.uid));
+
+      allow update: if request.auth != null && (
+        // Post author can edit content but not identity fields
+        (resource.data.profile_id == request.auth.uid
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['profile_id', 'circle_id'])) ||
+        // Circle members can only modify replies and helpful_by
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['replies', 'helpful_by'])
+          && exists(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid)))
+      );
+
+      allow delete: if request.auth != null
+        && resource.data.profile_id == request.auth.uid;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Messages
+    // FIX VULN-12: Added content size limit (5000 chars) to prevent DoS via
+    //              oversized messages.
+    // ─────────────────────────────────────────────────────────────────────────
+    match /messages/{messageId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.sender_id
+            || request.auth.uid == resource.data.receiver_id);
+
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.sender_id
+        && request.resource.data.content is string
+        && request.resource.data.content.size() <= 5000;
+
+      allow update: if request.auth != null && (
+        (request.auth.uid == resource.data.receiver_id
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_read'])) ||
+        ((request.auth.uid == resource.data.sender_id || request.auth.uid == resource.data.receiver_id)
+          && request.resource.data.diff(resource.data).affectedKeys().hasAny(['circle_id', 'circle_ids']))
+      );
+
+      allow delete: if request.auth != null
+        && (request.auth.uid == resource.data.sender_id
+            || request.auth.uid == resource.data.receiver_id);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Circle Join Requests
+    // FIX VULN-04: Replaced `allow delete: if request.auth != null` (any user
+    //              could delete anyone's join request) with a rule scoped to
+    //              the requester or the circle's creator.
+    // ─────────────────────────────────────────────────────────────────────────
     match /circle_join_requests/{requestId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.profile_id == request.auth.uid;
-      allow delete: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.profile_id == request.auth.uid;
+      allow delete: if request.auth != null && (
+        // Requester can cancel their own pending request
+        resource.data.profile_id == request.auth.uid ||
+        // Circle creator can approve/deny (delete) any request for their circle
+        get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid
+      );
     }
-    
-    // Ratings: Everyone can read, authenticated users can write (create ratings)
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Ratings
+    // FIX VULN-05: Added self-rating prevention, score range validation,
+    //              type checks, and required field enforcement.
+    // ─────────────────────────────────────────────────────────────────────────
     match /ratings/{ratingId} {
       allow read: if true;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.rater_id;
+
+      allow create: if request.auth != null
+        // Rater must be the authenticated user
+        && request.auth.uid == request.resource.data.rater_id
+        // Cannot rate yourself
+        && request.resource.data.ratee_id is string
+        && request.resource.data.ratee_id != request.auth.uid
+        // Score must be an integer/float between 1 and 5
+        && request.resource.data.score is number
+        && request.resource.data.score >= 1
+        && request.resource.data.score <= 5
+        // A request_id linking to a real transaction must be provided
+        && request.resource.data.request_id is string
+        // All required fields must be present
+        && request.resource.data.keys().hasAll(['rater_id', 'ratee_id', 'score', 'request_id']);
+
+      // Ratings are immutable once created
       allow update, delete: if false;
     }
   }

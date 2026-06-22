@@ -1,8 +1,9 @@
 node_modules/
 .DS_Store
 site/public/config.js
-.env
-.env.local
+**/.env
+**/.env.local
+**/.env.*.local
 dist/
 .firebase/
 scratch/

@@ -155,7 +155,10 @@
     const escapeHtml = window.db.escapeHtml;
 
     // --- Approve / Decline handlers (called from inline onclick) ---
-    async function handleApprove(requestId, itemId, listingType, btnEl) {
+    async function handleApprove(btnEl) {
+        const requestId = btnEl.dataset.requestId;
+        const itemId = btnEl.dataset.itemId;
+        const listingType = btnEl.dataset.listingType;
         const card = document.getElementById(`req-card-${requestId}`);
         const isGiveaway = listingType === 'giveaway';
         const confirmMsg = isGiveaway
@@ -180,7 +183,8 @@
         }
     }
 
-    async function handleDecline(requestId, btnEl) {
+    async function handleDecline(btnEl) {
+        const requestId = btnEl.dataset.requestId;
         const card = document.getElementById(`req-card-${requestId}`);
         btnEl.disabled = true;
         btnEl.textContent = 'Declining...';
@@ -221,7 +225,9 @@
     }
 
     // --- Return Flow handlers ---
-    async function handleMarkPickedUp(requestId, itemId, btnEl) {
+    async function handleMarkPickedUp(btnEl) {
+        const requestId = btnEl.dataset.requestId;
+        const itemId = btnEl.dataset.itemId;
         if (!confirm("Are you sure you want to mark this item as picked up?")) return;
         btnEl.disabled = true;
         btnEl.textContent = 'Updating...';
@@ -235,7 +241,8 @@
         }
     }
 
-    async function handleMarkReturned(requestId, btnEl) {
+    async function handleMarkReturned(btnEl) {
+        const requestId = btnEl.dataset.requestId;
         if (!confirm("Are you sure you want to mark this item as returned?")) return;
         btnEl.disabled = true;
         btnEl.textContent = 'Updating...';
@@ -249,7 +256,8 @@
         }
     }
 
-    async function handleConfirmReturn(requestId, btnEl) {
+    async function handleConfirmReturn(btnEl) {
+        const requestId = btnEl.dataset.requestId;
         if (!confirm("Confirm that this item has been returned to you in good condition?")) return;
         btnEl.disabled = true;
         btnEl.textContent = 'Confirming...';
@@ -268,7 +276,10 @@
     let activeRatingRequestId = null;
     let activeRatingRateeId = null;
 
-    function openRatingModal(requestId, rateeId, rateeName) {
+    function openRatingModal(btnEl) {
+        const requestId = btnEl.dataset.requestId;
+        const rateeId = btnEl.dataset.targetId;
+        const rateeName = btnEl.dataset.targetName;
         activeRatingRequestId = requestId;
         activeRatingRateeId = rateeId;
         document.getElementById('rating-modal-subtitle').textContent = `How was your interaction with ${rateeName}?`;
@@ -479,7 +490,8 @@
                                     Item already lent
                                 </span>
                                 <button
-                                    onclick="handleDecline('${req.id}', this)"
+                                    onclick="handleDecline(this)"
+                                    data-request-id="${db.escapeAttr(req.id)}"
                                     class="bg-surface-container text-on-surface-variant px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-200 transition-colors active:scale-95">
                                     ✕ Decline
                                 </button>`;
@@ -487,12 +499,16 @@
                             const approveLabel = isGiveaway ? '🎁 Confirm Give Away' : '✓ Approve';
                             actionButtons = `
                                 <button
-                                    onclick="handleApprove('${req.id}', '${item.id}', '${item.listing_type || 'free'}', this)"
+                                    onclick="handleApprove(this)"
+                                    data-request-id="${db.escapeAttr(req.id)}"
+                                    data-item-id="${db.escapeAttr(item.id)}"
+                                    data-listing-type="${db.escapeAttr(item.listing_type || 'free')}"
                                     class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95">
                                     ${approveLabel}
                                 </button>
                                 <button
-                                    onclick="handleDecline('${req.id}', this)"
+                                    onclick="handleDecline(this)"
+                                    data-request-id="${db.escapeAttr(req.id)}"
                                     class="bg-surface-container text-on-surface-variant px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-200 transition-colors active:scale-95">
                                     ✕ Decline
                                 </button>`;
@@ -500,28 +516,33 @@
                     } else if (!isOwnerView && isPending) {
                         actionButtons = `
                             <button
-                                onclick="handleDecline('${req.id}', this)"
+                                onclick="handleDecline(this)"
+                                data-request-id="${db.escapeAttr(req.id)}"
                                 class="bg-surface-container text-on-surface-variant px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-200 transition-colors active:scale-95">
                                 ✕ Cancel Request
                             </button>`;
                     } else if (!isOwnerView && req.status === 'approved') {
                         actionButtons = `
                             <button
-                                onclick="handleMarkPickedUp('${req.id}', '${item.id}', this)"
+                                onclick="handleMarkPickedUp(this)"
+                                data-request-id="${db.escapeAttr(req.id)}"
+                                data-item-id="${db.escapeAttr(item.id)}"
                                 class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
                                 <span class="material-symbols-outlined text-[16px]">shopping_bag</span> Mark Picked Up
                             </button>`;
                     } else if (!isOwnerView && req.status === 'borrowed') {
                         actionButtons = `
                             <button
-                                onclick="handleMarkReturned('${req.id}', this)"
+                                onclick="handleMarkReturned(this)"
+                                data-request-id="${db.escapeAttr(req.id)}"
                                 class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
                                 <span class="material-symbols-outlined text-[16px]">keyboard_return</span> Mark as Returned
                             </button>`;
                     } else if (isOwnerView && req.status === 'returned') {
                         actionButtons = `
                             <button
-                                onclick="handleConfirmReturn('${req.id}', this)"
+                                onclick="handleConfirmReturn(this)"
+                                data-request-id="${db.escapeAttr(req.id)}"
                                 class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95">
                                 ✓ Confirm Return Received
                             </button>`;
@@ -531,7 +552,7 @@
                     <div id="req-card-${req.id}" class="bg-surface-container-lowest rounded-xl p-5 group hover:shadow-lg transition-shadow">
                         <div class="flex gap-4 mb-4">
                             <div class="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-                                <img class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900" src="${item.image_url || 'https://placehold.co/200x200'}" />
+                                <img class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900" src="${db.sanitizeUrl(item.image_url) || 'https://placehold.co/200x200'}" />
                             </div>
                             <div class="flex-1 min-w-0">
                                 <div class="flex justify-between items-start">
@@ -543,7 +564,7 @@
                                 </div>
                                 <p class="text-on-surface-variant text-sm flex items-center gap-1 mt-1 truncate">
                                     <span class="material-symbols-outlined text-sm">person</span>
-                                    ${otherParty ? `<span class="hover:underline cursor-pointer font-medium" onclick="window.location.href='profile.html?userId=${otherParty.id}'">${escapeHtml(otherParty.full_name || 'Neighbor')}</span>` : 'Neighbor'}
+                                    ${otherParty ? `<span class="hover:underline cursor-pointer font-medium" onclick="window.location.href='profile.html?userId=' + encodeURIComponent(this.dataset.userId)" data-user-id="${db.escapeAttr(otherParty.id)}">${escapeHtml(otherParty.full_name || 'Neighbor')}</span>` : 'Neighbor'}
                                     ${partnerRatingHtml}
                                 </p>
                                 ${isGiveaway ? '<span class="inline-block mt-2 text-[10px] font-bold uppercase tracking-widest text-teal-600 bg-teal-50 dark:bg-teal-950/40 dark:text-teal-300 px-2 py-0.5 rounded-full">Give Away</span>' : ''}
@@ -551,7 +572,9 @@
                             </div>
                         </div>
                         <div class="flex justify-between items-center pt-4 border-t border-surface-container-low gap-3 flex-wrap">
-                            <button onclick="window.location.href='chat.html?userId=${currentView === 'borrowing' ? item.owner_id : req.borrower_id}&itemId=${item.id}'"
+                            <button onclick="window.location.href='chat.html?userId=' + encodeURIComponent(this.dataset.userId) + '&itemId=' + encodeURIComponent(this.dataset.itemId)"
+                                data-user-id="${db.escapeAttr(currentView === 'borrowing' ? item.owner_id : req.borrower_id)}"
+                                data-item-id="${db.escapeAttr(item.id)}"
                                 class="text-primary font-semibold text-sm hover:underline">
                                 Message
                             </button>
@@ -664,7 +687,10 @@
                                 const targetName = name;
                                 pastActionBtn = `
                                     <button
-                                        onclick="openRatingModal('${req.id}', '${targetId}', '${targetName}')"
+                                        onclick="openRatingModal(this)"
+                                        data-request-id="${db.escapeAttr(req.id)}"
+                                        data-target-id="${db.escapeAttr(targetId)}"
+                                        data-target-name="${db.escapeAttr(targetName)}"
                                         class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors active:scale-95 flex items-center gap-1 shadow-sm shrink-0">
                                         <span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span> Rate Exchange
                                     </button>`;
@@ -672,7 +698,7 @@
                                 pastActionBtn = `<span class="text-xs text-stone-400 font-medium italic bg-stone-100 dark:bg-stone-800 px-2 py-1 rounded shrink-0">Permanent Gift</span>`;
                             } else {
                                 const btnText = item.listing_type === 'rental' ? 'Rent Again' : 'Borrow Again';
-                                pastActionBtn = `<button onclick="window.location.href='item-details.html?id=${item.id}'" class="text-sm font-bold text-primary hover:underline shrink-0">${btnText}</button>`;
+                                pastActionBtn = `<button onclick="window.location.href='item-details.html?id=' + encodeURIComponent(this.dataset.itemId)" data-item-id="${db.escapeAttr(item.id)}" class="text-sm font-bold text-primary hover:underline shrink-0">${btnText}</button>`;
                             }
                         } else {
                             pastActionBtn = `<span class="text-xs text-stone-400 italic shrink-0">Inactive</span>`;

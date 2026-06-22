@@ -484,14 +484,7 @@
                 const itemOwnerId = itemData.owner_id;
                 const listingType = itemData.listing_type || 'free';
 
-                const snap = await firebase.firestore().collection('requests')
-                    .where('item_id', '==', contextItemId)
-                    .get();
-                
-                activeRequest = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).find(req => {
-                    return (req.borrower_id === currentUser.uid && itemOwnerId === targetUserId) ||
-                           (req.borrower_id === targetUserId && itemOwnerId === currentUser.uid);
-                });
+                activeRequest = await window.db.getActiveRequest(contextItemId, currentUser.uid, targetUserId);
 
                 const bar = document.getElementById('transaction-bar');
                 if (!activeRequest) {
@@ -711,7 +704,7 @@
                 chatMessages.innerHTML += `
                 <div class="flex gap-3 max-w-[85%] self-start mt-4 w-full">
                     <div class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 mt-1">
-                        <img src="${targetUser?.avatar_url || 'https://placehold.co/100x100?text=U'}" class="w-full h-full object-cover">
+                        <img src="${db.sanitizeUrl(targetUser?.avatar_url) || 'https://placehold.co/100x100?text=U'}" class="w-full h-full object-cover">
                     </div>
                     <div>
                         <div class="bg-stone-200/50 text-on-surface p-4 rounded-2xl rounded-tl-none leading-relaxed break-words">

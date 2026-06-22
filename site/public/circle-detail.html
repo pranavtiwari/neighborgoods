@@ -655,7 +655,7 @@
                 return `
                 <div onclick="window.location.href='item-details.html?id=${item.id}'" class="group bg-surface rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 border border-outline-variant/10 cursor-pointer flex flex-col h-full">
                     <div class="relative aspect-square w-full overflow-hidden bg-surface-container-low flex-shrink-0 flex items-center justify-center p-4">
-                        <img src="${item.image_url || 'https://placehold.co/300x300?text=Item'}" class="w-full h-full object-contain rounded-xl bg-stone-50 dark:bg-stone-900 group-hover:scale-105 transition-transform duration-500">
+                        <img src="${db.sanitizeUrl(item.image_url) || 'https://placehold.co/300x300?text=Item'}" class="w-full h-full object-contain rounded-xl bg-stone-50 dark:bg-stone-900 group-hover:scale-105 transition-transform duration-500">
                     </div>
                     <div class="p-4 flex-1 flex flex-col justify-between">
                         <div>
@@ -811,7 +811,7 @@
                     const displayMembers = members.slice(0, 4);
                     const avatarContainer = document.getElementById('member-avatars');
                     avatarContainer.innerHTML = displayMembers.map(m =>
-                        `<img class="h-10 w-10 rounded-full ring-4 ring-surface object-cover" src="${m.avatar_url || 'https://i.pravatar.cc/150?u=' + m.id}" />`
+                        `<img class="h-10 w-10 rounded-full ring-4 ring-surface object-cover" src="${db.sanitizeUrl(m.avatar_url) || 'https://i.pravatar.cc/150?u=' + m.id}" />`
                     ).join('');
                     if (members.length > 4) {
                         avatarContainer.innerHTML += `<div class="h-10 w-10 rounded-full bg-surface-container ring-4 ring-surface flex items-center justify-center text-[10px] font-black text-primary">+${members.length - 4}</div>`;
@@ -978,7 +978,7 @@
                 return `
                 <div class="bg-white dark:bg-stone-900 rounded-xl p-4 shadow-sm border border-outline-variant/10 flex flex-col gap-3">
                     <div class="flex items-center gap-3">
-                        <img class="h-10 w-10 rounded-full object-cover shrink-0" src="${avatar}">
+                        <img class="h-10 w-10 rounded-full object-cover shrink-0" src="${db.sanitizeUrl(avatar)}">
                         <div class="flex-1 min-w-0">
                             <p class="font-bold text-sm text-on-surface truncate">${escapeHtml(name)}</p>
                             <div class="flex items-center gap-1.5 mt-0.5">
@@ -994,14 +994,15 @@
                     ${messageHtml}
                     ${detailsHtml}
                     <div class="flex gap-2 mt-1">
-                        <button onclick="handleApprove('${req.profile_id}')" class="flex-1 py-2 rounded-xl bg-primary text-on-primary text-xs font-bold active:scale-95 transition-all shadow-sm">Approve</button>
-                        <button onclick="handleDeny('${req.profile_id}')" class="flex-1 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-850 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs font-bold active:scale-95 transition-all">Deny</button>
+                        <button onclick="handleApprove(this)" data-profile-id="${db.escapeAttr(req.profile_id)}" class="flex-1 py-2 rounded-xl bg-primary text-on-primary text-xs font-bold active:scale-95 transition-all shadow-sm">Approve</button>
+                        <button onclick="handleDeny(this)" data-profile-id="${db.escapeAttr(req.profile_id)}" class="flex-1 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-850 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs font-bold active:scale-95 transition-all">Deny</button>
                     </div>
                 </div>`;
             }).join('');
         }
 
-        async function handleApprove(profileId) {
+        async function handleApprove(btnEl) {
+            const profileId = btnEl.dataset.profileId;
             try {
                 await window.db.approveJoinRequest(currentCircleId, profileId);
                 loadJoinRequests();
@@ -1012,7 +1013,8 @@
         }
         window.handleApprove = handleApprove;
 
-        async function handleDeny(profileId) {
+        async function handleDeny(btnEl) {
+            const profileId = btnEl.dataset.profileId;
             try {
                 await window.db.denyJoinRequest(currentCircleId, profileId);
                 loadJoinRequests();
@@ -1212,7 +1214,8 @@
         };
 
         // --- Feed ---
-        async function toggleHelpful(postId) {
+        async function toggleHelpful(btnEl) {
+            const postId = btnEl.dataset.postId;
             const user = firebase.auth().currentUser;
             if (!user) { alert("Please log in."); return; }
             try {
@@ -1230,7 +1233,8 @@
         }
         window.toggleHelpful = toggleHelpful;
 
-        function toggleRepliesSection(postId) {
+        function toggleRepliesSection(btnEl) {
+            const postId = btnEl.dataset.postId;
             const section = document.getElementById(`replies-section-${postId}`);
             if (section) {
                 section.classList.toggle('hidden');
@@ -1239,7 +1243,8 @@
         }
         window.toggleRepliesSection = toggleRepliesSection;
 
-        async function submitReply(postId) {
+        async function submitReply(btnEl) {
+            const postId = btnEl.dataset.postId;
             const user = firebase.auth().currentUser;
             if (!user) { alert("Please log in to reply."); return; }
             const input = document.getElementById(`reply-input-${postId}`);
@@ -1292,7 +1297,7 @@
                     const replies = post.replies || [];
                     const repliesHtml = replies.map(r => `
                         <div class="flex items-start gap-3 bg-stone-100 dark:bg-stone-800/40 p-3.5 rounded-xl text-sm">
-                            <img class="h-6 w-6 rounded-full object-cover shrink-0 mt-0.5" src="${r.author_avatar || 'https://i.pravatar.cc/150?u=' + r.author_id}"/>
+                            <img class="h-6 w-6 rounded-full object-cover shrink-0 mt-0.5" src="${db.sanitizeUrl(r.author_avatar) || 'https://i.pravatar.cc/150?u=' + r.author_id}"/>
                             <div class="flex-1">
                                 <div class="flex items-baseline justify-between">
                                     <span class="font-bold text-on-surface text-xs">${escapeHtml(r.author_name)}</span>
@@ -1305,7 +1310,7 @@
                     return `
                     <div class="bg-surface-container-lowest rounded-xl p-8 shadow-sm hover:shadow-md transition-all duration-300">
                         <div class="flex items-center gap-4 mb-6">
-                            <img class="h-12 w-12 rounded-full object-cover" src="${post.profiles?.avatar_url || 'https://i.pravatar.cc/150?u=' + post.profile_id}"/>
+                            <img class="h-12 w-12 rounded-full object-cover" src="${db.sanitizeUrl(post.profiles?.avatar_url) || 'https://i.pravatar.cc/150?u=' + post.profile_id}"/>
                             <div>
                                 <p class="font-bold text-on-surface">${escapeHtml(post.profiles?.full_name || 'Neighbor')}</p>
                                 <p class="text-[10px] text-on-surface-variant font-black uppercase tracking-widest">${timeStr}</p>
@@ -1313,11 +1318,11 @@
                         </div>
                         <p class="text-xl leading-relaxed text-on-surface mb-8">${escapeHtml(post.content)}</p>
                         <div class="flex items-center gap-8 pt-6 border-t border-surface-container">
-                            <button onclick="toggleHelpful('${post.id}')" class="group flex items-center gap-2 ${textColor} hover:text-primary transition-colors">
+                            <button onclick="toggleHelpful(this)" data-post-id="${db.escapeAttr(post.id)}" class="group flex items-center gap-2 ${textColor} hover:text-primary transition-colors">
                                 <span class="material-symbols-outlined text-xl transition-transform group-active:scale-125" style="font-variation-settings: ${iconFill}">favorite</span>
                                 <span class="text-xs">Helpful (${helpfulBy.length})</span>
                             </button>
-                            <button onclick="toggleRepliesSection('${post.id}')" class="group flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
+                            <button onclick="toggleRepliesSection(this)" data-post-id="${db.escapeAttr(post.id)}" class="group flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
                                 <span class="material-symbols-outlined text-xl">comment</span>
                                 <span class="font-bold text-xs">Reply (${replies.length})</span>
                             </button>
@@ -1326,7 +1331,7 @@
                             <div class="max-h-48 overflow-y-auto pr-2 custom-scrollbar space-y-3">${repliesHtml}</div>
                             <div class="flex gap-2 mt-4 pt-2">
                                 <input type="text" id="reply-input-${post.id}" placeholder="Write a reply..." class="flex-1 bg-surface-container-low border-none rounded-lg px-4 py-2.5 text-sm focus:ring-1 focus:ring-primary placeholder:text-outline-variant">
-                                <button onclick="submitReply('${post.id}')" class="px-4 py-2.5 bg-primary text-on-primary font-bold text-xs rounded-lg active:scale-95 transition-all">Send</button>
+                                <button onclick="submitReply(this)" data-post-id="${db.escapeAttr(post.id)}" class="px-4 py-2.5 bg-primary text-on-primary font-bold text-xs rounded-lg active:scale-95 transition-all">Send</button>
                             </div>
                         </div>
                     </div>`;
@@ -1398,7 +1403,7 @@
                 return `
                     <div class="flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-stone-50 dark:hover:bg-stone-850/50 transition-colors">
                         <div class="flex items-center gap-3">
-                            <img class="h-10 w-10 rounded-full object-cover shrink-0" src="${m.avatar_url || 'https://i.pravatar.cc/150?u=' + m.id}" />
+                            <img class="h-10 w-10 rounded-full object-cover shrink-0" src="${db.sanitizeUrl(m.avatar_url) || 'https://i.pravatar.cc/150?u=' + m.id}" />
                             <div>
                                 <div class="flex items-center gap-1.5 font-bold text-sm text-on-surface">
                                     <span>${escapeHtml(m.full_name || 'Unknown')}</span>
@@ -1409,7 +1414,7 @@
                             </div>
                         </div>
                         ${showRemoveBtn ? `
-                            <button onclick="handleRemoveMember('${m.id}', '${escapeHtml(m.full_name || 'this member')}')" class="p-2 text-stone-400 hover:text-error dark:hover:text-error-container hover:bg-error/10 rounded-full transition-colors flex items-center justify-center" title="Remove member">
+                            <button onclick="handleRemoveMember(this)" data-profile-id="${db.escapeAttr(m.id)}" data-profile-name="${db.escapeAttr(m.full_name || 'this member')}" class="p-2 text-stone-400 hover:text-error dark:hover:text-error-container hover:bg-error/10 rounded-full transition-colors flex items-center justify-center" title="Remove member">
                                 <span class="material-symbols-outlined text-[20px]">person_remove</span>
                             </button>
                         ` : ''}
@@ -1418,7 +1423,9 @@
             }).join('');
         }
 
-        async function handleRemoveMember(profileId, name) {
+        async function handleRemoveMember(btnEl) {
+            const profileId = btnEl.dataset.profileId;
+            const name = btnEl.dataset.profileName;
             const confirmed = confirm(`Are you sure you want to remove ${name} from this circle?`);
             if (!confirmed) return;
 

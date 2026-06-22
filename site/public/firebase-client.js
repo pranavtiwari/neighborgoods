@@ -18,14 +18,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     console.log('Firebase initialized successfully.');
 
     // Enable offline persistence
-    firebase.firestore().enablePersistence()
-        .catch((err) => {
-            if (err.code === 'failed-precondition') {
-                console.warn('Firestore persistence failed-precondition (multiple tabs open)');
-            } else if (err.code === 'unimplemented') {
-                console.warn('Firestore persistence is not supported by this browser');
-            }
+    try {
+        firebase.firestore().settings({
+            localCache: firebase.firestore.persistentLocalCache({
+                tabManager: firebase.firestore.persistentMultipleTabManager()
+            })
         });
+    } catch (err) {
+        console.warn('Firestore persistence settings failed:', err);
+    }
 
     // Helper function to handle Google Login with profile picker
     window.loginWithGoogle = async function(redirectTo = 'explore.html') {
@@ -62,10 +63,20 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     };
 
     // Helper function to handle Email/Password Login
+    // Allowed post-auth redirect targets (VULN-19: open redirect prevention)
+    const ALLOWED_REDIRECTS = new Set([
+        'explore.html', 'index.html', 'circles.html', 'profile.html',
+        'messages.html', 'activity.html', 'edit-profile.html', 'add-item.html'
+    ]);
+    function safeRedirect(redirectTo, fallback = 'explore.html') {
+        const target = (redirectTo || fallback).split('?')[0].split('#')[0];
+        return ALLOWED_REDIRECTS.has(target) ? redirectTo : fallback;
+    }
+
     window.loginWithEmail = async function(email, password, redirectTo = 'explore.html') {
         try {
             await firebase.auth().signInWithEmailAndPassword(email, password);
-            window.location.href = redirectTo;
+            window.location.href = safeRedirect(redirectTo);
         } catch (error) {
             console.error('Email login error:', error);
             throw error;
@@ -73,7 +84,18 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     };
 
     // Helper function to handle Email/Password Registration
+    // VULN-15: Password complexity enforced (min 8 chars, uppercase, digit)
     window.registerWithEmail = async function(email, password, fullName, redirectTo = 'explore.html') {
+        // Password complexity check (client-side defence-in-depth)
+        if (!password || password.length < 8) {
+            throw new Error('Password must be at least 8 characters long.');
+        }
+        if (!/[A-Z]/.test(password)) {
+            throw new Error('Password must contain at least one uppercase letter.');
+        }
+        if (!/[0-9]/.test(password)) {
+            throw new Error('Password must contain at least one number.');
+        }
         try {
             const result = await firebase.auth().createUserWithEmailAndPassword(email, password);
             const user = result.user;
@@ -91,7 +113,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 updated_at: firebase.firestore.FieldValue.serverTimestamp()
             });
             
-            window.location.href = redirectTo;
+            window.location.href = safeRedirect(redirectTo);
         } catch (error) {
             console.error('Email registration error:', error);
             throw error;
@@ -105,6 +127,19 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             window.location.href = 'index.html';
         } catch (error) {
             console.error('Logout error:', error.message);
+        }
+    };
+
+    // VULN-16: Password reset flow (was missing entirely)
+    window.resetPassword = async function(email) {
+        if (!email || !email.includes('@')) {
+            throw new Error('Please enter a valid email address.');
+        }
+        try {
+            await firebase.auth().sendPasswordResetEmail(email);
+        } catch (error) {
+            console.error('Password reset error:', error);
+            throw error;
         }
     };
 
@@ -166,6 +201,31 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
+        },
+        // Escape a string for safe insertion into an HTML attribute value.
+        escapeAttr: function(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        },
+        // Validate a URL is safe to use in a src/href attribute:
+        // - Only http:, https:, or data: protocols are allowed (blocks javascript:, vbscript:, etc.)
+        // - The URL is then HTML-attribute-escaped to prevent attribute breakout
+        // Returns '' if the URL is invalid or uses a dangerous protocol.
+        sanitizeUrl: function(url) {
+            if (!url) return '';
+            try {
+                const parsed = new URL(url, window.location.origin);
+                if (!['http:', 'https:', 'data:'].includes(parsed.protocol)) return '';
+            } catch (e) {
+                // Relative URLs are fine; only reject if URL() throws AND it looks dangerous
+                if (/^javascript:/i.test(url.trim()) || /^vbscript:/i.test(url.trim())) return '';
+            }
+            return this.escapeAttr(url);
         },
         // --- Category Taxonomy and Fuzzy Matching ---
         CATEGORY_TAXONOMY: {
@@ -889,7 +949,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         }
                         for (const chunk of chunks) {
                             const snap = await firebase.firestore().collection('requests')
-                                .where('item_id', 'in', chunk).get();
+                                .where('item_id', 'in', chunk)
+                                .where('lender_id', '==', userId).get();
                             requests.push(...snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                         }
                     }
@@ -1014,14 +1075,25 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 list2.forEach(m => combinedMap[m.id] = m);
                 const messages = Object.values(combinedMap);
 
-                // Populate sender and receiver profiles
-                for (const msg of messages) {
-                    const senderProfile = await this.getProfile(msg.sender_id);
+                // Populate sender and receiver profiles in parallel using a cache to avoid duplicate fetches
+                const profileCache = {};
+                const fetchProfileWithCache = async (pId) => {
+                    if (!pId) return null;
+                    if (profileCache[pId]) return profileCache[pId];
+                    if (!profileCache[pId]) {
+                        profileCache[pId] = this.getProfile(pId);
+                    }
+                    return profileCache[pId];
+                };
+
+                await Promise.all(messages.map(async (msg) => {
+                    const [senderProfile, receiverProfile] = await Promise.all([
+                        fetchProfileWithCache(msg.sender_id),
+                        fetchProfileWithCache(msg.receiver_id)
+                    ]);
                     msg.sender = senderProfile;
-                    
-                    const receiverProfile = await this.getProfile(msg.receiver_id);
                     msg.receiver = receiverProfile;
-                }
+                }));
 
                 // Sort descending
                 messages.sort((a, b) => {
@@ -1427,20 +1499,33 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         getActiveRequest: async function(itemId, userId1, userId2) {
             try {
-                const snap = await firebase.firestore().collection('requests')
+                const db = firebase.firestore();
+                const user = firebase.auth().currentUser;
+                if (!user) return null;
+                const currentUid = user.uid;
+
+                // Query where the logged-in user is the borrower
+                const q1 = db.collection('requests')
                     .where('item_id', '==', itemId)
+                    .where('borrower_id', '==', currentUid)
                     .get();
-                for (const doc of snap.docs) {
+                // Query where the logged-in user is the lender
+                const q2 = db.collection('requests')
+                    .where('item_id', '==', itemId)
+                    .where('lender_id', '==', currentUid)
+                    .get();
+                
+                const [snap1, snap2] = await Promise.all([q1, q2]);
+                const docs = [...snap1.docs, ...snap2.docs];
+                
+                for (const doc of docs) {
                     const req = doc.data();
-                    const itemDoc = await firebase.firestore().collection('items').doc(itemId).get();
-                    if (itemDoc.exists) {
-                        const itemData = itemDoc.data();
-                        const ownerId = itemData.owner_id;
-                        const isMatch = (req.borrower_id === userId1 && ownerId === userId2) ||
-                                        (req.borrower_id === userId2 && ownerId === userId1);
-                        if (isMatch) {
-                            return { id: doc.id, ...req };
-                        }
+                    const bId = req.borrower_id;
+                    const lId = req.lender_id;
+                    const isMatch = (bId === userId1 && lId === userId2) ||
+                                    (bId === userId2 && lId === userId1);
+                    if (isMatch) {
+                        return { id: doc.id, ...req };
                     }
                 }
                 return null;
@@ -1488,13 +1573,22 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 return this._ratingsSummaryCache;
             }
             try {
-                const [requestsSnap, ratingsSnap] = await Promise.all([
-                    firebase.firestore().collection('requests').get(),
-                    firebase.firestore().collection('ratings').get()
-                ]);
+                const user = firebase.auth().currentUser;
+                let requestsDocs = [];
+                
+                if (user) {
+                    const db = firebase.firestore();
+                    const [borrowerSnap, lenderSnap] = await Promise.all([
+                        db.collection('requests').where('borrower_id', '==', user.uid).get(),
+                        db.collection('requests').where('lender_id', '==', user.uid).get()
+                    ]);
+                    requestsDocs = [...borrowerSnap.docs, ...lenderSnap.docs];
+                }
+
+                const ratingsSnap = await firebase.firestore().collection('ratings').get();
                 
                 const requestsMap = {};
-                requestsSnap.docs.forEach(doc => {
+                requestsDocs.forEach(doc => {
                     requestsMap[doc.id] = { id: doc.id, ...doc.data() };
                 });
                 
@@ -1616,9 +1710,13 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
                 const avgScore = Number((totalScore / count).toFixed(1));
                 
-                await firebase.firestore().collection('profiles').doc(rateeId).update({
-                    reputation_score: avgScore
-                });
+                try {
+                    await firebase.firestore().collection('profiles').doc(rateeId).update({
+                        reputation_score: avgScore
+                    });
+                } catch (profileUpdateErr) {
+                    console.warn("Could not update profile reputation_score client-side (this is expected if reputation_score direct-write rules are disabled):", profileUpdateErr);
+                }
 
                 return { id: ref.id };
             } catch (err) {
