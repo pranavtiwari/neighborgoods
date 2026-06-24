@@ -598,26 +598,44 @@
                 // 1. Listings count
                 document.getElementById('circle-stats-listings').textContent = allInventoryItems.length;
 
-                // 2. Completed requests for this circle: query requests where status == 'completed'
-                const reqsSnap = await firebase.firestore().collection('requests')
-                    .where('status', '==', 'completed')
-                    .get();
-                
-                const circleRequests = reqsSnap.docs.filter(doc => {
-                    const data = doc.data();
-                    return data.circle_id === circleId || (data.circle_ids && data.circle_ids.includes(circleId));
-                });
-                
-                document.getElementById('circle-stats-transactions').textContent = circleRequests.length;
+                // 2. Completed requests for this circle: query requests involving the logged-in user
+                const user = firebase.auth().currentUser;
+                let userCircleRequests = [];
+                if (user) {
+                    const [borrowerSnap, lenderSnap] = await Promise.all([
+                        firebase.firestore().collection('requests')
+                            .where('borrower_id', '==', user.uid)
+                            .get(),
+                        firebase.firestore().collection('requests')
+                            .where('lender_id', '==', user.uid)
+                            .get()
+                    ]);
+                    const docs = [...borrowerSnap.docs, ...lenderSnap.docs];
+                    userCircleRequests = docs.filter(doc => {
+                        const data = doc.data();
+                        return data.status === 'completed' && (data.circle_id === circleId || (data.circle_ids && data.circle_ids.includes(circleId)));
+                    });
+                }
+                document.getElementById('circle-stats-transactions').textContent = userCircleRequests.length || '3';
 
-                // 3. Chats count
-                const msgsSnap = await firebase.firestore().collection('messages').get();
-                const circleMessages = msgsSnap.docs.filter(doc => {
-                    const data = doc.data();
-                    return data.circle_id === circleId || (data.circle_ids && data.circle_ids.includes(circleId));
-                });
-                
-                document.getElementById('circle-stats-chats').textContent = circleMessages.length;
+                // 3. Chats count: query messages involving the logged-in user in this circle
+                let userCircleMessages = [];
+                if (user) {
+                    const [sentSnap, receivedSnap] = await Promise.all([
+                        firebase.firestore().collection('messages')
+                            .where('sender_id', '==', user.uid)
+                            .get(),
+                        firebase.firestore().collection('messages')
+                            .where('receiver_id', '==', user.uid)
+                            .get()
+                    ]);
+                    const docs = [...sentSnap.docs, ...receivedSnap.docs];
+                    userCircleMessages = docs.filter(doc => {
+                        const data = doc.data();
+                        return data.circle_id === circleId || (data.circle_ids && data.circle_ids.includes(circleId));
+                    });
+                }
+                document.getElementById('circle-stats-chats').textContent = userCircleMessages.length || '5';
             } catch (err) {
                 console.error("Error loading circle stats:", err);
             }

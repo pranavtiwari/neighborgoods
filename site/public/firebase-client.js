@@ -19,11 +19,19 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
     // Enable offline persistence
     try {
-        firebase.firestore().settings({
-            localCache: firebase.firestore.persistentLocalCache({
-                tabManager: firebase.firestore.persistentMultipleTabManager()
-            })
-        });
+        const db = firebase.firestore();
+        if (typeof firebase.firestore.persistentLocalCache === 'function' &&
+            typeof firebase.firestore.persistentMultipleTabManager === 'function') {
+            db.settings({
+                localCache: firebase.firestore.persistentLocalCache({
+                    tabManager: firebase.firestore.persistentMultipleTabManager()
+                })
+            });
+        } else if (typeof db.enablePersistence === 'function') {
+            db.enablePersistence().catch((err) => {
+                console.warn('Firestore offline persistence fallback failed:', err);
+            });
+        }
     } catch (err) {
         console.warn('Firestore persistence settings failed:', err);
     }
@@ -193,6 +201,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
     // --- Unified Database (Firestore) & Storage API ---
     window.db = {
+        profilesCache: {},
+        _profilePromises: {},
+
         escapeHtml: function(str) {
             if (!str) return '';
             return str
@@ -468,16 +479,32 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         // --- Profiles ---
         getProfile: async function(profileId) {
-            try {
-                const doc = await firebase.firestore().collection('profiles').doc(profileId).get();
-                return doc.exists ? { id: doc.id, ...doc.data() } : null;
-            } catch (err) {
-                console.error("Error getting profile:", err);
-                return null;
+            if (!profileId) return null;
+            if (this.profilesCache[profileId]) {
+                return this.profilesCache[profileId];
             }
+            if (!this._profilePromises) this._profilePromises = {};
+            if (this._profilePromises[profileId]) {
+                return this._profilePromises[profileId];
+            }
+            this._profilePromises[profileId] = (async () => {
+                try {
+                    const doc = await firebase.firestore().collection('profiles').doc(profileId).get();
+                    const profile = doc.exists ? { id: doc.id, ...doc.data() } : null;
+                    this.profilesCache[profileId] = profile;
+                    return profile;
+                } catch (err) {
+                    console.error("Error getting profile:", err);
+                    return null;
+                } finally {
+                    delete this._profilePromises[profileId];
+                }
+            })();
+            return this._profilePromises[profileId];
         },
 
         updateProfile: async function(profileId, profileData) {
+            delete this.profilesCache[profileId];
             try {
                 await firebase.firestore().collection('profiles').doc(profileId).set({
                     ...profileData,
@@ -599,15 +626,17 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         getCircleItems: async function(circleId) {
             try {
-                const snapshot = await firebase.firestore().collection('items').get();
+                const dbRef = firebase.firestore().collection('items');
+                const [snap1, snap2] = await Promise.all([
+                    dbRef.where('circle_id', '==', circleId).get(),
+                    dbRef.where('circle_ids', 'array-contains', circleId).get()
+                ]);
                 const itemsMap = {};
-                snapshot.docs.forEach(doc => {
-                    const data = doc.data();
-                    const inArray = data.circle_ids && Array.isArray(data.circle_ids) && data.circle_ids.includes(circleId);
-                    const isSingle = data.circle_id === circleId;
-                    if (inArray || isSingle) {
-                        itemsMap[doc.id] = { id: doc.id, ...data };
-                    }
+                snap1.docs.forEach(doc => {
+                    itemsMap[doc.id] = { id: doc.id, ...doc.data() };
+                });
+                snap2.docs.forEach(doc => {
+                    itemsMap[doc.id] = { id: doc.id, ...doc.data() };
                 });
                 return Object.values(itemsMap);
             } catch (err) {
@@ -732,14 +761,14 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     .where('circle_id', '==', circleId).get();
                 
                 const memberships = snapshot.docs.map(doc => doc.data());
-                const members = [];
-                for (const m of memberships) {
+                const members = await Promise.all(memberships.map(async (m) => {
                     const profile = await this.getProfile(m.profile_id);
                     if (profile) {
-                        members.push({ ...profile, role: m.role, joined_at: m.joined_at });
+                        return { ...profile, role: m.role, joined_at: m.joined_at };
                     }
-                }
-                return members;
+                    return null;
+                }));
+                return members.filter(Boolean);
             } catch (err) {
                 console.error("Error getting circle members:", err);
                 return [];
@@ -836,15 +865,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 const snapshot = await firebase.firestore().collection('circle_join_requests')
                     .where('circle_id', '==', circleId)
                     .get();
-                const requests = [];
-                for (const doc of snapshot.docs) {
+                const pendingDocs = snapshot.docs.filter(doc => !doc.data().status || doc.data().status === 'pending');
+                const requests = await Promise.all(pendingDocs.map(async (doc) => {
                     const data = doc.data();
-                    // Only show pending requests (approved/denied are deleted, but filter for safety)
-                    if (!data.status || data.status === 'pending') {
-                        const profile = await this.getProfile(data.profile_id);
-                        requests.push({ id: doc.id, ...data, profile });
-                    }
-                }
+                    const profile = await this.getProfile(data.profile_id);
+                    return { id: doc.id, ...data, profile };
+                }));
                 return requests;
             } catch (err) {
                 console.error("Error getting join requests:", err);
@@ -957,7 +983,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 }
 
                 // Populate related details
-                for (const req of requests) {
+                await Promise.all(requests.map(async (req) => {
                     const itemDoc = await firebase.firestore().collection('items').doc(req.item_id).get();
                     if (itemDoc.exists) {
                         const itemData = { id: itemDoc.id, ...itemDoc.data() };
@@ -970,7 +996,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     
                     const borrowerProfile = await this.getProfile(req.borrower_id);
                     req.profiles = borrowerProfile;
-                }
+                }));
 
                 // Sort descending
                 requests.sort((a, b) => {
@@ -1184,11 +1210,11 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     .where('circle_id', '==', circleId).get();
                 const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
-                // Fetch profiles in parallel or sequentially
-                for (const post of posts) {
+                // Fetch profiles in parallel
+                await Promise.all(posts.map(async (post) => {
                     const profile = await this.getProfile(post.profile_id);
                     post.profiles = profile;
-                }
+                }));
                 
                 // Sort by created_at descending
                 posts.sort((a, b) => {
@@ -1314,6 +1340,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         const itemData = itemDoc.data();
                         const lenderId = itemData.owner_id;
                         const borrowerId = requestData.borrower_id;
+                        delete this.profilesCache[lenderId];
+                        delete this.profilesCache[borrowerId];
 
                         // Mark item as available again (or completed if giveaway)
                         if (itemData.listing_type === 'giveaway') {
@@ -1480,6 +1508,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     // Revert carbon savings (-2 for both profiles)
                     const lenderId = itemData.owner_id;
                     const borrowerId = requestData.borrower_id;
+                    delete this.profilesCache[lenderId];
+                    delete this.profilesCache[borrowerId];
                     
                     const lenderProfileRef = db.collection('profiles').doc(lenderId);
                     const lenderDoc = await transaction.get(lenderProfileRef);
@@ -1610,11 +1640,11 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 }
 
                 // Populate rater profiles for these ratings
-                for (const r of ratings) {
+                await Promise.all(ratings.map(async (r) => {
                     if (r.rater_id) {
                         r.rater_profile = await getProfileLocal(r.rater_id);
                     }
-                }
+                }));
 
                 ratings.forEach(rating => {
                     const score = Number(rating.score);
@@ -1678,6 +1708,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         createRating: async function(ratingData) {
             this._ratingsSummaryCache = null; // Clear ratings cache
+            if (ratingData.ratee_id) {
+                delete this.profilesCache[ratingData.ratee_id];
+            }
             try {
                 const ref = await firebase.firestore().collection('ratings').add({
                     ...ratingData,
@@ -1733,9 +1766,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 const ratings = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
                 // Populate rater profiles
-                for (const r of ratings) {
+                await Promise.all(ratings.map(async (r) => {
                     r.rater_profile = await this.getProfile(r.rater_id);
-                }
+                }));
                 
                 // Sort descending by created_at
                 ratings.sort((a, b) => {

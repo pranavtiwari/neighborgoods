@@ -18,7 +18,3 @@
 ## 3. Responsive Web Design (Tablet)
 - [ ] **Grid Audit**: Adjust the 3-column layouts on Explore for tablet breakage.
 - [ ] **Contextual Headers**: Fix header heights and visibility across transitional breakpoints.
-
-## 4. Backend Transition (Supabase)
-- [ ] **Schema Setup**: Apply `Specs/SCHEMA.sql` to your Supabase project.
-- [x] **Data Fetching**: Replace hardcoded mocks with async data fetching.

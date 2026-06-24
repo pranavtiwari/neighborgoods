@@ -1,7 +1,7 @@
 -- Share, Instead. Database Schema
--- Designed for Supabase (PostgreSQL)
+-- Designed for PostgreSQL
 
--- 1. Profiles Table (Extends Supabase Auth)
+-- 1. Profiles Table (Extends Auth Users)
 CREATE TABLE profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   full_name TEXT,

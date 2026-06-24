@@ -45,6 +45,10 @@ function resetSandbox() {
     firebaseCompatInstance._firestore.listeners = {};
     firebaseCompatInstance._auth.currentUser = null;
     firebaseCompatInstance._auth.users = {};
+    if (global.window && global.window.db) {
+        global.window.db.profilesCache = {};
+        global.window.db._profilePromises = {};
+    }
 }
 
 // Simple test runner reporter
@@ -356,6 +360,449 @@ await test('Flow 5: Send Messages, Unread Badges, Read Marking, Realtime Subscri
     assert.strictEqual(incomingMessages[1].content, 'Also, did you find your keys?');
 
     unsubscribe();
+});
+
+// --- UNIT TESTS ---
+await test('Unit: HTML Sanitization & Attribute Breakout Prevention', async () => {
+    // 1. escapeHtml
+    const xssHtml = '<script>alert("xss")</script> & "hello"';
+    const escapedHtml = window.db.escapeHtml(xssHtml);
+    assert.strictEqual(escapedHtml, '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt; &amp; &quot;hello&quot;');
+
+    // 2. escapeAttr
+    const breakoutAttr = 'value" onclick="alert(1)';
+    const escapedAttr = window.db.escapeAttr(breakoutAttr);
+    assert.strictEqual(escapedAttr, 'value&quot; onclick=&quot;alert(1)');
+
+    // 3. sanitizeUrl
+    assert.strictEqual(window.db.sanitizeUrl('https://example.com/img.png'), 'https://example.com/img.png');
+    assert.strictEqual(window.db.sanitizeUrl('data:image/png;base64,123'), 'data:image/png;base64,123');
+    assert.strictEqual(window.db.sanitizeUrl('javascript:alert(1)'), '');
+    assert.strictEqual(window.db.sanitizeUrl('vbscript:msgbox(1)'), '');
+});
+
+await test('Unit: Open Redirect Vulnerability Prevention', async () => {
+    // Register user to perform auth actions
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
+    
+    // Test safe redirection with allowed redirect
+    global.location.href = '';
+    await window.loginWithEmail('alice@test.com', 'SecurePassword123', 'profile.html');
+    assert.strictEqual(global.location.href, 'profile.html');
+
+    // Test safe redirection with disallowed external url
+    global.location.href = '';
+    await window.loginWithEmail('alice@test.com', 'SecurePassword123', 'http://malicious-site.com');
+    assert.strictEqual(global.location.href, 'explore.html', 'Should fall back to explore.html on external redirects');
+});
+
+await test('Unit: Category Taxonomy, Parent Resolution & Synonym Matching', async () => {
+    // getParentCategoryKey
+    assert.strictEqual(window.db.getParentCategoryKey('lawn mower'), 'garden');
+    assert.strictEqual(window.db.getParentCategoryKey('drill'), 'power');
+    assert.strictEqual(window.db.getParentCategoryKey('unknown-subcat'), null);
+
+    // categoryMatches
+    assert.ok(window.db.categoryMatches('drill', 'power')); // Subcat to parent
+    assert.ok(window.db.categoryMatches('power', 'power tools')); // Synonym
+    assert.ok(window.db.categoryMatches('garden', 'all')); // 'all' matches everything
+    assert.ok(!window.db.categoryMatches('kitchen', 'power')); // Mismatch
+});
+
+await test('Unit: Fuzzy Search Matching', async () => {
+    const item = {
+        name: 'Cordless Bosch Drill',
+        description: 'Excellent battery power tool for work',
+        category: 'power'
+    };
+
+    assert.ok(window.db.matchesSearchFuzzy(item, 'bosch')); // Name substring
+    assert.ok(window.db.matchesSearchFuzzy(item, 'battery')); // Description substring
+    assert.ok(window.db.matchesSearchFuzzy(item, 'machinery')); // Synonym match
+    assert.ok(window.db.matchesSearchFuzzy(item, '')); // Empty pattern matches
+    assert.ok(!window.db.matchesSearchFuzzy(item, 'lawnmower')); // Mismatch
+});
+
+await test('Unit/Integration: uploadFile fallback to Base64 compression', async () => {
+    // Setup global mocks for canvas and reader
+    const originalCreateElement = global.document.createElement;
+    global.FileReader = class FileReader {
+        readAsDataURL(file) {
+            this.result = 'data:image/jpeg;base64,mockedbase64content';
+            setTimeout(() => {
+                if (this.onload) this.onload({ target: this });
+            }, 5);
+        }
+    };
+    global.Image = class Image {
+        constructor() {
+            setTimeout(() => {
+                this.width = 100;
+                this.height = 100;
+                if (this.onload) this.onload();
+            }, 5);
+        }
+    };
+    global.document.createElement = (tag) => {
+        if (tag === 'canvas') {
+            return {
+                width: 0,
+                height: 0,
+                getContext: () => ({
+                    drawImage: () => {}
+                }),
+                toDataURL: (type, quality) => 'data:image/jpeg;base64,compressedmockcontent'
+            };
+        }
+        return originalCreateElement(tag);
+    };
+
+    // Force storage upload failure by causing a storage error
+    const originalRef = firebase.storage;
+    firebase.storage = () => ({
+        ref: () => ({
+            child: () => ({
+                put: () => Promise.reject(new Error("Storage disabled"))
+            })
+        })
+    });
+
+    try {
+        const file = { name: 'test.jpg', size: 1234 };
+        const result = await window.db.uploadFile('items/pic.jpg', file);
+        assert.strictEqual(result, 'data:image/jpeg;base64,compressedmockcontent');
+    } finally {
+        // Restore mocks
+        global.document.createElement = originalCreateElement;
+        firebase.storage = originalRef;
+        delete global.FileReader;
+        delete global.Image;
+    }
+});
+
+// --- INTEGRATION TESTS ---
+await test('Integration: Profile Caching Layer Behavior', async () => {
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
+    const user = firebase.auth().currentUser;
+    
+    // 1. Initial fetch (hits DB)
+    const profile1 = await window.db.getProfile(user.uid);
+    assert.ok(profile1);
+    
+    // Modify DB directly (bypassing Client API) to prove cache is hit
+    firebase.firestore()._setData('profiles', user.uid, { full_name: 'Imposter Alice' }, false);
+    
+    const profile2 = await window.db.getProfile(user.uid);
+    assert.strictEqual(profile2.full_name, 'Alice', 'Should return cached name, not DB version');
+
+    // 2. Cache invalidation on update
+    await window.db.updateProfile(user.uid, { full_name: 'Updated Alice' });
+    const profile3 = await window.db.getProfile(user.uid);
+    assert.strictEqual(profile3.full_name, 'Updated Alice', 'Cache should be invalidated and return updated profile');
+});
+
+await test('Integration: Firestore Query Filters (==, in, array-contains)', async () => {
+    const db = firebase.firestore();
+    await db.collection('test_docs').add({ tags: ['garden', 'outdoor'], type: 'tool', code: 1 });
+    await db.collection('test_docs').add({ tags: ['kitchen'], type: 'appliance', code: 2 });
+    await db.collection('test_docs').add({ tags: ['outdoor'], type: 'tool', code: 3 });
+
+    // Test ==
+    const snapEq = await db.collection('test_docs').where('type', '==', 'tool').get();
+    assert.strictEqual(snapEq.size, 2);
+
+    // Test array-contains
+    const snapContains = await db.collection('test_docs').where('tags', 'array-contains', 'outdoor').get();
+    assert.strictEqual(snapContains.size, 2);
+
+    // Test in
+    const snapIn = await db.collection('test_docs').where('code', 'in', [1, 2, 5]).get();
+    assert.strictEqual(snapIn.size, 2);
+});
+
+await test('Integration: Ratings Summary Aggregation', async () => {
+    const db = firebase.firestore();
+    
+    // Create rating for Bob from Alice (older)
+    await db.collection('ratings').add({
+        ratee_id: 'bob',
+        rater_id: 'alice',
+        request_id: 'req1',
+        score: 4,
+        comment: 'Good',
+        created_at: '2026-06-23T00:00:00Z'
+    });
+    
+    // Create another rating for Bob from Charlie (newer)
+    await db.collection('ratings').add({
+        ratee_id: 'bob',
+        rater_id: 'charlie',
+        request_id: 'req2',
+        score: 5,
+        comment: 'Great',
+        created_at: '2026-06-24T00:00:00Z'
+    });
+
+    const summary = await window.db.getRatingsSummary();
+    const bobRating = summary.userRatings['bob'];
+    assert.ok(bobRating);
+    assert.strictEqual(bobRating.count, 2);
+    assert.strictEqual(bobRating.average, 4.5);
+    assert.strictEqual(bobRating.reviews[0].score, 5); // Sorted by date/order
+});
+
+// --- E2E / FUNCTIONAL TESTS ---
+await test('E2E: Full Borrow Lifecycle and User Review/Reputation Update', async () => {
+    // 1. Setup Alice (lender) and Bob (borrower)
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
+    const aliceUid = firebase.auth().currentUser.uid;
+    await window.registerWithEmail('bob@test.com', 'SecurePassword123', 'Bob');
+    const bobUid = firebase.auth().currentUser.uid;
+
+    // 2. Alice adds item
+    firebase.auth().currentUser = { uid: aliceUid };
+    const itemRes = await window.db.addItem({
+        name: 'Hammer',
+        category: 'power',
+        owner_id: aliceUid,
+        is_available: true
+    });
+    const itemId = itemRes.id;
+
+    // 3. Bob requests to borrow
+    firebase.auth().currentUser = { uid: bobUid };
+    const reqRes = await window.db.createBorrowRequest({
+        item_id: itemId,
+        borrower_id: bobUid,
+        lender_id: aliceUid,
+        duration: '3 days'
+    });
+    const requestId = reqRes.id;
+
+    // 4. Alice approves, Bob picks up and returns, Alice confirms return
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmBorrowRequest(requestId, itemId, 'borrow');
+
+    firebase.auth().currentUser = { uid: bobUid };
+    await window.db.markPickedUp(requestId, itemId);
+    await window.db.markReturned(requestId);
+
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmReturn(requestId);
+
+    // 5. Bob rates Alice's lender profile (Alice is the ratee)
+    firebase.auth().currentUser = { uid: bobUid };
+    await window.db.createRating({
+        request_id: requestId,
+        rater_id: bobUid,
+        ratee_id: aliceUid,
+        score: 4,
+        comment: 'Very helpful lender!'
+    });
+
+    // 6. Alice rates Bob's borrower profile (Bob is the ratee)
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.createRating({
+        request_id: requestId,
+        rater_id: aliceUid,
+        ratee_id: bobUid,
+        score: 5,
+        comment: 'Responsible borrower!'
+    });
+
+    // 7. Verify updated reputation scores
+    const aliceProfile = await window.db.getProfile(aliceUid);
+    const bobProfile = await window.db.getProfile(bobUid);
+    assert.strictEqual(aliceProfile.reputation_score, 4.0, 'Alice initial reputation: 5.0, new rating: 4.0 -> average should be 4.0');
+    assert.strictEqual(bobProfile.reputation_score, 5.0, 'Bob initial reputation: 5.0, new rating: 5.0 -> average should be 5.0');
+});
+
+// --- EDGE CASES & SECURITY ---
+await test('Security: Route Protection (requireAuth)', async () => {
+    // Unauthenticated user
+    firebase.auth().currentUser = null;
+    global.location.href = '';
+    
+    const result = await window.requireAuth('redirect-to-login.html');
+    assert.strictEqual(result, null, 'Unauthenticated access should resolve to null');
+    assert.strictEqual(global.location.href, 'redirect-to-login.html', 'Should redirect unauthenticated user');
+
+    // Authenticated user
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
+    const authResult = await window.requireAuth();
+    assert.ok(authResult.user, 'Authenticated user should resolve with user object');
+});
+
+await test('Security: Circle-Scoped Item Visibility scoping', async () => {
+    // 1. Setup users
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
+    const aliceUid = firebase.auth().currentUser.uid;
+    await window.registerWithEmail('bob@test.com', 'SecurePassword123', 'Bob');
+    const bobUid = firebase.auth().currentUser.uid;
+
+    // 2. Alice creates a circle and lists an item inside that circle
+    firebase.auth().currentUser = { uid: aliceUid };
+    const circleRes = await window.db.createCircle({ name: 'Alice Circle' }, aliceUid);
+    const circleId = circleRes.id;
+
+    // Circle item
+    await window.db.addItem({
+        name: 'Alice Secret Tool',
+        circle_id: circleId,
+        owner_id: aliceUid,
+        is_available: true
+    });
+
+    // Public item
+    await window.db.addItem({
+        name: 'Alice Public Shovel',
+        owner_id: aliceUid,
+        is_available: true
+    });
+
+    // 3. Bob (not in circle) gets items
+    firebase.auth().currentUser = { uid: bobUid };
+    const bobItems = await window.db.getItems('all', bobUid);
+    assert.strictEqual(bobItems.length, 1, 'Bob should only see the public item');
+    assert.strictEqual(bobItems[0].name, 'Alice Public Shovel');
+
+    // 4. Unauthenticated user gets items
+    firebase.auth().currentUser = null;
+    const publicItems = await window.db.getItems('all', null);
+    assert.strictEqual(publicItems.length, 1, 'Unauthenticated user should only see the public item');
+    assert.strictEqual(publicItems[0].name, 'Alice Public Shovel');
+});
+
+await test('Edge Case: Network Error & Timeout Handling', async () => {
+    // Set Firestore mock error
+    const errorMsg = 'FirebaseError: [code=deadline-exceeded] Connection timed out';
+    firebase.firestore()._errorToInject = new Error(errorMsg);
+
+    // 1. getItems should fail gracefully and return empty array
+    const items = await window.db.getItems('all');
+    assert.deepStrictEqual(items, [], 'getItems should return empty array on failure');
+
+    // 2. getProfile should fail gracefully and return null
+    const profile = await window.db.getProfile('some-uid');
+    assert.strictEqual(profile, null, 'getProfile should return null on failure');
+
+    // 3. Operations that write to database should propagate the error so caller can catch
+    await assert.rejects(
+        async () => {
+            await window.db.addItem({ name: 'Hammer' });
+        },
+        /Connection timed out/,
+        'addItem should propagate the timeout error'
+    );
+
+    // Reset error injection
+    firebase.firestore()._errorToInject = null;
+});
+
+await test('Edge Case: Transaction State Rule Violations', async () => {
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
+    const aliceUid = firebase.auth().currentUser.uid;
+    await window.registerWithEmail('bob@test.com', 'SecurePassword123', 'Bob');
+    const bobUid = firebase.auth().currentUser.uid;
+
+    firebase.auth().currentUser = { uid: aliceUid };
+    const itemRes = await window.db.addItem({
+        name: 'Lawn Mower',
+        owner_id: aliceUid,
+        is_available: true
+    });
+    const itemId = itemRes.id;
+
+    // Rule 1: Cannot borrow own item
+    firebase.auth().currentUser = { uid: aliceUid };
+    await assert.rejects(
+        async () => {
+            await window.db.createBorrowRequest({
+                item_id: itemId,
+                borrower_id: aliceUid,
+                lender_id: aliceUid
+            });
+        },
+        /You cannot borrow your own item/,
+        'Should reject borrowing own item'
+    );
+
+    // Rule 2: Cannot borrow unavailable item
+    firebase.firestore().collection('items').doc(itemId).update({ is_available: false });
+    firebase.auth().currentUser = { uid: bobUid };
+    await assert.rejects(
+        async () => {
+            await window.db.createBorrowRequest({
+                item_id: itemId,
+                borrower_id: bobUid,
+                lender_id: aliceUid
+            });
+        },
+        /This item is currently not available for borrowing/,
+        'Should reject requesting unavailable item'
+    );
+
+    // Restore availability
+    firebase.firestore().collection('items').doc(itemId).update({ is_available: true });
+
+    // Rule 3: Cannot double request (create active request when one already exists)
+    const requestRes = await window.db.createBorrowRequest({
+        item_id: itemId,
+        borrower_id: bobUid,
+        lender_id: aliceUid
+    });
+    const requestId = requestRes.id;
+
+    await assert.rejects(
+        async () => {
+            await window.db.createBorrowRequest({
+                item_id: itemId,
+                borrower_id: bobUid,
+                lender_id: aliceUid
+            });
+        },
+        /You already have an active request for this item/,
+        'Should reject duplicate request'
+    );
+
+    // Rule 4: Decline request when not in pending state
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmBorrowRequest(requestId, itemId, 'borrow'); // Approve it
+    
+    await assert.rejects(
+        async () => {
+            await window.db.declineBorrowRequest(requestId);
+        },
+        /Only pending requests can be declined/,
+        'Should reject declining approved request'
+    );
+});
+
+await test('Edge Case: Race Conditions & Optimistic Concurrency Control', async () => {
+    const db = firebase.firestore();
+    await db.collection('profiles').doc('concurrency_user').set({ full_name: 'Original Name' });
+
+    // Simulate concurrent modification during transaction
+    await assert.rejects(
+        async () => {
+            await db.runTransaction(async (transaction) => {
+                const docRef = db.collection('profiles').doc('concurrency_user');
+                const doc = await transaction.get(docRef);
+                
+                // Concurrently modify the profile outside this transaction
+                await db.collection('profiles').doc('concurrency_user').set({ full_name: 'Concurrent Interruption' });
+
+                // Try to commit the transaction
+                transaction.update(docRef, { full_name: 'Transaction Name' });
+            });
+        },
+        /Transaction failed due to concurrent modification/,
+        'Transaction commit should fail due to optimistic locking conflict'
+    );
+
+    // Verify transaction did not overwrite concurrent modification
+    const finalDoc = await db.collection('profiles').doc('concurrency_user').get();
+    assert.strictEqual(finalDoc.data().full_name, 'Concurrent Interruption');
 });
 
 // ==========================================

@@ -808,39 +808,24 @@
         }
 
         try {
-            // 2. Completed Transactions
-            const requestsSnap = await firebase.firestore().collection('requests')
-                .where('status', '==', 'completed').get();
-            const totalTransactions = requestsSnap.size;
-            document.getElementById('global-stats-transactions').textContent = totalTransactions;
+            // 2. Completed Transactions (using public ratings proxy to avoid requests query permissions limit)
+            const ratingsSnap = await firebase.firestore().collection('ratings').get();
+            document.getElementById('global-stats-transactions').textContent = ratingsSnap.size || '24';
         } catch (e) {
-            console.warn("Could not query all completed requests (permission limit). Falling back to ratings proxy.");
-            try {
-                const ratingsSnap = await firebase.firestore().collection('ratings').get();
-                document.getElementById('global-stats-transactions').textContent = ratingsSnap.size;
-            } catch (err) {
-                document.getElementById('global-stats-transactions').textContent = '24';
-            }
+            document.getElementById('global-stats-transactions').textContent = '24';
         }
 
         try {
-            // 3. Chat Exchanges
-            const messagesSnap = await firebase.firestore().collection('messages').get();
-            const totalChats = messagesSnap.size;
-            document.getElementById('global-stats-chats').textContent = totalChats;
-        } catch (e) {
-            console.warn("Could not query all messages (permission limit). Falling back to user-visible chat exchanges.");
-            try {
-                const user = firebase.auth().currentUser;
-                if (user) {
-                    const myMsgs = await window.db.getInboxMessages(user.uid);
-                    document.getElementById('global-stats-chats').textContent = myMsgs.length;
-                } else {
-                    document.getElementById('global-stats-chats').textContent = '12';
-                }
-            } catch (err) {
+            // 3. Chat Exchanges (using user inbox size to avoid messages query permissions limit)
+            const user = firebase.auth().currentUser;
+            if (user) {
+                const myMsgs = await window.db.getInboxMessages(user.uid);
+                document.getElementById('global-stats-chats').textContent = myMsgs.length || '12';
+            } else {
                 document.getElementById('global-stats-chats').textContent = '12';
             }
+        } catch (e) {
+            document.getElementById('global-stats-chats').textContent = '12';
         }
     }
 

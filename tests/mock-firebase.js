@@ -8,6 +8,7 @@ class MockDocRef {
     }
 
     async get() {
+        await this.firestore._checkErrorAndDelay();
         const data = this.firestore._getData(this.collectionName, this.id);
         return {
             exists: !!data,
@@ -18,14 +19,17 @@ class MockDocRef {
     }
 
     async set(data, options = {}) {
+        await this.firestore._checkErrorAndDelay();
         this.firestore._setData(this.collectionName, this.id, data, options.merge);
     }
 
     async update(data) {
+        await this.firestore._checkErrorAndDelay();
         this.firestore._setData(this.collectionName, this.id, data, true);
     }
 
     async delete() {
+        await this.firestore._checkErrorAndDelay();
         this.firestore._deleteData(this.collectionName, this.id);
     }
 }
@@ -42,6 +46,7 @@ class MockQuery {
     }
 
     async get() {
+        await this.firestore._checkErrorAndDelay();
         let docs = this.firestore._getCollectionDocs(this.collectionName);
         for (const filter of this.filters) {
             docs = docs.filter(doc => {
@@ -50,6 +55,8 @@ class MockQuery {
                     return val === filter.value;
                 } else if (filter.op === 'in') {
                     return Array.isArray(filter.value) && filter.value.includes(val);
+                } else if (filter.op === 'array-contains') {
+                    return Array.isArray(val) && val.includes(filter.value);
                 }
                 return true;
             });
@@ -70,15 +77,19 @@ class MockQuery {
 
     onSnapshot(callback, errorCallback) {
         const trigger = async () => {
-            const snap = await this.get();
-            const wrappedSnap = {
-                ...snap,
-                docChanges: () => snap.docs.map(doc => ({
-                    type: 'added',
-                    doc: doc
-                }))
-            };
-            callback(wrappedSnap);
+            try {
+                const snap = await this.get();
+                const wrappedSnap = {
+                    ...snap,
+                    docChanges: () => snap.docs.map(doc => ({
+                        type: 'added',
+                        doc: doc
+                    }))
+                };
+                callback(wrappedSnap);
+            } catch (err) {
+                if (errorCallback) errorCallback(err);
+            }
         };
         
         trigger();
@@ -102,6 +113,7 @@ class MockCollection {
     }
 
     async add(data) {
+        await this.firestore._checkErrorAndDelay();
         const id = Math.random().toString(36).substring(2, 15);
         this.firestore._setData(this.name, id, data, false);
         const ref = new MockDocRef(this.name, id, this.firestore);
@@ -129,6 +141,7 @@ class MockBatch {
     }
 
     async commit() {
+        await this.firestore._checkErrorAndDelay();
         for (const op of this.operations) {
             if (op.action === 'update') {
                 await op.ref.update(op.data);
@@ -141,9 +154,12 @@ class MockTransaction {
     constructor(firestore) {
         this.firestore = firestore;
         this.writes = [];
+        this.readVersions = {};
     }
 
     async get(ref) {
+        const key = `${ref.collectionName}/${ref.id}`;
+        this.readVersions[key] = this.firestore._docVersions[key] || 0;
         return ref.get();
     }
 
@@ -172,6 +188,18 @@ class MockFirestore {
     constructor() {
         this.db = {};
         this.listeners = {};
+        this._docVersions = {};
+        this._errorToInject = null;
+        this._latencyMs = 0;
+    }
+
+    async _checkErrorAndDelay() {
+        if (this._errorToInject) {
+            throw this._errorToInject;
+        }
+        if (this._latencyMs) {
+            await new Promise(r => setTimeout(r, this._latencyMs));
+        }
     }
 
     collection(name) {
@@ -186,8 +214,18 @@ class MockFirestore {
     }
 
     async runTransaction(cb) {
+        await this._checkErrorAndDelay();
         const tx = new MockTransaction(this);
         const result = await cb(tx);
+        
+        // Optimistic concurrency control verification
+        for (const [key, versionAtRead] of Object.entries(tx.readVersions)) {
+            const currentVersion = this._docVersions[key] || 0;
+            if (currentVersion !== versionAtRead) {
+                throw new Error("Transaction failed due to concurrent modification (optimistic concurrency control).");
+            }
+        }
+        
         await tx._commit();
         return result;
     }
@@ -227,12 +265,19 @@ class MockFirestore {
             this.db[collectionName][id] = resolvedData;
         }
 
+        const docKey = `${collectionName}/${id}`;
+        this._docVersions[docKey] = (this._docVersions[docKey] || 0) + 1;
+
         this._triggerListeners(collectionName);
     }
 
     _deleteData(collectionName, id) {
         if (this.db[collectionName] && this.db[collectionName][id]) {
             delete this.db[collectionName][id];
+            
+            const docKey = `${collectionName}/${id}`;
+            delete this._docVersions[docKey];
+
             this._triggerListeners(collectionName);
         }
     }
