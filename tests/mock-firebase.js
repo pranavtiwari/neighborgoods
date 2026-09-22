@@ -345,6 +345,10 @@ class MockAuth {
         return { user: this.currentUser };
     }
 
+    async getRedirectResult() {
+        return { user: null };
+    }
+
     async signInWithEmailAndPassword(email, password) {
         const userRecord = this.users[email];
         if (!userRecord || userRecord.password !== password) {

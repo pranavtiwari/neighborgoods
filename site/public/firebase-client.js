@@ -36,39 +36,66 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         console.warn('Firestore persistence settings failed:', err);
     }
 
-    // Helper function to handle Google Login with profile picker
+    // Ensure a Firestore profile exists for an authenticated user
+    async function ensureProfile(user) {
+        if (!user) return;
+        try {
+            const profileRef = firebase.firestore().collection('profiles').doc(user.uid);
+            const doc = await profileRef.get();
+            if (!doc.exists) {
+                await profileRef.set({
+                    full_name: user.displayName || 'Neighbor',
+                    avatar_url: user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
+                    bio: '',
+                    reputation_score: 5.0,
+                    carbon_saved_kg: 0,
+                    location: '',
+                    created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+        } catch (profileError) {
+            console.warn('Profile fetch/creation failed during Google Auth. User is still authenticated:', profileError);
+        }
+    }
+
+    // Helper function to handle Google Login
+    // Uses the redirect flow instead of popup: Google's OAuth responses now send
+    // a Cross-Origin-Opener-Policy header that severs the popup handle, which
+    // makes firebase.auth().signInWithPopup() unreliable (auth/cancelled-popup-request).
+    const REDIRECT_LOGIN_FLAG = 'pg_login_in_progress';
+    const REDIRECT_TARGET_KEY = 'post_auth_redirect';
     window.loginWithGoogle = async function(redirectTo = 'explore.html') {
+        sessionStorage.setItem(REDIRECT_LOGIN_FLAG, '1');
+        sessionStorage.setItem(REDIRECT_TARGET_KEY, redirectTo || 'explore.html');
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         try {
-            const result = await firebase.auth().signInWithPopup(provider);
-            const user = result.user;
-            
-            // Check if profile exists, if not create one
-            try {
-                const profileRef = firebase.firestore().collection('profiles').doc(user.uid);
-                const doc = await profileRef.get();
-                if (!doc.exists) {
-                    await profileRef.set({
-                        full_name: user.displayName || 'Neighbor',
-                        avatar_url: user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
-                        bio: '',
-                        reputation_score: 5.0,
-                        carbon_saved_kg: 0,
-                        location: '',
-                        created_at: firebase.firestore.FieldValue.serverTimestamp(),
-                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                }
-            } catch (profileError) {
-                console.warn('Profile fetch/creation failed during Google Auth. User is still authenticated:', profileError);
-            }
-            window.location.href = redirectTo;
+            await firebase.auth().signInWithRedirect(provider);
         } catch (error) {
+            sessionStorage.removeItem(REDIRECT_LOGIN_FLAG);
+            sessionStorage.removeItem(REDIRECT_TARGET_KEY);
             console.error('Login error:', error);
             alert('Login failed: ' + error.message);
         }
     };
+
+    // Complete a Google redirect sign-in on the way back from accounts.google.com
+    firebase.auth().getRedirectResult().then(async (result) => {
+        // Always clear the flag — whether the redirect succeeded, was cancelled, or there was no pending redirect
+        const target = sessionStorage.getItem(REDIRECT_TARGET_KEY) || 'explore.html';
+        sessionStorage.removeItem(REDIRECT_LOGIN_FLAG);
+        sessionStorage.removeItem(REDIRECT_TARGET_KEY);
+        if (!result || !result.user) return;
+        const user = result.user;
+        await ensureProfile(user);
+        window.location.href = safeRedirect(target);
+    }).catch((error) => {
+        sessionStorage.removeItem(REDIRECT_LOGIN_FLAG);
+        sessionStorage.removeItem(REDIRECT_TARGET_KEY);
+        console.error('Redirect login error:', error);
+        alert('Login failed: ' + error.message);
+    });
 
     // Helper function to handle Email/Password Login
     // Allowed post-auth redirect targets (VULN-19: open redirect prevention)

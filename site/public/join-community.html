@@ -24,9 +24,10 @@
     }
   </style>
   <script>
-    // Redirect if already logged in
+    // Redirect if already logged in (skip while a Google redirect sign-in is in
+    // progress, otherwise this redirect races the redirect-completion handler)
     firebase.auth().onAuthStateChanged((user) => {
-        if (user) {
+        if (user && sessionStorage.getItem('pg_login_in_progress') !== '1') {
             window.location.href = 'explore.html';
         }
     });
@@ -37,6 +38,7 @@
         console.warn('Real Google OAuth is not yet configured. Please check site/public/config.js.');
         return;
       }
+      if (sessionStorage.getItem('pg_login_in_progress') === '1') return;
       await window.loginWithGoogle('explore.html');
     }
 
