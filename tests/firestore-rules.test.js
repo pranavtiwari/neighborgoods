@@ -120,6 +120,57 @@ await test('items: may not create with another owner_id', async () => {
     }));
 });
 
+await test('items: a book copy requires a canonical book and owner', async () => {
+    // No book_id: a physical copy cannot exist without its canonical book.
+    await assertFails(dbFor(ALICE).collection('items').doc('copy1').set({
+        name: 'The Great Gatsby', owner_id: ALICE, kind: 'book'
+    }));
+    // A book copy with owner + book_id succeeds.
+    await assertSucceeds(dbFor(ALICE).collection('items').doc('copy1').set({
+        name: 'The Great Gatsby', owner_id: ALICE, kind: 'book', book_id: 'book1'
+    }));
+    // A book copy cannot be created for another owner either.
+    await assertFails(dbFor(BOB).collection('items').doc('copy2').set({
+        name: 'The Great Gatsby', owner_id: ALICE, kind: 'book', book_id: 'book1'
+    }));
+});
+
+await test('items: v1 listing types only (no new rentals)', async () => {
+    await assertFails(dbFor(ALICE).collection('items').doc('item1').set({
+        name: 'Book', owner_id: ALICE, listing_type: 'rental'
+    }));
+    await assertFails(dbFor(ALICE).collection('items').doc('item1').set({
+        name: 'Book', owner_id: ALICE, listing_type: 'free'
+    }));
+    await assertSucceeds(dbFor(ALICE).collection('items').doc('item1').set({
+        name: 'Book', owner_id: ALICE, listing_type: 'borrow'
+    }));
+    await assertSucceeds(dbFor(ALICE).collection('items').doc('item2').set({
+        name: 'Book', owner_id: ALICE, listing_type: 'giveaway'
+    }));
+    await assertSucceeds(dbFor(ALICE).collection('items').doc('item3').set({
+        name: 'Book', owner_id: ALICE, listing_type: 'swap'
+    }));
+});
+
+await test('items: legacy rental rows stay editable without becoming new rentals', async () => {
+    await seed(async db => db.collection('items').doc('legacy').set({
+        name: 'Legacy rental book', owner_id: ALICE, listing_type: 'rental',
+        condition: 'fair'
+    }));
+    // Editing other copy fields is allowed; the legacy type is preserved.
+    await assertSucceeds(dbFor(ALICE).collection('items').doc('legacy')
+        .update({ condition: 'good' }));
+    // But an edit that changes the listing type to a retired value is denied.
+    await assertFails(dbFor(ALICE).collection('items').doc('legacy')
+        .update({ listing_type: 'free' }));
+    await seed(async db => db.collection('items').doc('modern').set({
+        name: 'Modern book', owner_id: ALICE, listing_type: 'borrow'
+    }));
+    await assertFails(dbFor(ALICE).collection('items').doc('modern')
+        .update({ listing_type: 'rental' }));
+});
+
 await test('items: stranger may not update', async () => {
     await seed(async db => db.collection('items').doc('item1').set({
         name: 'Book', owner_id: ALICE, status: 'available', is_available: true

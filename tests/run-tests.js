@@ -1088,6 +1088,97 @@ await test('Flow 6: Canonical Books Catalog, Deduplication, Search, and Zero-Cop
     assert.strictEqual(searchByAuthor[0].id, book2.id);
 });
 
+await test('Flow 7: Book copies attach to one canonical book and use v1 listing types', async () => {
+    resetSandbox();
+    const aliceUid = 'alice-copy-uid';
+    const bobUid = 'bob-copy-uid';
+
+    // V1 listing types, with legacy values mapped cleanly for existing rows.
+    assert.strictEqual(window.db.normalizeListingType('borrow'), 'borrow');
+    assert.strictEqual(window.db.normalizeListingType('giveaway'), 'giveaway');
+    assert.strictEqual(window.db.normalizeListingType('swap'), 'swap');
+    assert.strictEqual(window.db.normalizeListingType('free'), 'borrow');
+    assert.strictEqual(window.db.normalizeListingType('rental'), 'borrow');
+    assert.strictEqual(window.db.normalizeListingType('donate'), 'giveaway');
+
+    firebase.auth().currentUser = { uid: aliceUid };
+    const book = await window.db.createBook({
+        title: 'The Left Hand of Darkness',
+        authors: ['Ursula K. Le Guin'],
+        isbn: '9780441478125'
+    });
+
+    // Alice lists a physical copy with copy-specific metadata.
+    const aliceCopy = await window.db.addItem({
+        name: book.title,
+        kind: 'book',
+        book_id: book.id,
+        owner_id: aliceUid,
+        listing_type: 'borrow',
+        condition: 'good',
+        condition_notes: 'Minor shelf wear',
+        edition_notes: 'Ace paperback',
+        photos: ['https://example.com/copy-a.jpg'],
+        visibility: 'public',
+        location_area: 'Springfield',
+        is_available: true,
+        status: 'available'
+    });
+
+    const storedAlice = await window.db.getItem(aliceCopy.id);
+    assert.strictEqual(storedAlice.book_id, book.id);
+    assert.strictEqual(storedAlice.kind, 'book');
+    assert.strictEqual(storedAlice.listing_type, 'borrow');
+    assert.strictEqual(storedAlice.condition, 'good');
+    assert.strictEqual(storedAlice.photos.length, 1);
+
+    // The same title from a second owner becomes a second copy under the SAME
+    // canonical book, not a duplicate book.
+    firebase.auth().currentUser = { uid: bobUid };
+    const bobCopy = await window.db.addItem({
+        name: book.title,
+        kind: 'book',
+        book_id: book.id,
+        owner_id: bobUid,
+        listing_type: 'swap',
+        condition: 'like_new',
+        visibility: 'public',
+        is_available: true,
+        status: 'available'
+    });
+
+    const storedBob = await window.db.getItem(bobCopy.id);
+    assert.strictEqual(storedBob.book_id, book.id);
+    assert.strictEqual(storedBob.listing_type, 'swap');
+    assert.notStrictEqual(aliceCopy.id, bobCopy.id);
+
+    const updatedBook = await window.db.getBook(book.id);
+    assert.strictEqual(updatedBook.copies_count, 2);
+    assert.strictEqual(updatedBook.available_copies_count, 2);
+
+    // A copy cannot be created without a canonical book.
+    await assert.rejects(
+        async () => window.db.addItem({
+            name: 'Orphan copy', kind: 'book', owner_id: bobUid, listing_type: 'borrow'
+        }),
+        /canonical book/
+    );
+
+    // New writes can never introduce a legacy rental; they are mapped to the
+    // v1 borrow type instead.
+    const legacyAttempt = await window.db.addItem({
+        name: book.title,
+        kind: 'book',
+        book_id: book.id,
+        owner_id: bobUid,
+        listing_type: 'rental',
+        is_available: true,
+        status: 'available'
+    });
+    const storedLegacyAttempt = await window.db.getItem(legacyAttempt.id);
+    assert.strictEqual(storedLegacyAttempt.listing_type, 'borrow');
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================

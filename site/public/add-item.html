@@ -90,11 +90,47 @@
                         Clear
                     </button>
                 </div>
+
+                <!-- Create a new canonical book when nothing matches -->
+                <button type="button" id="toggle-manual-book" onclick="toggleManualBookFields()"
+                    class="mt-3 text-xs font-semibold text-primary hover:underline flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">add</span>
+                    Can't find it? Enter book details manually
+                </button>
+
+                <div id="manual-book-fields" class="hidden mt-3 pt-3 border-t border-primary/10 space-y-3">
+                    <p class="text-xs text-stone-600 dark:text-stone-400">
+                        A new canonical book record will be created when you publish. Use the
+                        <strong>Name</strong> field below as the book title.
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label for="book-author" class="block text-[11px] font-semibold text-stone-500 mb-1">Author(s)</label>
+                            <input type="text" id="book-author" placeholder="e.g. Ursula K. Le Guin"
+                                class="w-full bg-surface rounded-xl border border-outline-variant/30 py-2.5 px-3 text-sm focus:ring-2 focus:ring-primary">
+                        </div>
+                        <div>
+                            <label for="book-isbn" class="block text-[11px] font-semibold text-stone-500 mb-1">ISBN (optional)</label>
+                            <input type="text" id="book-isbn" placeholder="978..."
+                                class="w-full bg-surface rounded-xl border border-outline-variant/30 py-2.5 px-3 text-sm focus:ring-2 focus:ring-primary">
+                        </div>
+                        <div>
+                            <label for="book-publisher" class="block text-[11px] font-semibold text-stone-500 mb-1">Publisher (optional)</label>
+                            <input type="text" id="book-publisher" placeholder="e.g. Ace Books"
+                                class="w-full bg-surface rounded-xl border border-outline-variant/30 py-2.5 px-3 text-sm focus:ring-2 focus:ring-primary">
+                        </div>
+                        <div>
+                            <label for="book-year" class="block text-[11px] font-semibold text-stone-500 mb-1">Published year (optional)</label>
+                            <input type="number" id="book-year" min="1000" max="2999" placeholder="e.g. 1968"
+                                class="w-full bg-surface rounded-xl border border-outline-variant/30 py-2.5 px-3 text-sm focus:ring-2 focus:ring-primary">
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- Image Upload -->
             <div>
-                <label class="block text-sm font-bold mb-2">Item Photo</label>
+                <label class="block text-sm font-bold mb-2">Copy Photo</label>
                 <div id="image-preview-container" class="hidden relative w-full aspect-square md:aspect-video rounded-xl overflow-hidden bg-stone-100 border-2 border-stone-200 shadow-sm mb-3 group cursor-pointer" onclick="document.getElementById('image-upload').click()">
                     <img id="image-preview" src="" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900">
                     <div class="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center transition-all">
@@ -129,37 +165,86 @@
                 </div>
             </div>
             
-            <!-- Listing Type Selector -->
+            <!-- Listing Type Selector (v1: borrow, giveaway, swap) -->
             <div>
                 <label class="block text-sm font-bold mb-2">Listing Type</label>
                 <div class="grid grid-cols-3 gap-3">
-                    <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 cursor-pointer transition-all active:scale-[0.98]" id="type-free-label">
-                        <input type="radio" name="listing-type" value="free" checked class="hidden">
-                        <span class="material-symbols-outlined text-primary text-2xl mb-1" style="font-variation-settings: 'FILL' 1;">volunteer_activism</span>
-                        <span class="text-sm font-bold text-on-surface text-center">Free to Borrow</span>
-                        <span class="text-[10px] text-stone-500 text-center mt-1">Shared with neighbors</span>
-                    </label>
-                    <label class="flex flex-col items-center justify-center p-4 rounded-xl border border-outline-variant/30 hover:bg-stone-50 cursor-pointer transition-all active:scale-[0.98]" id="type-rental-label">
-                        <input type="radio" name="listing-type" value="rental" class="hidden">
-                        <span class="material-symbols-outlined text-stone-500 text-2xl mb-1">payments</span>
-                        <span class="text-sm font-bold text-on-surface text-center">Rental</span>
-                        <span class="text-[10px] text-stone-500 text-center mt-1">Price via messages</span>
+                    <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 cursor-pointer transition-all active:scale-[0.98]" id="type-borrow-label">
+                        <input type="radio" name="listing-type" value="borrow" checked class="hidden">
+                        <span class="material-symbols-outlined text-primary text-2xl mb-1" style="font-variation-settings: 'FILL' 1;">auto_stories</span>
+                        <span class="text-sm font-bold text-on-surface text-center">Borrow</span>
+                        <span class="text-[10px] text-stone-500 text-center mt-1">Lend &amp; get it back</span>
                     </label>
                     <label class="flex flex-col items-center justify-center p-4 rounded-xl border border-outline-variant/30 hover:bg-stone-50 cursor-pointer transition-all active:scale-[0.98]" id="type-giveaway-label">
                         <input type="radio" name="listing-type" value="giveaway" class="hidden">
                         <span class="material-symbols-outlined text-stone-500 text-2xl mb-1">card_giftcard</span>
                         <span class="text-sm font-bold text-on-surface text-center">Give Away</span>
-                        <span class="text-[10px] text-stone-500 text-center mt-1">Item is theirs to keep</span>
+                        <span class="text-[10px] text-stone-500 text-center mt-1">It's theirs to keep</span>
+                    </label>
+                    <label class="flex flex-col items-center justify-center p-4 rounded-xl border border-outline-variant/30 hover:bg-stone-50 cursor-pointer transition-all active:scale-[0.98]" id="type-swap-label">
+                        <input type="radio" name="listing-type" value="swap" class="hidden">
+                        <span class="material-symbols-outlined text-stone-500 text-2xl mb-1">sync_alt</span>
+                        <span class="text-sm font-bold text-on-surface text-center">Swap</span>
+                        <span class="text-[10px] text-stone-500 text-center mt-1">Trade for another book</span>
                     </label>
                 </div>
+                <p id="legacy-type-note" class="hidden mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"></p>
+            </div>
+
+            <!-- Copy Condition & Edition -->
+            <div class="bg-surface-container rounded-2xl p-5 space-y-4">
+                <div>
+                    <h3 class="font-bold text-sm">About this copy</h3>
+                    <p class="text-xs text-stone-500 mt-1">The canonical book is shared; these details describe your physical copy.</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="item-condition" class="block text-xs font-bold mb-1.5">Condition</label>
+                        <select id="item-condition" name="condition" class="w-full bg-surface rounded-xl border border-outline-variant/30 py-3 px-3 text-sm focus:ring-2 focus:ring-primary">
+                            <option value="new">New</option>
+                            <option value="like_new">Like new</option>
+                            <option value="good" selected>Good</option>
+                            <option value="fair">Fair</option>
+                            <option value="poor">Poor</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="item-fulfillment" class="block text-xs font-bold mb-1.5">Fulfillment</label>
+                        <select id="item-fulfillment" name="fulfillment_method" class="w-full bg-surface rounded-xl border border-outline-variant/30 py-3 px-3 text-sm focus:ring-2 focus:ring-primary">
+                            <option value="pickup" selected>Local pickup</option>
+                            <option value="shipping">Shipping</option>
+                            <option value="both">Pickup or shipping</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="item-condition-notes" class="block text-xs font-bold mb-1.5">Condition notes</label>
+                    <input type="text" id="item-condition-notes" name="condition_notes" placeholder="e.g. Slight crease on the spine; no writing inside"
+                        class="w-full bg-surface rounded-xl border border-outline-variant/30 py-3 px-3 text-sm focus:ring-2 focus:ring-primary">
+                </div>
+                <div>
+                    <label for="item-edition-notes" class="block text-xs font-bold mb-1.5">Edition notes</label>
+                    <input type="text" id="item-edition-notes" name="edition_notes" placeholder="e.g. 1998 illustrated paperback, UK edition"
+                        class="w-full bg-surface rounded-xl border border-outline-variant/30 py-3 px-3 text-sm focus:ring-2 focus:ring-primary">
+                </div>
+            </div>
+
+            <!-- Visibility -->
+            <div>
+                <label for="item-visibility" class="block text-sm font-bold mb-2">Visibility</label>
+                <select id="item-visibility" name="visibility" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
+                    <option value="public" selected>Public in World of Books</option>
+                    <option value="circles">Only the selected circles</option>
+                </select>
+                <p class="text-[10px] text-stone-500 mt-1">New copies are public in World of Books by default. You can still add them to your circles below.</p>
             </div>
 
             <!-- Pickup Location -->
             <div>
-                <label class="block text-sm font-bold mb-2">Pickup Location</label>
+                <label class="block text-sm font-bold mb-2">Pickup Area</label>
                 <div class="flex gap-2">
                     <div class="relative flex-1">
-                        <input type="text" id="item-location" required placeholder="Select on map or fetch GPS..." class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
+                        <input type="text" id="item-location" required placeholder="Neighborhood, city, or select on map..." class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
                         <span id="loc-loading-spinner" class="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-stone-500 animate-spin hidden">progress_activity</span>
                     </div>
                     <button type="button" id="gps-btn" class="w-14 h-14 shrink-0 bg-surface-container hover:bg-stone-200 dark:hover:bg-stone-800 flex items-center justify-center rounded-xl text-primary active:scale-95 transition-all shadow-sm">
@@ -167,7 +252,7 @@
                     </button>
                 </div>
                 <div id="map-container" class="mt-3 rounded-xl overflow-hidden border border-outline-variant/30 shadow-sm h-60 w-full hidden relative z-10"></div>
-                <p id="location-hint" class="text-[10px] text-stone-500 mt-1">On desktop, you can click on the map or drag the marker to specify the exact pickup location.</p>
+                <p id="location-hint" class="text-[10px] text-stone-500 mt-1">Only the area is shown publicly. Your exact address stays private until you approve a request.</p>
             </div>
 
             <!-- Description -->
@@ -178,8 +263,8 @@
 
             <!-- Circles Selection -->
             <div>
-                <label class="block text-sm font-bold mb-2">List in Circles (Optional)</label>
-                <p class="text-xs text-stone-500 mb-3">If selected, your item will only be visible to members of the chosen circles. If none are selected, it will be public.</p>
+                <label class="block text-sm font-bold mb-2">Also list in Circles (Optional)</label>
+                <p class="text-xs text-stone-500 mb-3">Multi-circle listings are supported. Public copies stay discoverable in World of Books; choose “Only the selected circles” above to restrict visibility.</p>
                 <div id="circles-checkbox-list" class="space-y-2 max-h-48 overflow-y-auto p-3 bg-surface-container rounded-xl border border-outline-variant/10 shadow-inner">
                     <div class="text-stone-500 text-sm p-4 flex items-center justify-center gap-2">
                         <span class="material-symbols-outlined animate-spin text-primary">progress_activity</span>
@@ -252,6 +337,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const itemId = urlParams.get('id');
         const circleId = urlParams.get('circleId');
+        const bookIdParam = urlParams.get('book_id');
         let currentItemImageUrl = null;
 
         const CATEGORIES = window.db.getCategoryOptions();
@@ -260,6 +346,49 @@
         
         let userCircles = [];
         let currentBookMetadata = null;
+        let currentBookId = null;
+
+        function toggleManualBookFields(forceShow) {
+            const fields = document.getElementById('manual-book-fields');
+            if (!fields) return;
+            const shouldShow = typeof forceShow === 'boolean' ? forceShow : fields.classList.contains('hidden');
+            fields.classList.toggle('hidden', !shouldShow);
+        }
+        window.toggleManualBookFields = toggleManualBookFields;
+
+        function getManualBookData() {
+            const name = (document.getElementById('item-name').value || '').trim();
+            const authorText = (document.getElementById('book-author').value || '').trim();
+            const isbn = (document.getElementById('book-isbn').value || '').trim();
+            const publisher = (document.getElementById('book-publisher').value || '').trim();
+            const year = (document.getElementById('book-year').value || '').trim();
+
+            const base = currentBookMetadata || {};
+            const authors = authorText
+                ? authorText.split(/,|&|\band\b/i).map(a => a.trim()).filter(Boolean)
+                : (base.authors || []);
+
+            const merged = {
+                ...base,
+                title: name || base.title || '',
+                authors,
+                isbn: isbn || base.isbn || base.isbn_13 || base.isbn_10 || '',
+                isbn_13: base.isbn_13 || null,
+                isbn_10: base.isbn_10 || null,
+                publisher: publisher || base.publisher || null,
+                published_year: year ? parseInt(year, 10) : (base.published_year || null)
+            };
+            return merged;
+        }
+
+        async function searchCatalogBooks(query) {
+            try {
+                return await window.db.searchBooks({ query: query, limit: 8 });
+            } catch (err) {
+                console.warn('Catalog search failed:', err);
+                return [];
+            }
+        }
 
         async function performBookLookup() {
             const input = document.getElementById('book-lookup-input');
@@ -282,8 +411,28 @@
             btnText.classList.add('hidden');
             spinner.classList.remove('hidden');
 
+            const isIsbn = window.db.cleanIsbn(query).length >= 9;
+
             try {
-                const isIsbn = window.db.cleanIsbn(query).length >= 9;
+                // 1. Prefer an existing canonical book so two owners attach to
+                //    the same title instead of creating duplicate records.
+                const catalogMatches = await searchCatalogBooks(query);
+                if (catalogMatches.length > 0) {
+                    if (catalogMatches.length === 1) {
+                        applySelectedBook(catalogMatches[0]);
+                        statusDiv.className = 'mt-3 text-xs text-emerald-600 font-medium';
+                        statusDiv.textContent = 'Found this book in the catalog — details filled in.';
+                    } else {
+                        renderBookCandidates(catalogMatches);
+                        statusDiv.className = 'mt-3 text-xs text-stone-600';
+                        statusDiv.textContent = 'Found ' + catalogMatches.length + ' books in the catalog. Select one below:';
+                    }
+                    statusDiv.classList.remove('hidden');
+                    return;
+                }
+
+                // 2. Fall back to external metadata lookup and create the
+                //    canonical record only when the listing is published.
                 const result = await window.db.lookupBookMetadata(isIsbn ? { isbn: query } : { query: query });
 
                 if (result && result.found) {
@@ -299,12 +448,19 @@
                         statusDiv.classList.remove('hidden');
                     }
                 } else {
+                    if (isIsbn) {
+                        document.getElementById('book-isbn').value = query;
+                    } else if (!document.getElementById('item-name').value.trim()) {
+                        document.getElementById('item-name').value = query;
+                    }
+                    toggleManualBookFields(true);
                     statusDiv.className = 'mt-3 text-xs text-stone-500';
-                    statusDiv.textContent = 'No matching book found online. You can enter details manually below.';
+                    statusDiv.textContent = 'No matching book found. Add the details manually below and we will create a new catalog record.';
                     statusDiv.classList.remove('hidden');
                 }
             } catch (err) {
                 console.warn('Book lookup error:', err);
+                toggleManualBookFields(true);
                 statusDiv.className = 'mt-3 text-xs text-stone-500';
                 statusDiv.textContent = 'Lookup unavailable. You can enter details manually below.';
                 statusDiv.classList.remove('hidden');
@@ -327,12 +483,15 @@
                     : '<span class="material-symbols-outlined text-stone-300 text-3xl flex-shrink-0">book</span>';
                 const yearStr = book.published_year ? ' (' + book.published_year + ')' : '';
                 const authorsStr = (book.authors || []).join(', ');
+                const catalogBadge = book.id
+                    ? '<span class="ml-2 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">In catalog</span>'
+                    : '';
 
                 card.innerHTML = 
                     '<div class="flex items-center gap-3 overflow-hidden">' +
                         coverImg +
                         '<div class="min-w-0">' +
-                            '<div class="font-bold text-xs text-on-surface truncate">' + window.db.escapeHtml(book.title) + '</div>' +
+                            '<div class="font-bold text-xs text-on-surface truncate">' + window.db.escapeHtml(book.title) + catalogBadge + '</div>' +
                             '<div class="text-[11px] text-stone-500 truncate">' + window.db.escapeHtml(authorsStr) + yearStr + '</div>' +
                         '</div>' +
                     '</div>' +
@@ -345,7 +504,9 @@
                     container.classList.add('hidden');
                     const statusDiv = document.getElementById('book-lookup-status');
                     statusDiv.className = 'mt-3 text-xs text-emerald-600 font-medium';
-                    statusDiv.textContent = 'Book selected and details auto-filled.';
+                    statusDiv.textContent = book.id
+                        ? 'Existing catalog book attached. Now describe your physical copy.'
+                        : 'Book selected and details auto-filled.';
                 };
                 container.appendChild(card);
             });
@@ -353,22 +514,44 @@
             container.classList.remove('hidden');
         }
 
-        function applySelectedBook(book) {
+        function applySelectedBook(book, options = {}) {
             currentBookMetadata = book;
+            currentBookId = book.id || null;
 
             const nameInput = document.getElementById('item-name');
-            nameInput.value = book.title;
+            if (!options.preserveName) {
+                nameInput.value = book.title || '';
+            }
 
             const descInput = document.getElementById('item-description');
-            if (descInput && !descInput.value.trim() && book.description) {
+            if (!options.preserveDescription && descInput && !descInput.value.trim() && book.description) {
                 descInput.value = book.description;
             }
 
-            if (book.cover_url && !selectedFile) {
+            if (!options.preserveImage && book.cover_url && !selectedFile) {
                 currentItemImageUrl = book.cover_url;
                 imagePreview.src = book.cover_url;
                 previewContainer.classList.remove('hidden');
                 uploadPlaceholder.classList.add('hidden');
+            }
+
+            // Keep the manual fields in sync so the user can correct metadata
+            // before a new canonical record is created.
+            const authorInput = document.getElementById('book-author');
+            const isbnInput = document.getElementById('book-isbn');
+            const publisherInput = document.getElementById('book-publisher');
+            const yearInput = document.getElementById('book-year');
+            if (authorInput && !authorInput.value.trim() && book.authors && book.authors.length) {
+                authorInput.value = book.authors.join(', ');
+            }
+            if (isbnInput && !isbnInput.value.trim() && (book.isbn_13 || book.isbn)) {
+                isbnInput.value = book.isbn_13 || book.isbn;
+            }
+            if (publisherInput && !publisherInput.value.trim() && book.publisher) {
+                publisherInput.value = book.publisher;
+            }
+            if (yearInput && !yearInput.value && book.published_year) {
+                yearInput.value = book.published_year;
             }
 
             if (!selectedCategories.includes('books')) {
@@ -387,6 +570,7 @@
             if (book.authors && book.authors.length) metaParts.push(book.authors.join(', '));
             if (book.published_year) metaParts.push(book.published_year);
             if (book.isbn_13 || book.isbn) metaParts.push('ISBN: ' + (book.isbn_13 || book.isbn));
+            if (book.id) metaParts.push('Catalog book');
             metaEl.textContent = metaParts.join(' • ');
 
             if (book.cover_url) {
@@ -402,6 +586,7 @@
 
         function clearSelectedBook() {
             currentBookMetadata = null;
+            currentBookId = null;
             document.getElementById('selected-book-badge').classList.add('hidden');
             document.getElementById('book-lookup-status').classList.add('hidden');
             document.getElementById('book-lookup-input').value = '';
@@ -618,11 +803,11 @@
             }
         });
 
-        // Listing Type Interactive Highlighting
+        // Listing Type Interactive Highlighting (v1: borrow, giveaway, swap)
         const typeLabels = [
-            { label: document.getElementById('type-free-label'),     radio: null },
-            { label: document.getElementById('type-rental-label'),   radio: null },
+            { label: document.getElementById('type-borrow-label'),   radio: null },
             { label: document.getElementById('type-giveaway-label'), radio: null },
+            { label: document.getElementById('type-swap-label'),     radio: null },
         ];
         typeLabels.forEach(t => t.radio = t.label.querySelector('input'));
 
@@ -842,6 +1027,23 @@
             if (!session) return;
             const userId = session.user.uid;
 
+            // Deep links from a book detail page: /add-item.html?book_id=...
+            // attach a new physical copy to the existing canonical record.
+            if (bookIdParam) {
+                try {
+                    const book = await window.db.getBook(bookIdParam);
+                    if (book) {
+                        applySelectedBook(book);
+                        const statusDiv = document.getElementById('book-lookup-status');
+                        statusDiv.className = 'mt-3 text-xs text-emerald-600 font-medium';
+                        statusDiv.textContent = 'Adding a copy of "' + book.title + '" to the catalog.';
+                        statusDiv.classList.remove('hidden');
+                    }
+                } catch (bookErr) {
+                    console.warn('Could not load book from book_id param:', bookErr);
+                }
+            }
+
             let preSelectedCircles = [];
             if (circleId) {
                 preSelectedCircles = [circleId];
@@ -914,12 +1116,56 @@
                 }
                 renderCategoryChips();
 
-                // Pre-select the correct listing type in edit mode
-                const savedType = item.listing_type || 'free';
+                // Pre-select the correct listing type in edit mode. Legacy
+                // 'free' and 'rental' listings stay readable but are converted
+                // to a v1 type (borrow) when saved; rentals are never offered
+                // for new listings.
+                const savedType = window.db.normalizeListingType(item.listing_type || item.intent || 'borrow');
                 typeLabels.forEach(({ radio }) => {
                     radio.checked = radio.value === savedType;
                 });
                 updateTypeSelection();
+                if (item.listing_type && item.listing_type !== savedType) {
+                    const legacyNote = document.getElementById('legacy-type-note');
+                    legacyNote.textContent = 'This listing used the legacy "' + item.listing_type + '" type. Saving it will convert it to "' + savedType + '".';
+                    legacyNote.classList.remove('hidden');
+                }
+
+                // Copy-specific details
+                document.getElementById('item-condition').value = item.condition || item.condition_grade || 'good';
+                document.getElementById('item-condition-notes').value = item.condition_notes || '';
+                document.getElementById('item-edition-notes').value = item.edition_note || item.edition_notes || '';
+                document.getElementById('item-fulfillment').value = item.fulfillment_method || 'pickup';
+                const itemVisibility = item.visibility
+                    || ((item.circle_id || (item.circle_ids && item.circle_ids.length > 0)) ? 'circles' : 'public');
+                document.getElementById('item-visibility').value = itemVisibility === 'circles' ? 'circles' : 'public';
+
+                if (item.book_id) {
+                    try {
+                        const book = await window.db.getBook(item.book_id);
+                        if (book) {
+                            applySelectedBook(book, {
+                                preserveName: true,
+                                preserveDescription: true,
+                                preserveImage: true
+                            });
+                        }
+                    } catch (bookErr) {
+                        console.warn('Could not load linked canonical book:', bookErr);
+                    }
+                }
+
+                // Prefill manual metadata for legacy (pre-catalog) book items.
+                if (item.isbn13 || item.isbn_13 || item.isbn10 || item.isbn_10 || item.author || item.authors || item.publisher || item.published_year) {
+                    const authorVal = item.authors || item.author;
+                    if (authorVal) {
+                        document.getElementById('book-author').value = Array.isArray(authorVal) ? authorVal.join(', ') : authorVal;
+                    }
+                    const isbnVal = item.isbn13 || item.isbn_13 || item.isbn10 || item.isbn_10 || item.isbn;
+                    if (isbnVal) document.getElementById('book-isbn').value = isbnVal;
+                    if (item.publisher) document.getElementById('book-publisher').value = item.publisher;
+                    if (item.published_year) document.getElementById('book-year').value = item.published_year;
+                }
 
                 if (item.image_url) {
                     currentItemImageUrl = item.image_url;
@@ -928,7 +1174,7 @@
                     previewContainer.classList.remove('hidden');
                 }
 
-                document.getElementById('item-location').value = item.location || '';
+                document.getElementById('item-location').value = item.location_area || item.location || '';
                 itemLatitude = item.latitude || null;
                 itemLongitude = item.longitude || null;
 
@@ -990,9 +1236,14 @@
                 const session = await requireAuth();
                 if (!session) return;
 
-                const name = document.getElementById('item-name').value;
+                const name = document.getElementById('item-name').value.trim();
                 const description = document.getElementById('item-description').value;
-                const itemLocation = document.getElementById('item-location').value;
+                const itemLocation = document.getElementById('item-location').value.trim();
+                const condition = document.getElementById('item-condition').value;
+                const conditionNotes = document.getElementById('item-condition-notes').value.trim();
+                const editionNotes = document.getElementById('item-edition-notes').value.trim();
+                const fulfillment = document.getElementById('item-fulfillment').value;
+                const visibility = document.getElementById('item-visibility').value;
 
                 let imageUrl = currentItemImageUrl;
 
@@ -1004,11 +1255,18 @@
                     imageUrl = await window.db.uploadFile(filePath, selectedFile);
                 }
 
-                const listingType = document.querySelector('input[name="listing-type"]:checked').value;
-                
+                const listingType = window.db.normalizeListingType(
+                    document.querySelector('input[name="listing-type"]:checked').value
+                );
+
                 // Get checked circles
                 const checkedCircles = document.querySelectorAll('input[name="selected-circles"]:checked');
                 const selectedCircles = Array.from(checkedCircles).map(cb => cb.value);
+
+                if (visibility === 'circles' && selectedCircles.length === 0) {
+                    showError("Choose at least one circle, or make this copy public in World of Books.");
+                    return;
+                }
 
                 // Ensure parent categories are also included in the saved categories list for subcategories
                 const categoriesToSave = [...selectedCategories];
@@ -1019,27 +1277,59 @@
                     }
                 });
 
-                let canonicalBookId = null;
-                if (currentBookMetadata) {
-                    try {
-                        const bookRes = await window.db.findOrCreateBook(currentBookMetadata);
-                        if (bookRes && bookRes.book) {
-                            canonicalBookId = bookRes.book.id;
-                        }
-                    } catch (bookErr) {
-                        console.warn('Could not link canonical book:', bookErr);
-                    }
+                const isBook = selectedCategories.includes('books')
+                    || !!currentBookId
+                    || !!currentBookMetadata
+                    || !!document.getElementById('book-isbn').value.trim();
+
+                if (isBook && !name) {
+                    showError("Please enter the book title so we can create or attach a canonical book.");
+                    return;
                 }
+
+                // Attach the existing canonical book, or create one from the
+                // lookup/manual metadata. A book copy must never be saved
+                // without a book.
+                let canonicalBookId = currentBookId;
+                if (isBook && !canonicalBookId) {
+                    const bookData = getManualBookData();
+                    if (!bookData.title) {
+                        showError("A book copy must be linked to a book. Search for a book or enter its title.");
+                        return;
+                    }
+                    const bookRes = await window.db.findOrCreateBook(bookData);
+                    if (!bookRes || !bookRes.book || !bookRes.book.id) {
+                        throw new Error("Could not create or find the canonical book record.");
+                    }
+                    canonicalBookId = bookRes.book.id;
+                }
+
+                if (isBook && !canonicalBookId) {
+                    throw new Error("A book copy must be linked to a book.");
+                }
+
+                const photos = imageUrl ? [imageUrl] : [];
 
                 const payload = {
                     name: name,
+                    kind: isBook ? 'book' : 'item',
                     book_id: canonicalBookId,
                     category: selectedCategories[0] || 'other',
                     categories: categoriesToSave,
                     description: description,
                     image_url: imageUrl,
+                    photos: photos,
                     listing_type: listingType,
+                    condition: condition,
+                    condition_grade: condition,
+                    condition_notes: conditionNotes,
+                    edition_note: editionNotes,
+                    edition_notes: editionNotes,
+                    fulfillment_method: fulfillment,
+                    visibility: visibility,
+                    visibility_scope: visibility === 'public' ? 'world_of_books' : 'circles',
                     location: itemLocation,
+                    location_area: itemLocation,
                     latitude: itemLatitude || null,
                     longitude: itemLongitude || null,
                     circle_id: selectedCircles[0] || null,

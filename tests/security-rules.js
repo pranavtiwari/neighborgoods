@@ -171,10 +171,24 @@ function buildRulesEngine(firestore) {
                     if (data.owner_id !== uid) DENY('owner_id must be the authenticated user');
                     if (typeof data.name !== 'string') DENY('name must be a string');
                     if (data.name.length > 200) DENY('name exceeds 200 chars');
+                    if ('listing_type' in data && !['borrow', 'giveaway', 'swap'].includes(data.listing_type)) {
+                        DENY('new listings must use a v1 listing type (borrow, giveaway, swap)');
+                    }
+                    if (data.kind === 'book' && (typeof data.book_id !== 'string' || !data.book_id)) {
+                        DENY('a book copy must be linked to a canonical book');
+                    }
+                    if ('visibility' in data && !['public', 'circles'].includes(data.visibility)) {
+                        DENY('invalid visibility');
+                    }
                 } else {
                     if (!prior) DENY('item not found');
                     if (data.owner_id !== prior.owner_id) DENY('owner_id is immutable');
                     if (typeof data.name !== 'string' || data.name.length > 200) DENY('invalid name');
+                    const changedFields = Object.keys(data).filter(k => data[k] !== prior[k]);
+                    if (changedFields.includes('listing_type') &&
+                        !['borrow', 'giveaway', 'swap'].includes(data.listing_type)) {
+                        DENY('new listings must use a v1 listing type (borrow, giveaway, swap)');
+                    }
                     if (prior.owner_id !== uid) {
                         // Non-owner: only if the denormalised active request
                         // points at this item and they are a participant in it,

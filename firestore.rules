@@ -198,7 +198,20 @@ service cloud.firestore {
         && (!('description' in request.resource.data) || (
               request.resource.data.description is string
               && request.resource.data.description.size() <= 5000))
-        && (!('image_url' in request.resource.data) || request.resource.data.image_url is string);
+        && (!('image_url' in request.resource.data) || request.resource.data.image_url is string)
+        // V1 listing types only. Legacy 'free'/'rental' rows stay readable but
+        // no new rental can be created.
+        && (!('listing_type' in request.resource.data) || (
+              request.resource.data.listing_type in ['borrow', 'giveaway', 'swap']))
+        && (!('kind' in request.resource.data) || (
+              request.resource.data.kind in ['book', 'item', 'skill', 'surplus']))
+        // A physical book copy must be linked to a canonical book; owner_id is
+        // already required to be the authenticated user above.
+        && (!('kind' in request.resource.data) || request.resource.data.kind != 'book' || (
+              request.resource.data.book_id is string
+              && request.resource.data.book_id.size() > 0))
+        && (!('visibility' in request.resource.data) || (
+              request.resource.data.visibility in ['public', 'circles']));
 
       // FIX VULN-13: The original rule only let the OWNER update an item, but
       // the borrow lifecycle mutates item.status / is_available from both
@@ -218,6 +231,15 @@ service cloud.firestore {
         && (!('description' in request.resource.data) || (
               request.resource.data.description is string
               && request.resource.data.description.size() <= 5000))
+        // No new rentals on edit. Legacy rows that leave listing_type untouched
+        // remain editable for migration/cleanup.
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['listing_type']) || (
+              request.resource.data.listing_type in ['borrow', 'giveaway', 'swap']))
+        && (!request.resource.data.keys().hasAny(['kind']) || request.resource.data.kind != 'book' || (
+              request.resource.data.book_id is string
+              && request.resource.data.book_id.size() > 0))
+        && (!('visibility' in request.resource.data) || (
+              request.resource.data.visibility in ['public', 'circles']))
         && (
           // Owner may rewrite the listing freely.
           resource.data.owner_id == request.auth.uid

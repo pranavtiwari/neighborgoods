@@ -684,6 +684,13 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     myCircleIds = new Set(memberships.map(m => m.circle_id));
                 }
                 const isVisible = item => {
+                    // V1 copies default to public in World of Books. Public
+                    // copies remain discoverable even when also listed in
+                    // circles; only explicitly circle-scoped copies are
+                    // filtered by membership.
+                    if (item.visibility === 'public' || item.visibility_scope === 'world_of_books') {
+                        return true;
+                    }
                     if (userId) {
                         if (item.circle_ids && item.circle_ids.length > 0) {
                             return item.circle_ids.some(cid => myCircleIds.has(cid));
@@ -810,9 +817,84 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
+        // V1 listing types. Legacy 'free' and 'rental' listings remain
+        // readable (and are mapped for display/editing), but new writes must
+        // never introduce a rental.
+        LISTING_TYPES: ['borrow', 'giveaway', 'swap'],
+
+        normalizeListingType: function(type, intent) {
+            const raw = String(type || '').toLowerCase();
+            const rawIntent = String(intent || '').toLowerCase();
+            if ((raw === 'free' || raw === '') && (rawIntent === 'donate' || rawIntent === 'giveaway')) {
+                return 'giveaway';
+            }
+            if (raw === 'rental' || raw === 'free' || raw === 'lend' || raw === 'loan') return 'borrow';
+            if (raw === 'donate' || raw === 'donation') return 'giveaway';
+            if (raw === 'swap' || raw === 'trade') return 'swap';
+            if (raw === 'giveaway') return 'giveaway';
+            return 'borrow';
+        },
+
+        // Kept as a named alias so callers/UI can express intent explicitly.
+        mapLegacyListingType: function(type) {
+            return this.normalizeListingType(type);
+        },
+
+        syncBookCopyCounts: async function(bookId) {
+            if (!bookId) return null;
+            try {
+                const book = await this.getBook(bookId);
+                if (!book) return null;
+
+                const snap = await firebase.firestore().collection('items')
+                    .where('book_id', '==', bookId)
+                    .get();
+                const copies = snap.docs.map(doc => doc.data());
+                const total = copies.length;
+                const available = copies.filter(copy =>
+                    copy.is_available !== false && (!copy.status || copy.status === 'available')
+                ).length;
+
+                if (book.copies_count === total && book.available_copies_count === available) {
+                    return book;
+                }
+
+                await firebase.firestore().collection('books').doc(bookId).set({
+                    copies_count: total,
+                    available_copies_count: available,
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                return { ...book, copies_count: total, available_copies_count: available };
+            } catch (err) {
+                console.warn('Could not sync book copy counts:', err);
+                return null;
+            }
+        },
+
         addItem: async function(itemData) {
             try {
                 const user = firebase.auth().currentUser;
+                const ownerId = itemData.owner_id || (user ? user.uid : null);
+                const categories = Array.isArray(itemData.categories) ? itemData.categories : [];
+                const isBook = itemData.kind === 'book'
+                    || !!itemData.book_id
+                    || categories.includes('books');
+
+                // A physical copy can never exist without its canonical book
+                // and an owner. Generic non-book items keep the legacy path.
+                if (itemData.owner_id && user && itemData.owner_id !== user.uid) {
+                    throw new Error('owner_id must match the signed-in user.');
+                }
+                if (isBook) {
+                    if (!ownerId) {
+                        throw new Error('A book copy must have an owner.');
+                    }
+                    if (!itemData.book_id) {
+                        throw new Error('A book copy must be linked to a canonical book.');
+                    }
+                }
+
                 let ownerName = 'Neighbor';
                 let ownerAvatar = '';
                 if (user) {
@@ -823,8 +905,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     }
                 }
 
+                const listingType = this.normalizeListingType(itemData.listing_type, itemData.intent);
+
                 const doc = {
                     ...itemData,
+                    listing_type: listingType,
+                    owner_id: ownerId,
                     owner_name: ownerName,
                     owner_avatar: ownerAvatar,
                     created_at: firebase.firestore.FieldValue.serverTimestamp()
@@ -833,6 +919,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 // Book spine fields. `name` is the display title used by the
                 // existing item-details/explore UI; metadata is kept alongside
                 // so the catalogue can be searched without loading everything.
+                if (doc.kind === 'book') {
+                    doc.condition = doc.condition || doc.condition_grade || null;
+                    doc.condition_grade = doc.condition_grade || doc.condition || null;
+                    doc.photos = Array.isArray(doc.photos) ? doc.photos : (doc.image_url ? [doc.image_url] : []);
+                    if (doc.visibility !== 'circles') {
+                        doc.visibility = 'public';
+                        doc.visibility_scope = doc.visibility_scope || 'world_of_books';
+                    }
+                }
                 if (doc.isbn13) {
                     doc.isbn13 = String(doc.isbn13).replace(/[^0-9Xx]/g, '').toUpperCase();
                 }
@@ -870,6 +965,11 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         console.warn("Could not save private location subcollection:", locErr);
                     }
                 }
+
+                if (doc.book_id) {
+                    await this.syncBookCopyCounts(doc.book_id);
+                }
+
                 return { id: ref.id };
             } catch (err) {
                 console.error("Error adding item:", err);
@@ -879,10 +979,23 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         updateItem: async function(itemId, itemData) {
             try {
+                const patch = { ...itemData };
+                if ('listing_type' in patch) {
+                    patch.listing_type = this.normalizeListingType(patch.listing_type);
+                }
+                if ('photos' in patch || 'image_url' in patch) {
+                    if (!Array.isArray(patch.photos)) {
+                        patch.photos = patch.image_url ? [patch.image_url] : [];
+                    }
+                }
                 await firebase.firestore().collection('items').doc(itemId).set({
-                    ...itemData,
+                    ...patch,
                     updated_at: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
+
+                if (patch.book_id) {
+                    await this.syncBookCopyCounts(patch.book_id);
+                }
                 return { id: itemId };
             } catch (err) {
                 console.error("Error updating item:", err);
@@ -893,10 +1006,14 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         deleteItem: async function(itemId) {
             try {
                 const docSnap = await firebase.firestore().collection('items').doc(itemId).get();
-                if (docSnap.exists && docSnap.data().active_request_id) {
+                const existing = docSnap.exists ? docSnap.data() : null;
+                if (existing && existing.active_request_id) {
                     throw new Error("Cannot delete item with an active circulation transaction.");
                 }
                 await firebase.firestore().collection('items').doc(itemId).delete();
+                if (existing && existing.book_id) {
+                    await this.syncBookCopyCounts(existing.book_id);
+                }
             } catch (err) {
                 console.error("Error deleting item:", err);
                 throw err;
