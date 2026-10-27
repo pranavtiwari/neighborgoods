@@ -88,6 +88,14 @@ class MockQuery {
                     return Array.isArray(filter.value) && filter.value.includes(val);
                 } else if (filter.op === 'array-contains') {
                     return Array.isArray(val) && val.includes(filter.value);
+                } else if (filter.op === '>=') {
+                    return val !== undefined && val !== null && val >= filter.value;
+                } else if (filter.op === '<=') {
+                    return val !== undefined && val !== null && val <= filter.value;
+                } else if (filter.op === '>') {
+                    return val !== undefined && val !== null && val > filter.value;
+                } else if (filter.op === '<') {
+                    return val !== undefined && val !== null && val < filter.value;
                 }
                 return true;
             });

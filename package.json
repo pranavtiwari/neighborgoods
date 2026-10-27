@@ -5,10 +5,11 @@
     "build": "vite build && node post-build.js",
     "preview": "vite preview",
     "test:unit": "node tests/run-tests.js",
+    "test:catalog": "node tests/catalog.test.js",
     "test:state-machine": "node tests/state-machine.test.js",
     "test:rules": "node tests/run-emulator.js tests/firestore-rules.test.js",
     "test:migrations": "node tests/run-emulator.js tests/migrations.test.js",
-    "test": "node tests/run-tests.js && node tests/state-machine.test.js && node tests/run-emulator.js tests/firestore-rules.test.js && node tests/run-emulator.js tests/migrations.test.js",
+    "test": "node tests/catalog.test.js && node tests/run-tests.js && node tests/state-machine.test.js && node tests/run-emulator.js tests/firestore-rules.test.js && node tests/run-emulator.js tests/migrations.test.js",
     "ci": "npm test"
   },
   "dependencies": {

@@ -1017,6 +1017,77 @@ await test('Integration: getCircleItems and getActiveRequest security scoping', 
     assert.strictEqual(activeReq.id, req.id);
 });
 
+await test('Flow 6: Canonical Books Catalog, Deduplication, Search, and Zero-Copy Status', async () => {
+    resetSandbox();
+    const aliceUid = 'alice-catalog-uid';
+    const bobUid = 'bob-catalog-uid';
+
+    firebase.auth().currentUser = { uid: aliceUid };
+
+    // 1. Create a canonical book with ISBN-10
+    const createdBook = await window.db.createBook({
+        title: 'The Great Gatsby',
+        authors: ['F. Scott Fitzgerald'],
+        isbn: '0743273567',
+        published_year: 1925
+    });
+
+    assert.ok(createdBook.id);
+    assert.strictEqual(createdBook.title, 'The Great Gatsby');
+    assert.strictEqual(createdBook.title_normalized, 'great gatsby');
+    assert.strictEqual(createdBook.isbn_10, '0743273567');
+    assert.strictEqual(createdBook.isbn_13, '9780743273565');
+    assert.ok(createdBook.isbns.includes('0743273567'));
+    assert.ok(createdBook.isbns.includes('9780743273565'));
+    assert.strictEqual(createdBook.copies_count, 0);
+
+    // 2. Test Zero-Copy presentation
+    const zeroCopies = window.db.getBookCopiesStatus(createdBook);
+    assert.strictEqual(zeroCopies.hasCopies, false);
+    assert.strictEqual(zeroCopies.totalCopies, 0);
+    assert.strictEqual(zeroCopies.badge, 'No copies yet');
+    assert.strictEqual(zeroCopies.actionLabel, 'Be the first to share a copy');
+    assert.ok(zeroCopies.ctaUrl.includes(encodeURIComponent(createdBook.id)));
+
+    // 3. Deduplication: Find or create using ISBN-13
+    firebase.auth().currentUser = { uid: bobUid };
+    const dedupIsbn = await window.db.findOrCreateBook({
+        title: 'The Great Gatsby (Reprint)',
+        isbn: '978-0-7432-7356-5'
+    });
+    assert.strictEqual(dedupIsbn.created, false, 'Duplicate ISBN must return existing book');
+    assert.strictEqual(dedupIsbn.book.id, createdBook.id);
+
+    // 4. Deduplication: Find or create using Title + Author (without ISBN)
+    const book2 = await window.db.createBook({
+        title: 'To Kill a Mockingbird',
+        authors: ['Harper Lee']
+    });
+    assert.ok(book2.id);
+
+    const dedupTitle = await window.db.findOrCreateBook({
+        title: 'to kill a mockingbird',
+        authors: ['Harper Lee']
+    });
+    assert.strictEqual(dedupTitle.created, false, 'Matching title and author must return existing book');
+    assert.strictEqual(dedupTitle.book.id, book2.id);
+
+    // 5. Search by ISBN
+    const searchByIsbn = await window.db.searchBooks({ query: '9780743273565' });
+    assert.strictEqual(searchByIsbn.length, 1);
+    assert.strictEqual(searchByIsbn[0].id, createdBook.id);
+
+    // 6. Search by Title prefix
+    const searchByTitle = await window.db.searchBooks({ query: 'great' });
+    assert.ok(searchByTitle.length >= 1);
+    assert.strictEqual(searchByTitle[0].id, createdBook.id);
+
+    // 7. Search by Author
+    const searchByAuthor = await window.db.searchBooks({ query: 'harper lee' });
+    assert.strictEqual(searchByAuthor.length, 1);
+    assert.strictEqual(searchByAuthor[0].id, book2.id);
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================

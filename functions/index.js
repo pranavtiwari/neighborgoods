@@ -7,6 +7,15 @@ import {
     ACTIONS,
     validateTransition
 } from './state-machine.js';
+import {
+    cleanIsbn,
+    normalizeIsbn,
+    normalizeTitle,
+    normalizeAuthor,
+    normalizeAuthors,
+    buildCanonicalBookPayload,
+    getBookCopiesStatus
+} from './catalog.js';
 
 initializeApp();
 const db = getFirestore();
@@ -244,8 +253,122 @@ export const transitionRequest = onCall({ cors: true }, async (request) => {
     }
 });
 
+/**
+ * Callable Function: findOrCreateBook
+ * Finds an existing canonical book by ISBN or Title+Author,
+ * or creates a new canonical book record.
+ */
+export const findOrCreateBook = onCall({ cors: true }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Authentication required.');
+    }
+    const actorId = request.auth.uid;
+    const bookData = request.data || {};
+
+    if (!bookData.title || typeof bookData.title !== 'string' || !bookData.title.trim()) {
+        throw new HttpsError('invalid-argument', 'Book title is required.');
+    }
+
+    try {
+        const normIsbn = normalizeIsbn(bookData.isbn || bookData.isbn_13 || bookData.isbn_10 || '');
+        const normTitle = normalizeTitle(bookData.title);
+        const { authors, authors_normalized } = normalizeAuthors(bookData.authors || []);
+
+        let matchedDoc = null;
+
+        // 1. Try deterministic doc id if ISBN-13 is valid
+        if (normIsbn.valid && normIsbn.isbn13) {
+            const directDoc = await db.collection('books').doc(`isbn_${normIsbn.isbn13}`).get();
+            if (directDoc.exists) {
+                matchedDoc = { id: directDoc.id, ...directDoc.data() };
+            }
+        }
+
+        // 2. Try querying by ISBN across isbns array
+        if (!matchedDoc && normIsbn.isbns.length > 0) {
+            for (const code of normIsbn.isbns) {
+                const snap = await db.collection('books')
+                    .where('isbns', 'array-contains', code)
+                    .limit(1)
+                    .get();
+                if (!snap.empty) {
+                    matchedDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
+                    break;
+                }
+            }
+        }
+
+        // 3. Fallback: Query by normalized title and check author
+        if (!matchedDoc && normTitle) {
+            const titleSnap = await db.collection('books')
+                .where('title_normalized', '==', normTitle)
+                .limit(10)
+                .get();
+
+            if (!titleSnap.empty) {
+                if (authors_normalized.length > 0) {
+                    for (const doc of titleSnap.docs) {
+                        const data = doc.data();
+                        const existingAuthorsNorm = data.authors_normalized || [];
+                        const hasMatchingAuthor = authors_normalized.some(a => existingAuthorsNorm.includes(a));
+                        if (hasMatchingAuthor) {
+                            matchedDoc = { id: doc.id, ...data };
+                            break;
+                        }
+                    }
+                } else {
+                    matchedDoc = { id: titleSnap.docs[0].id, ...titleSnap.docs[0].data() };
+                }
+            }
+        }
+
+        if (matchedDoc) {
+            return {
+                created: false,
+                book: matchedDoc,
+                copiesStatus: getBookCopiesStatus(matchedDoc)
+            };
+        }
+
+        // No match found -> create new canonical book
+        const payload = buildCanonicalBookPayload({
+            ...bookData,
+            created_at: FieldValue.serverTimestamp(),
+            updated_at: FieldValue.serverTimestamp()
+        }, actorId);
+
+        const docId = normIsbn.valid && normIsbn.isbn13 
+            ? `isbn_${normIsbn.isbn13}` 
+            : db.collection('books').doc().id;
+
+        const docRef = db.collection('books').doc(docId);
+        await docRef.set(payload);
+
+        const createdBook = {
+            id: docId,
+            ...payload
+        };
+
+        return {
+            created: true,
+            book: createdBook,
+            copiesStatus: getBookCopiesStatus(createdBook)
+        };
+    } catch (err) {
+        if (err instanceof HttpsError) throw err;
+        throw new HttpsError('internal', err.message);
+    }
+});
+
 export {
     TRANSACTION_TYPES,
     REQUEST_STATUSES,
-    ACTIONS
+    ACTIONS,
+    cleanIsbn,
+    normalizeIsbn,
+    normalizeTitle,
+    normalizeAuthor,
+    normalizeAuthors,
+    buildCanonicalBookPayload,
+    getBookCopiesStatus
 };

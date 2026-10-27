@@ -2366,6 +2366,398 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 console.error("Error checking existing requests:", err);
                 return false;
             }
+        },
+
+        // ── Canonical Books Catalog (Universal Library) ──────────────────────
+        cleanIsbn: function(raw) {
+            if (!raw || typeof raw !== 'string') return '';
+            return raw.replace(/[^0-9X]/gi, '').toUpperCase();
+        },
+
+        isValidIsbn10: function(str) {
+            if (!str || typeof str !== 'string' || str.length !== 10) return false;
+            let sum = 0;
+            for (let i = 0; i < 9; i++) {
+                const digit = parseInt(str[i], 10);
+                if (isNaN(digit)) return false;
+                sum += (10 - i) * digit;
+            }
+            const checkChar = str[9];
+            const checkVal = checkChar === 'X' ? 10 : parseInt(checkChar, 10);
+            if (isNaN(checkVal)) return false;
+            sum += checkVal;
+            return sum % 11 === 0;
+        },
+
+        isValidIsbn13: function(str) {
+            if (!str || typeof str !== 'string' || str.length !== 13) return false;
+            let sum = 0;
+            for (let i = 0; i < 12; i++) {
+                const digit = parseInt(str[i], 10);
+                if (isNaN(digit)) return false;
+                sum += i % 2 === 0 ? digit : digit * 3;
+            }
+            const checkDigit = parseInt(str[12], 10);
+            if (isNaN(checkDigit)) return false;
+            const expectedCheck = (10 - (sum % 10)) % 10;
+            return checkDigit === expectedCheck;
+        },
+
+        isbn10ToIsbn13: function(isbn10) {
+            const cleaned = this.cleanIsbn(isbn10);
+            if (!this.isValidIsbn10(cleaned)) return null;
+            const base = '978' + cleaned.substring(0, 9);
+            let sum = 0;
+            for (let i = 0; i < 12; i++) {
+                const digit = parseInt(base[i], 10);
+                sum += i % 2 === 0 ? digit : digit * 3;
+            }
+            const checkDigit = (10 - (sum % 10)) % 10;
+            return base + checkDigit.toString();
+        },
+
+        isbn13ToIsbn10: function(isbn13) {
+            const cleaned = this.cleanIsbn(isbn13);
+            if (!this.isValidIsbn13(cleaned)) return null;
+            if (!cleaned.startsWith('978')) return null;
+            const base = cleaned.substring(3, 12);
+            let sum = 0;
+            for (let i = 0; i < 9; i++) {
+                const digit = parseInt(base[i], 10);
+                sum += (10 - i) * digit;
+            }
+            const remainder = sum % 11;
+            const checkVal = (11 - remainder) % 11;
+            const checkChar = checkVal === 10 ? 'X' : checkVal.toString();
+            return base + checkChar;
+        },
+
+        normalizeIsbn: function(raw) {
+            const cleaned = this.cleanIsbn(raw);
+            let isbn10 = null;
+            let isbn13 = null;
+            let valid = false;
+
+            if (cleaned.length === 10 && this.isValidIsbn10(cleaned)) {
+                valid = true;
+                isbn10 = cleaned;
+                isbn13 = this.isbn10ToIsbn13(cleaned);
+            } else if (cleaned.length === 13 && this.isValidIsbn13(cleaned)) {
+                valid = true;
+                isbn13 = cleaned;
+                isbn10 = this.isbn13ToIsbn10(cleaned);
+            }
+
+            const isbns = [];
+            if (isbn10) isbns.push(isbn10);
+            if (isbn13 && !isbns.includes(isbn13)) isbns.push(isbn13);
+
+            return {
+                valid,
+                isbn10,
+                isbn13,
+                isbns
+            };
+        },
+
+        normalizeTitle: function(raw) {
+            if (!raw || typeof raw !== 'string') return '';
+            let text = raw.trim().toLowerCase();
+            text = text.replace(/^(the|a|an)\s+/i, '');
+            text = text.replace(/[^\p{L}\p{N}\s]/gu, ' ');
+            text = text.replace(/\s+/g, ' ').trim();
+            return text;
+        },
+
+        normalizeAuthor: function(raw) {
+            if (!raw || typeof raw !== 'string') return '';
+            let text = raw.trim().toLowerCase();
+            text = text.replace(/[^\p{L}\p{N}\s]/gu, '');
+            text = text.replace(/\s+/g, ' ').trim();
+            return text;
+        },
+
+        normalizeAuthors: function(authors) {
+            let authorList = [];
+            if (Array.isArray(authors)) {
+                authorList = authors;
+            } else if (typeof authors === 'string') {
+                authorList = authors.split(/,|&| and /i).map(s => s.trim()).filter(Boolean);
+            }
+
+            const cleanedAuthors = [];
+            const normalizedAuthors = [];
+
+            for (const a of authorList) {
+                if (!a || typeof a !== 'string') continue;
+                const trimmed = a.trim();
+                if (!trimmed) continue;
+                cleanedAuthors.push(trimmed);
+                const norm = this.normalizeAuthor(trimmed);
+                if (norm && !normalizedAuthors.includes(norm)) {
+                    normalizedAuthors.push(norm);
+                }
+            }
+
+            return {
+                authors: cleanedAuthors,
+                authors_normalized: normalizedAuthors
+            };
+        },
+
+        getBookCopiesStatus: function(book) {
+            const totalCopies = typeof book?.copies_count === 'number' ? book.copies_count : 0;
+            const availableCopies = typeof book?.available_copies_count === 'number' ? book.available_copies_count : 0;
+            const bookId = book?.id || '';
+
+            if (totalCopies === 0) {
+                return {
+                    hasCopies: false,
+                    totalCopies: 0,
+                    availableCopies: 0,
+                    badge: 'No copies yet',
+                    badgeClass: 'bg-stone-100 text-stone-600 border border-stone-200',
+                    message: 'No physical copies currently available in your circles or World of Books.',
+                    actionLabel: 'Be the first to share a copy',
+                    ctaUrl: bookId ? '/add-item.html?book_id=' + encodeURIComponent(bookId) : '/add-item.html'
+                };
+            }
+
+            if (availableCopies === 0) {
+                return {
+                    hasCopies: true,
+                    totalCopies,
+                    availableCopies: 0,
+                    badge: 'All copies in use',
+                    badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
+                    message: totalCopies + ' copy in circulation, currently checked out.',
+                    actionLabel: 'Add to Want List',
+                    ctaUrl: bookId ? '/item-details.html?book_id=' + encodeURIComponent(bookId) + '#want' : '#'
+                };
+            }
+
+            return {
+                hasCopies: true,
+                totalCopies,
+                availableCopies,
+                badge: availableCopies + ' available',
+                badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+                message: availableCopies + ' of ' + totalCopies + ' copies ready to borrow or swap.',
+                actionLabel: 'View Copies',
+                ctaUrl: bookId ? '/item-details.html?book_id=' + encodeURIComponent(bookId) : '#'
+            };
+        },
+
+        getBook: async function(bookId) {
+            if (!bookId) return null;
+            try {
+                const doc = await firebase.firestore().collection('books').doc(bookId).get();
+                if (!doc.exists) return null;
+                return { id: doc.id, ...doc.data() };
+            } catch (err) {
+                console.error('Error fetching canonical book:', err);
+                return null;
+            }
+        },
+
+        findBook: async function({ isbn, title, author } = {}) {
+            try {
+                const normIsbn = this.normalizeIsbn(isbn || '');
+                const normTitle = this.normalizeTitle(title || '');
+                const { authors_normalized } = this.normalizeAuthors(author || []);
+
+                // 1. Direct ID lookup if ISBN-13 is valid
+                if (normIsbn.valid && normIsbn.isbn13) {
+                    const directDoc = await firebase.firestore().collection('books').doc('isbn_' + normIsbn.isbn13).get();
+                    if (directDoc.exists) {
+                        return { id: directDoc.id, ...directDoc.data() };
+                    }
+                }
+
+                // 2. Query by ISBN in isbns array
+                if (normIsbn.isbns.length > 0) {
+                    for (const code of normIsbn.isbns) {
+                        const snap = await firebase.firestore().collection('books')
+                            .where('isbns', 'array-contains', code)
+                            .limit(1)
+                            .get();
+                        if (!snap.empty) {
+                            return { id: snap.docs[0].id, ...snap.docs[0].data() };
+                        }
+                    }
+                }
+
+                // 3. Query by normalized title
+                if (normTitle) {
+                    const snap = await firebase.firestore().collection('books')
+                        .where('title_normalized', '==', normTitle)
+                        .limit(10)
+                        .get();
+
+                    if (!snap.empty) {
+                        if (authors_normalized.length > 0) {
+                            for (const doc of snap.docs) {
+                                const data = doc.data();
+                                const existingNorm = data.authors_normalized || [];
+                                if (authors_normalized.some(a => existingNorm.includes(a))) {
+                                    return { id: doc.id, ...data };
+                                }
+                            }
+                        } else {
+                            return { id: snap.docs[0].id, ...snap.docs[0].data() };
+                        }
+                    }
+                }
+
+                return null;
+            } catch (err) {
+                console.error('Error finding book:', err);
+                return null;
+            }
+        },
+
+        createBook: async function(bookData) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('User must be logged in to add a book.');
+
+            if (!bookData.title || typeof bookData.title !== 'string' || !bookData.title.trim()) {
+                throw new Error('Book title is required.');
+            }
+
+            const title = bookData.title.trim();
+            const title_normalized = this.normalizeTitle(title);
+            const { authors, authors_normalized } = this.normalizeAuthors(bookData.authors || []);
+            const normIsbn = this.normalizeIsbn(bookData.isbn || bookData.isbn_13 || bookData.isbn_10 || '');
+
+            const isbns = [...normIsbn.isbns];
+            if (Array.isArray(bookData.isbns)) {
+                for (const raw of bookData.isbns) {
+                    const c = this.cleanIsbn(raw);
+                    if (c && !isbns.includes(c)) isbns.push(c);
+                }
+            }
+
+            const publishedYear = bookData.published_year ? parseInt(bookData.published_year, 10) : null;
+
+            const docId = normIsbn.valid && normIsbn.isbn13 
+                ? 'isbn_' + normIsbn.isbn13 
+                : firebase.firestore().collection('books').doc().id;
+
+            const payload = {
+                title,
+                title_normalized,
+                authors,
+                authors_normalized,
+                isbn_10: normIsbn.isbn10 || bookData.isbn_10 || null,
+                isbn_13: normIsbn.isbn13 || bookData.isbn_13 || null,
+                isbns,
+                publisher: bookData.publisher ? String(bookData.publisher).trim() : null,
+                published_year: !isNaN(publishedYear) ? publishedYear : null,
+                language: bookData.language ? String(bookData.language).trim().toLowerCase() : 'en',
+                cover_url: bookData.cover_url ? String(bookData.cover_url).trim() : null,
+                description: bookData.description ? String(bookData.description).trim() : null,
+                source_identifiers: bookData.source_identifiers && typeof bookData.source_identifiers === 'object'
+                    ? bookData.source_identifiers
+                    : {},
+                copies_count: typeof bookData.copies_count === 'number' && bookData.copies_count >= 0 ? bookData.copies_count : 0,
+                available_copies_count: typeof bookData.available_copies_count === 'number' && bookData.available_copies_count >= 0 
+                    ? bookData.available_copies_count 
+                    : 0,
+                created_by: user.uid,
+                created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            const docRef = firebase.firestore().collection('books').doc(docId);
+            await docRef.set(payload);
+
+            return {
+                id: docId,
+                ...payload
+            };
+        },
+
+        findOrCreateBook: async function(bookData) {
+            const existing = await this.findBook({
+                isbn: bookData.isbn || bookData.isbn_13 || bookData.isbn_10,
+                title: bookData.title,
+                author: bookData.authors || bookData.author
+            });
+
+            if (existing) {
+                return {
+                    created: false,
+                    book: existing,
+                    copiesStatus: this.getBookCopiesStatus(existing)
+                };
+            }
+
+            const newBook = await this.createBook(bookData);
+            return {
+                created: true,
+                book: newBook,
+                copiesStatus: this.getBookCopiesStatus(newBook)
+            };
+        },
+
+        searchBooks: async function({ query, limit = 20 } = {}) {
+            if (!query || typeof query !== 'string') return [];
+            const clean = query.trim();
+            if (!clean) return [];
+
+            const results = [];
+            const seenIds = new Set();
+
+            // 1. Check if query is an ISBN
+            const cleanIsbnQuery = this.cleanIsbn(clean);
+            if (cleanIsbnQuery.length >= 9) {
+                const isbnSnap = await firebase.firestore().collection('books')
+                    .where('isbns', 'array-contains', cleanIsbnQuery)
+                    .limit(limit)
+                    .get();
+
+                isbnSnap.docs.forEach(doc => {
+                    if (!seenIds.has(doc.id)) {
+                        seenIds.add(doc.id);
+                        results.push({ id: doc.id, ...doc.data() });
+                    }
+                });
+            }
+
+            // 2. Title prefix search
+            const normTitle = this.normalizeTitle(clean);
+            if (normTitle && results.length < limit) {
+                const titleSnap = await firebase.firestore().collection('books')
+                    .where('title_normalized', '>=', normTitle)
+                    .where('title_normalized', '<=', normTitle + '\uf8ff')
+                    .limit(limit - results.length)
+                    .get();
+
+                titleSnap.docs.forEach(doc => {
+                    if (!seenIds.has(doc.id)) {
+                        seenIds.add(doc.id);
+                        results.push({ id: doc.id, ...doc.data() });
+                    }
+                });
+            }
+
+            // 3. Author search
+            const normAuthor = this.normalizeAuthor(clean);
+            if (normAuthor && results.length < limit) {
+                const authorSnap = await firebase.firestore().collection('books')
+                    .where('authors_normalized', 'array-contains', normAuthor)
+                    .limit(limit - results.length)
+                    .get();
+
+                authorSnap.docs.forEach(doc => {
+                    if (!seenIds.has(doc.id)) {
+                        seenIds.add(doc.id);
+                        results.push({ id: doc.id, ...doc.data() });
+                    }
+                });
+            }
+
+            return results;
         }
     };
 

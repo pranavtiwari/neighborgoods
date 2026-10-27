@@ -401,5 +401,54 @@ service cloud.firestore {
       // Ratings are immutable once created
       allow update, delete: if false;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Books (Issue #7: Canonical Book Catalog)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /books/{bookId} {
+      // 1. Public read: Anyone can read canonical book records
+      allow read: if true;
+
+      // 2. Authenticated create
+      allow create: if request.auth != null
+        && request.resource.data.created_by == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 500
+        && request.resource.data.title_normalized is string
+        && request.resource.data.title_normalized.size() >= 1
+        && request.resource.data.title_normalized.size() <= 500
+        && request.resource.data.authors is list
+        && request.resource.data.isbns is list
+        && request.resource.data.copies_count is int
+        && request.resource.data.copies_count >= 0
+        && request.resource.data.available_copies_count is int
+        && request.resource.data.available_copies_count >= 0
+        && request.resource.data.created_at == request.time
+        && request.resource.data.updated_at == request.time;
+
+      // 3. Authenticated update
+      allow update: if request.auth != null
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.created_by == resource.data.created_by
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['title']) || (
+              request.resource.data.title is string
+              && request.resource.data.title.size() >= 1
+              && request.resource.data.title.size() <= 500))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['title_normalized']) || (
+              request.resource.data.title_normalized is string
+              && request.resource.data.title_normalized.size() >= 1
+              && request.resource.data.title_normalized.size() <= 500))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['copies_count']) || (
+              request.resource.data.copies_count is int
+              && request.resource.data.copies_count >= 0))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['available_copies_count']) || (
+              request.resource.data.available_copies_count is int
+              && request.resource.data.available_copies_count >= 0))
+        && request.resource.data.updated_at == request.time;
+
+      // 4. Delete: Disallow deleting books
+      allow delete: if false;
+    }
   }
 }

@@ -18,6 +18,8 @@ import {
     assertFails,
     assertSucceeds
 } from '@firebase/rules-unit-testing';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/firestore';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, '..');
@@ -397,6 +399,217 @@ await test('private location: borrower cannot read before approval, but can read
         .collection('private').doc('location').get());
 });
 
+// ---------------------------------------------------------------- books
+const serverTimestamp = () => firebase.firestore.FieldValue.serverTimestamp();
+
+const validBook = () => ({
+    created_by: ALICE,
+    title: 'The Great Gatsby',
+    title_normalized: 'great gatsby',
+    authors: ['F. Scott Fitzgerald'],
+    isbns: ['9780743273565'],
+    copies_count: 1,
+    available_copies_count: 1,
+    created_at: serverTimestamp(),
+    updated_at: serverTimestamp()
+});
+
+await test('books: public read (authenticated & unauthenticated)', async () => {
+    await seed(async db => {
+        await db.collection('books').doc('book1').set({
+            created_by: ALICE,
+            title: 'The Great Gatsby',
+            title_normalized: 'great gatsby',
+            authors: ['F. Scott Fitzgerald'],
+            isbns: ['9780743273565'],
+            copies_count: 1,
+            available_copies_count: 1,
+            created_at: new Date(),
+            updated_at: new Date()
+        });
+    });
+    const anon = testEnv.unauthenticatedContext().firestore(CLIENT_SETTINGS);
+    await assertSucceeds(anon.collection('books').doc('book1').get());
+    await assertSucceeds(dbFor(ALICE).collection('books').doc('book1').get());
+    await assertSucceeds(dbFor(BOB).collection('books').doc('book1').get());
+});
+
+await test('books: authenticated create with valid fields succeeds', async () => {
+    await assertSucceeds(dbFor(ALICE).collection('books').doc('book1').set(validBook()));
+});
+
+await test('books: create fails if unauthenticated or created_by mismatch', async () => {
+    const anon = testEnv.unauthenticatedContext().firestore(CLIENT_SETTINGS);
+    await assertFails(anon.collection('books').doc('b1').set(validBook()));
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        created_by: BOB
+    }));
+});
+
+await test('books: create fails with invalid title or title_normalized', async () => {
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        title: ''
+    }));
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        title: 'a'.repeat(501)
+    }));
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        title_normalized: ''
+    }));
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        title_normalized: 'a'.repeat(501)
+    }));
+});
+
+await test('books: create fails if authors or isbns not list', async () => {
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        authors: 'F. Scott Fitzgerald'
+    }));
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        isbns: '9780743273565'
+    }));
+});
+
+await test('books: create fails if copies_count or available_copies_count invalid', async () => {
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        copies_count: -1
+    }));
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        copies_count: 1.5
+    }));
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        available_copies_count: -1
+    }));
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        available_copies_count: 1.5
+    }));
+});
+
+await test('books: create fails if created_at or updated_at not request.time', async () => {
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        created_at: new Date('2020-01-01')
+    }));
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').set({
+        ...validBook(),
+        updated_at: new Date('2020-01-01')
+    }));
+});
+
+await test('books: update preserves immutable created_at and created_by', async () => {
+    await seed(async db => {
+        await db.collection('books').doc('b1').set({
+            created_by: ALICE,
+            title: 'Original Title',
+            title_normalized: 'original title',
+            authors: ['Author'],
+            isbns: ['1234567890'],
+            copies_count: 1,
+            available_copies_count: 1,
+            created_at: new Date('2026-01-01'),
+            updated_at: new Date('2026-01-01')
+        });
+    });
+    // Cannot change created_by
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').update({
+        created_by: BOB,
+        updated_at: serverTimestamp()
+    }));
+    // Cannot change created_at
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').update({
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp()
+    }));
+});
+
+await test('books: authenticated user may update copies_count and available_copies_count', async () => {
+    await seed(async db => {
+        await db.collection('books').doc('b1').set({
+            created_by: ALICE,
+            title: 'Original Title',
+            title_normalized: 'original title',
+            authors: ['Author'],
+            isbns: ['1234567890'],
+            copies_count: 1,
+            available_copies_count: 1,
+            created_at: new Date('2026-01-01'),
+            updated_at: new Date('2026-01-01')
+        });
+    });
+    // Another user (e.g. BOB) updates inventory copies
+    await assertSucceeds(dbFor(BOB).collection('books').doc('b1').update({
+        copies_count: 2,
+        available_copies_count: 2,
+        updated_at: serverTimestamp()
+    }));
+    // But cannot set negative copies_count
+    await assertFails(dbFor(BOB).collection('books').doc('b1').update({
+        copies_count: -1,
+        updated_at: serverTimestamp()
+    }));
+    // Or invalid title
+    await assertFails(dbFor(BOB).collection('books').doc('b1').update({
+        title: '',
+        updated_at: serverTimestamp()
+    }));
+});
+
+await test('books: update requires updated_at to match request.time', async () => {
+    await seed(async db => {
+        await db.collection('books').doc('b1').set({
+            created_by: ALICE,
+            title: 'Original Title',
+            title_normalized: 'original title',
+            authors: ['Author'],
+            isbns: ['1234567890'],
+            copies_count: 1,
+            available_copies_count: 1,
+            created_at: new Date('2026-01-01'),
+            updated_at: new Date('2026-01-01')
+        });
+    });
+    // Missing updated_at
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').update({
+        copies_count: 5
+    }));
+    // Stale updated_at
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').update({
+        copies_count: 5,
+        updated_at: new Date('2020-01-01')
+    }));
+});
+
+await test('books: delete is disallowed', async () => {
+    await seed(async db => {
+        await db.collection('books').doc('b1').set({
+            created_by: ALICE,
+            title: 'Original Title',
+            title_normalized: 'original title',
+            authors: ['Author'],
+            isbns: ['1234567890'],
+            copies_count: 1,
+            available_copies_count: 1,
+            created_at: new Date(),
+            updated_at: new Date()
+        });
+    });
+    const anon = testEnv.unauthenticatedContext().firestore(CLIENT_SETTINGS);
+    await assertFails(anon.collection('books').doc('b1').delete());
+    await assertFails(dbFor(ALICE).collection('books').doc('b1').delete());
+    await assertFails(dbFor(BOB).collection('books').doc('b1').delete());
+});
+
 // ----------------------------------------------------------- unauthenticated
 await test('all writes require authentication', async () => {
     const anon = testEnv.unauthenticatedContext().firestore(CLIENT_SETTINGS);
@@ -406,6 +619,7 @@ await test('all writes require authentication', async () => {
     await assertFails(anon.collection('impact_events').doc('e').set({
         actor_id: ALICE, beneficiary_id: BOB, kind: 'loan', credit_kg: 1
     }));
+    await assertFails(anon.collection('books').doc('b').set({ title: 'x' }));
 });
 
 console.log(`\nEMULATOR RULES SUITE: ${passed} passed, ${failed} failed`);
