@@ -204,8 +204,7 @@
         
         // Fetch Profile Data
         const data = await window.db.getProfile(targetUserId);
-        let carbonSaved = 0;
-            
+
         if (data) {
             document.getElementById('profile-name').textContent = data.full_name || 'Anonymous User';
             document.getElementById('profile-location').textContent = data.location ? `${data.location} Community Member` : 'Community Member';
@@ -224,8 +223,20 @@
                 document.getElementById('profile-nickname-row').classList.remove('flex');
                 document.getElementById('profile-nickname-row').classList.add('hidden');
             }
-            carbonSaved = data.carbon_saved_kg || 0;
-        }
+            }
+
+        // Carbon is derived from the append-only impact_events ledger.
+        // profiles.carbon_saved_kg is server-owned (firestore.rules) and has
+        // never been updated, so reading it showed 0kg for everyone.
+        const impact = await window.db.getImpactSummary(targetUserId);
+        const carbonSaved = impact.credit_kg;
+        const reputation = await window.db.getReputation(targetUserId);
+        document.getElementById('profile-rating').textContent = reputation.count > 0
+            ? reputation.average.toFixed(1)
+            : 'New';
+        document.getElementById('profile-rating-label').textContent = reputation.count > 0
+            ? `${reputation.count} Rating${reputation.count === 1 ? '' : 's'}`
+            : 'Rating';
 
         // Show/hide buttons based on viewing self vs others
         if (isSelf) {
@@ -262,16 +273,7 @@
             badge.classList.add('hidden');
         }
 
-        // Fetch Ratings and calculate average
-        const ratings = await window.db.getUserRatings(targetUserId);
-        if (ratings.length > 0) {
-            const avg = (ratings.reduce((acc, r) => acc + r.score, 0) / ratings.length).toFixed(1);
-            document.getElementById('profile-rating').textContent = avg;
-            document.getElementById('profile-rating-label').textContent = `Rating (${ratings.length})`;
-        } else {
-            document.getElementById('profile-rating').textContent = 'New';
-            document.getElementById('profile-rating-label').textContent = 'Rating';
-        }
+        // Rating tile is filled from the derived reputation above.
 
         // Fetch Lending Requests to count helped neighbors
         const lendingRequests = await window.db.getBorrowRequestsForUser(targetUserId, 'lending');

@@ -35,14 +35,41 @@ class MockDocRef {
 }
 
 class MockQuery {
-    constructor(collectionName, firestore, filters = []) {
+    constructor(collectionName, firestore, filters = [], opts = {}) {
         this.collectionName = collectionName;
         this.firestore = firestore;
         this.filters = filters;
+        this._orderBy = opts.orderBy || null;
+        this._limit = typeof opts.limit === 'number' ? opts.limit : null;
+        this._startAfterId = opts.startAfterId || null;
     }
 
     where(field, op, value) {
-        return new MockQuery(this.collectionName, this.firestore, [...this.filters, { field, op, value }]);
+        return new MockQuery(
+            this.collectionName, this.firestore,
+            [...this.filters, { field, op, value }],
+            { orderBy: this._orderBy, limit: this._limit, startAfterId: this._startAfterId }
+        );
+    }
+
+    orderBy(field, dir = 'asc') {
+        return new MockQuery(this.collectionName, this.firestore, this.filters,
+            { orderBy: { field, dir }, limit: this._limit, startAfterId: this._startAfterId });
+    }
+
+    limit(n) {
+        return new MockQuery(this.collectionName, this.firestore, this.filters,
+            { orderBy: this._orderBy, limit: n, startAfterId: this._startAfterId });
+    }
+
+    // startAfter takes a DocumentSnapshot in real Firestore. The mock keys off
+    // the snapshot's id, which is enough to model keyset pagination.
+    startAfter(snapshotOrDoc) {
+        const id = snapshotOrDoc && typeof snapshotOrDoc === 'object'
+            ? (snapshotOrDoc.id || (snapshotOrDoc.ref && snapshotOrDoc.ref.id) || null)
+            : null;
+        return new MockQuery(this.collectionName, this.firestore, this.filters,
+            { orderBy: this._orderBy, limit: this._limit, startAfterId: id });
     }
 
     async get() {
@@ -61,6 +88,29 @@ class MockQuery {
                 return true;
             });
         }
+
+        // orderBy / startAfter / limit, matching Firestore's semantics closely
+        // enough to catch pagination bugs in client code.
+        if (this._orderBy) {
+            const { field, dir } = this._orderBy;
+            const key = v => {
+                if (v && typeof v.toDate === 'function') return v.toDate().getTime();
+                if (typeof v === 'number') return v;
+                const t = Date.parse(v || '');
+                return Number.isNaN(t) ? 0 : t;
+            };
+            docs = docs.slice().sort((a, b) => {
+                const ka = key(a[field]);
+                const kb = key(b[field]);
+                if (ka === kb) return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+                return dir === 'desc' ? kb - ka : ka - kb;
+            });
+        }
+        if (this._startAfterId) {
+            const idx = docs.findIndex(d => d.id === this._startAfterId);
+            if (idx !== -1) docs = docs.slice(idx + 1);
+        }
+        if (this._limit !== null) docs = docs.slice(0, this._limit);
 
         const mappedDocs = docs.map(d => ({
             id: d.id,
@@ -120,8 +170,19 @@ class MockCollection {
         return ref;
     }
 
+    // Firestore allows orderBy/limit/startAfter straight off a collection
+    // reference, not just off a Query. Client code relies on this, e.g.
+    // collection('items').orderBy('created_at','desc').limit(25).
     where(field, op, value) {
         return new MockQuery(this.name, this.firestore, [{ field, op, value }]);
+    }
+
+    orderBy(field, dir = 'asc') {
+        return new MockQuery(this.name, this.firestore, [], { orderBy: { field, dir } });
+    }
+
+    limit(n) {
+        return new MockQuery(this.name, this.firestore, [], { limit: n });
     }
 
     async get() {
@@ -191,7 +252,28 @@ class MockFirestore {
         this._docVersions = {};
         this._errorToInject = null;
         this._latencyMs = 0;
+        // Optional security-rules engine. When set to a function
+        // (collectionName, docId, data, isMerge) it must throw to deny a write.
+        // See tests/security-rules.js for the rule subset that is enforced.
+        this.rulesEngine = null;
     }
+
+    enableRulesEngine(fn) {
+        this.rulesEngine = fn;
+    }
+
+    disableRulesEngine() {
+        this.rulesEngine = null;
+    }
+
+    _assertRulesAllowed(collectionName, docId, data, isMerge) {
+        if (!this.rulesEngine) return;
+        this.rulesEngine(collectionName, docId, data, isMerge);
+    }
+
+    // Reference to the auth mock so the security-rules engine can resolve
+    // the acting user. Wired up by tests/run-tests.js.
+    _auth = null;
 
     async _checkErrorAndDelay() {
         if (this._errorToInject) {
@@ -256,6 +338,16 @@ class MockFirestore {
             }
         }
 
+        const isCreate = !this.db[collectionName][id];
+        const existing = this.db[collectionName][id];
+
+        // Firestore rules evaluate `request.resource.data` as the FULL document
+        // after the write, so validate the merged result — not just the delta.
+        const effective = (merge && existing)
+            ? { ...existing, ...resolvedData }
+            : resolvedData;
+        this._assertRulesAllowed(collectionName, id, effective, isCreate);
+
         if (merge && this.db[collectionName][id]) {
             this.db[collectionName][id] = {
                 ...this.db[collectionName][id],
@@ -272,6 +364,10 @@ class MockFirestore {
     }
 
     _deleteData(collectionName, id) {
+        if (this.rulesEngine) {
+            const prior = this._getData(collectionName, id);
+            if (prior) this.rulesEngine(collectionName, id, prior, 'delete');
+        }
         if (this.db[collectionName] && this.db[collectionName][id]) {
             delete this.db[collectionName][id];
             
@@ -423,6 +519,7 @@ class FirebaseCompat {
         this.firestore = () => this._firestore;
         this.auth = () => this._auth;
         this.storage = () => this._storage;
+        this._firestore._auth = this._auth;
         
         this.firestore.FieldValue = this._firestore.FieldValue;
         this.auth.GoogleAuthProvider = class GoogleAuthProvider {

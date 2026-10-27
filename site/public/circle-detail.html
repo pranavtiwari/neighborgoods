@@ -965,13 +965,21 @@
 
             panel.classList.remove('hidden');
             badge.textContent = requests.length;
+
+            // Reputation is derived from the ratings ledger; the stale
+            // profile.reputation_score field is server-owned and never updates.
+            const reputationByUser = await window.db.getReputations(
+                requests.map(r => r.profile_id)
+            );
+
             list.innerHTML = requests.map(req => {
                 const profile = req.profile || {};
                 const name = profile.full_name || 'Unknown';
                 const avatar = profile.avatar_url || 'https://i.pravatar.cc/150?u=' + req.profile_id;
                 const bio = profile.bio ? profile.bio.trim() : '';
                 const location = profile.location ? profile.location.trim() : '';
-                const rating = profile.reputation_score !== undefined ? Number(profile.reputation_score).toFixed(1) : '5.0';
+                const rep = reputationByUser[req.profile_id];
+                const rating = rep && rep.count > 0 ? rep.average.toFixed(1) : 'New';
 
                 let messageHtml = '';
                 if (req.message) {

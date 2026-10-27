@@ -7,3 +7,5 @@ site/public/config.js
 dist/
 .firebase/
 scratch/
+*.log
+tests/last-run.txt

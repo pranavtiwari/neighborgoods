@@ -3,6 +3,39 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Helper: may `uid` write the lifecycle fields of `itemId`?
+    //
+    // Firestore security rules have NO query primitive. `get()` and `exists()`
+    // accept a single document path only; chaining `.where()`/`.limit()` off
+    // `get()` is a hard evaluation error, not a runtime failure. The earlier
+    // form of this helper did exactly that, so every borrower-side lifecycle
+    // write (markPickedUp / markReturned / undo*) was denied in production
+    // regardless of request status — items were stuck at 'approved' forever.
+    //
+    // Rules can only read one document at a time, so the item denormalises
+    // `active_request_id` (written by the item OWNER when a request is
+    // approved) and we read that single request. A non-owner may never change
+    // it: the field is outside their lifecycle allow-list below.
+    //
+    // `active_request_id` is cleared back to null when the request reaches a
+    // terminal state, so access stops even though the request still exists.
+    //
+    // Two subtleties cost real debugging time here:
+    //  - snapshots returned by `get()` do NOT expose `.exists`; the guard is
+    //    the free-function `exists(path)`, and `&&` short-circuits so the
+    //    `get()` is never evaluated against a missing document.
+    //  - the path must be written twice because there is no binding for it.
+    // ─────────────────────────────────────────────────────────────────────────
+    function canParticipantUpdateItem(itemId, activeRequestId) {
+      return exists(/databases/$(database)/documents/requests/$(activeRequestId))
+        && get(/databases/$(database)/documents/requests/$(activeRequestId)).data.item_id == itemId
+        && (get(/databases/$(database)/documents/requests/$(activeRequestId)).data.borrower_id == request.auth.uid
+            || get(/databases/$(database)/documents/requests/$(activeRequestId)).data.lender_id == request.auth.uid)
+        && get(/databases/$(database)/documents/requests/$(activeRequestId)).data.status
+             in ['pending', 'approved', 'borrowed', 'returned'];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Profiles
     // FIX VULN-01: Removed the branch that let any authenticated user write
     //              reputation_score directly. Reputation is now immutable from
@@ -21,21 +54,71 @@ service cloud.firestore {
         // Basic field type guards
         && request.resource.data.full_name is string
         && request.resource.data.full_name.size() <= 100
-        && request.resource.data.bio is string
-        && request.resource.data.bio.size() <= 2000;
+        // `bio` is optional on create (never all callers supply it), but must
+        // be a bounded string when present.
+        && (!('bio' in request.resource.data) || (
+              request.resource.data.bio is string
+              && request.resource.data.bio.size() <= 2000));
 
       allow update: if request.auth != null
         && request.auth.uid == profileId
         // Owner CANNOT change reputation_score directly (Cloud Function only)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['reputation_score'])
-        // Owner CANNOT inflate carbon_saved_kg to arbitrary values
-        // (allow only decrements or same; increments are handled server-side)
+        // FIX VULN-14: carbon_saved_kg is the same class of server-owned
+        // aggregate as reputation_score. confirmReturn used to credit BOTH
+        // the lender and the borrower, so the counterparty's write was denied
+        // by the rule above and the whole return confirmation failed in
+        // production. Impact is now recorded as an append-only `impact_events`
+        // row and folded into the profile by a trusted process.
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['carbon_saved_kg'])
+        // Basic field type guards
         && request.resource.data.full_name is string
         && request.resource.data.full_name.size() <= 100
-        && request.resource.data.bio is string
-        && request.resource.data.bio.size() <= 2000;
+        && (!('bio' in request.resource.data) || (
+              request.resource.data.bio is string
+              && request.resource.data.bio.size() <= 2000));
 
       allow delete: if request.auth != null && request.auth.uid == profileId;
+    }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Firestore Indexes required by these rules
+//
+// Security rules are only evaluated for queries the backend can actually
+// serve. `isRequestParticipant()` above issues item_id + status IN [...] +
+// party, which needs these composite indexes. Without them a non-owner
+// lifecycle write is rejected by the BACKEND (FAILED_PRECONDITION /
+// "query requires an index"), not by the rule, which is very hard to
+// diagnose. See firestore/indexes.json.
+// ─────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────
+// Impact Events (append-only ledger)
+    // Replaces the illegal cross-profile carbon_saved_kg write. One row per
+    // participant per completed transfer; carbon is DERIVED from these rows.
+    // ─────────────────────────────────────────────────────────────────────────
+    match /impact_events/{eventId} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && request.resource.data.actor_id == request.auth.uid
+        && request.resource.data.beneficiary_id is string
+        && request.resource.data.beneficiary_id.size() > 0
+        && request.resource.data.credit_kg is number
+        && request.resource.data.credit_kg <= 10
+        // A credit is positive and names a real beneficiary; a reversal is
+        // negative and parks on the reserved 'none' beneficiary. Neither can
+        // be a large magnitude, and a reversal must point at what it undoes.
+        && (
+             (request.resource.data.credit_kg > 0
+               && request.resource.data.kind in ['loan', 'donation'])
+          || (request.resource.data.credit_kg < 0
+               && request.resource.data.kind == 'reversal'
+               && request.resource.data.reverses_event_id is string)
+        );
+
+      // Immutable: a ledger entry cannot be rewritten or removed.
+      allow update, delete: if false;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -102,14 +185,37 @@ service cloud.firestore {
               && request.resource.data.description.size() <= 5000))
         && (!('image_url' in request.resource.data) || request.resource.data.image_url is string);
 
+      // FIX VULN-13: The original rule only let the OWNER update an item, but
+      // the borrow lifecycle mutates item.status / is_available from both
+      // sides: the lender (confirm/decline) and the borrower
+      // (markPickedUp / markReturned). Those borrower-side writes were denied,
+      // so `markPickedUp` failed against real Firestore and items were stuck
+      // at status:'approved' forever.
+      //
+      // A participant may change ONLY the lifecycle fields. owner_id, name,
+      // and all descriptive data remain owner-only, and `active_request_id`
+      // is deliberately outside the allow-list so a borrower cannot repoint
+      // the item at a request of their own choosing.
       allow update: if request.auth != null
-        && resource.data.owner_id == request.auth.uid
         && request.resource.data.owner_id == resource.data.owner_id
         && request.resource.data.name is string
         && request.resource.data.name.size() <= 200
         && (!('description' in request.resource.data) || (
               request.resource.data.description is string
-              && request.resource.data.description.size() <= 5000));
+              && request.resource.data.description.size() <= 5000))
+        && (
+          // Owner may rewrite the listing freely.
+          resource.data.owner_id == request.auth.uid
+          // A borrower/lender may only advance the lifecycle, and only while
+          // the single denormalised request they were granted is in flight.
+          || (
+            resource.data.keys().hasAny(['active_request_id'])
+            && resource.data.active_request_id is string
+            && canParticipantUpdateItem(itemId, resource.data.active_request_id)
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['status', 'is_available', 'updated_at'])
+          )
+        );
 
       allow delete: if request.auth != null
         && resource.data.owner_id == request.auth.uid;

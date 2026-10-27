@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import assert from 'assert';
 import FirebaseCompat from './mock-firebase.js';
+import { buildRulesEngine } from './security-rules.js';
 
 // Setup Globals
 const __filename = fileURLToPath(import.meta.url);
@@ -21,6 +22,13 @@ global.ENV = {
 
 const firebaseCompatInstance = new FirebaseCompat();
 global.firebase = firebaseCompatInstance;
+
+// Enforce a subset of firestore.rules on every write. The mock previously
+// ignored rules entirely, which is how createBorrowRequest shipped without
+// `lender_id` (denied by firestore.rules:139) while the suite stayed green.
+firebaseCompatInstance._firestore.enableRulesEngine(
+    buildRulesEngine(firebaseCompatInstance._firestore)
+);
 
 // Mock DOM properties used in firebase-client.js
 global.document = {
@@ -221,12 +229,14 @@ await test('Flow 4: Transaction State Machine (Requested -> Approved -> Picked U
     });
     const itemId = itemRes.id;
 
-    // Bob requests to borrow the item
+    // Bob requests to borrow the item.
+    // NOTE: no lender_id is passed. It must be derived from the item doc by
+    // createBorrowRequest, because firestore.rules:139 requires it to exist
+    // and :140 requires it to differ from the borrower.
     firebase.auth().currentUser = { uid: bobUid };
     const requestRes = await window.db.createBorrowRequest({
         item_id: itemId,
         borrower_id: bobUid,
-        lender_id: aliceUid,
         duration: '2 days'
     });
     const requestId = requestRes.id;
@@ -234,6 +244,7 @@ await test('Flow 4: Transaction State Machine (Requested -> Approved -> Picked U
     // Verify initial states
     let req = (await firebase.firestore().collection('requests').doc(requestId).get()).data();
     assert.strictEqual(req.status, 'pending');
+    assert.strictEqual(req.lender_id, aliceUid, 'lender_id must be derived from the item owner');
     let item = (await firebase.firestore().collection('items').doc(itemId).get()).data();
     assert.strictEqual(item.is_available, true);
 
@@ -297,13 +308,22 @@ await test('Flow 4: Transaction State Machine (Requested -> Approved -> Picked U
     assert.strictEqual(item.status, 'available');
     assert.strictEqual(item.is_available, true);
 
-    // Verify Carbon credits (+2 to each profile)
+    // Verify impact credits are recorded for BOTH participants.
+    // carbon_saved_kg is server-owned (firestore.rules), so the client writes
+    // append-only impact_events rows instead of editing either profile.
+    let aliceImpact = await window.db.getImpactSummary(aliceUid);
+    let bobImpact = await window.db.getImpactSummary(bobUid);
+    assert.strictEqual(aliceImpact.credit_kg, 2, 'Alice (lender) should be credited 2kg');
+    assert.strictEqual(bobImpact.credit_kg, 2, 'Bob (borrower) should be credited 2kg');
+    assert.strictEqual(aliceImpact.loans, 1);
+
+    // Neither profile's carbon field was touched by the client
     let aliceProfile = await window.db.getProfile(aliceUid);
     let bobProfile = await window.db.getProfile(bobUid);
-    assert.strictEqual(aliceProfile.carbon_saved_kg, 2);
-    assert.strictEqual(bobProfile.carbon_saved_kg, 2);
+    assert.strictEqual(aliceProfile.carbon_saved_kg, 0, 'carbon_saved_kg must not be client-written');
+    assert.strictEqual(bobProfile.carbon_saved_kg, 0, 'carbon_saved_kg must not be client-written');
 
-    // Test Undo 4: Revert Completed return (and decrement carbon credits)
+    // Test Undo 4: Revert Completed return (appends a compensating ledger row)
     await window.db.undoConfirmReturn(requestId);
     req = (await firebase.firestore().collection('requests').doc(requestId).get()).data();
     assert.strictEqual(req.status, 'returned');
@@ -311,10 +331,60 @@ await test('Flow 4: Transaction State Machine (Requested -> Approved -> Picked U
     assert.strictEqual(item.status, 'returned');
     assert.strictEqual(item.is_available, false);
 
+    aliceImpact = await window.db.getImpactSummary(aliceUid);
+    bobImpact = await window.db.getImpactSummary(bobUid);
+    assert.strictEqual(aliceImpact.credit_kg, 0, 'reversal must cancel Alice credit');
+    assert.strictEqual(bobImpact.credit_kg, 0, 'reversal must cancel Bob credit');
+
     aliceProfile = await window.db.getProfile(aliceUid);
     bobProfile = await window.db.getProfile(bobUid);
     assert.strictEqual(aliceProfile.carbon_saved_kg, 0);
     assert.strictEqual(bobProfile.carbon_saved_kg, 0);
+
+    // ── Ledger integrity ──────────────────────────────────────────────────
+    // VULN-14 follow-up: a completed request must NOT keep granting the
+    // borrower item-write rights. Complete it again, then confirm the former
+    // participant can no longer mutate the item.
+    await window.db.confirmReturn(requestId);
+    req = (await firebase.firestore().collection('requests').doc(requestId).get()).data();
+    assert.strictEqual(req.status, 'completed', 'setup: request should be completed');
+
+    firebase.auth().currentUser = { uid: bobUid };
+    await assert.rejects(
+        async () => {
+            await firebase.firestore().collection('items').doc(itemId).update({ is_available: true });
+        },
+        /only the owner or a participant in an active request may update an item/,
+        'a former borrower must lose item-write rights once the request is completed'
+    );
+
+    // The owner can still write, proving the denial was about participation
+    // and not a blanket lockout.
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('items').doc(itemId).update({ is_available: true });
+    item = (await firebase.firestore().collection('items').doc(itemId).get()).data();
+    assert.strictEqual(item.is_available, true, 'owner retains full item control');
+
+    // Ledger rows are append-only: no update, no delete.
+    const ledgerSnap = await firebase.firestore().collection('impact_events')
+        .where('beneficiary_id', '==', aliceUid).get();
+    const ledgerDocId = ledgerSnap.docs[0].id;
+    firebase.auth().currentUser = { uid: aliceUid };
+    await assert.rejects(
+        async () => {
+            await firebase.firestore().collection('impact_events').doc(ledgerDocId)
+                .update({ credit_kg: 999 });
+        },
+        /impact_events are immutable/,
+        'ledger rows must not be rewritable'
+    );
+    await assert.rejects(
+        async () => {
+            await firebase.firestore().collection('impact_events').doc(ledgerDocId).delete();
+        },
+        /impact_events are immutable/,
+        'ledger rows must not be deletable'
+    );
 });
 
 // --- FLOW 5: Chat Messaging & Inbox ---
@@ -522,33 +592,96 @@ await test('Integration: Firestore Query Filters (==, in, array-contains)', asyn
 
 await test('Integration: Ratings Summary Aggregation', async () => {
     const db = firebase.firestore();
-    
-    // Create rating for Bob from Alice (older)
+
+    // Ratings are client-writable but only by a signed-in author
+    // (firestore.rules requires rater_id == auth.uid), so seed as real users.
+    await window.registerWithEmail('ratings-author@test.com', 'SecurePassword123', 'Author');
+    const authorUid = firebase.auth().currentUser.uid;
+    await window.registerWithEmail('bob@test.com', 'SecurePassword123', 'Bob');
+    const bobUid = firebase.auth().currentUser.uid;
+
+    // The viewer must actually participate in the rated requests:
+    // getRatingsSummary is scoped to the viewer's own requests. It used to
+    // read the whole `ratings` collection, which leaked every rating and rater
+    // profile in the app to any signed-in user.
+    // Items must be created by their owner (firestore.rules: owner_id ==
+    // auth.uid), so seed them while signed in as the author.
+    firebase.auth().currentUser = { uid: authorUid };
+    const itemA = await window.db.addItem({ name: 'Book A', owner_id: authorUid, is_available: true });
+    const itemB = await window.db.addItem({ name: 'Book B', owner_id: authorUid, is_available: true });
+
+    firebase.auth().currentUser = { uid: bobUid };
+    const reqA = await window.db.createBorrowRequest({ item_id: itemA.id, borrower_id: bobUid });
+    const reqB = await window.db.createBorrowRequest({ item_id: itemB.id, borrower_id: bobUid });
+
+    firebase.auth().currentUser = { uid: authorUid };
     await db.collection('ratings').add({
-        ratee_id: 'bob',
-        rater_id: 'alice',
-        request_id: 'req1',
+        ratee_id: bobUid,
+        rater_id: authorUid,
+        request_id: reqA.id,
         score: 4,
         comment: 'Good',
         created_at: '2026-06-23T00:00:00Z'
     });
-    
-    // Create another rating for Bob from Charlie (newer)
+
     await db.collection('ratings').add({
-        ratee_id: 'bob',
-        rater_id: 'charlie',
-        request_id: 'req2',
+        ratee_id: bobUid,
+        rater_id: authorUid,
+        request_id: reqB.id,
         score: 5,
         comment: 'Great',
         created_at: '2026-06-24T00:00:00Z'
     });
 
+    // View as Bob, who is party to both requests.
+    firebase.auth().currentUser = { uid: bobUid };
     const summary = await window.db.getRatingsSummary();
-    const bobRating = summary.userRatings['bob'];
-    assert.ok(bobRating);
+    const bobRating = summary.userRatings[bobUid];
+    assert.ok(bobRating, 'viewer should see ratings on their own requests');
     assert.strictEqual(bobRating.count, 2);
     assert.strictEqual(bobRating.average, 4.5);
-    assert.strictEqual(bobRating.reviews[0].score, 5); // Sorted by date/order
+
+    // Listing ratings only credit the borrower rating the lender: getRatingsSummary
+    // requires raterId === request.borrower_id, so the lender's rating of Bob
+    // is a user rating only. Verified explicitly so the join rule is pinned.
+    assert.strictEqual(summary.listingRatings[itemA.id], undefined,
+        'a lender rating must not count as a listing rating');
+
+    // Bob rates the lender (author) on request A, which IS a listing rating.
+    await db.collection('ratings').add({
+        ratee_id: authorUid,
+        rater_id: bobUid,
+        request_id: reqA.id,
+        score: 5,
+        comment: 'Great lender',
+        created_at: '2026-06-25T00:00:00Z'
+    });
+
+    // This rating was written straight to Firestore, so it bypassed the
+    // createRating() cache invalidation a real user flow would perform.
+    window.db._ratingsSummaryCache = {};
+    const summary2 = await window.db.getRatingsSummary();
+    const itemARating = summary2.listingRatings[itemA.id];
+    assert.ok(itemARating, 'a borrower rating of the lender should attribute to the item');
+    assert.strictEqual(itemARating.count, 1);
+    assert.strictEqual(itemARating.average, 5);
+    assert.strictEqual(summary2.userRatings[authorUid].count, 1, 'lender gains user reputation');
+
+    // A viewer with no requests must see nothing, not the whole table.
+    await window.registerWithEmail('nosy@test.com', 'SecurePassword123', 'Nosy');
+    const nosySummary = await window.db.getRatingsSummary();
+    assert.strictEqual(Object.keys(nosySummary.userRatings).length, 0,
+        'a user with no requests must not see other users\' ratings');
+    assert.strictEqual(Object.keys(nosySummary.listingRatings).length, 0,
+        'a user with no requests must not see listing ratings');
+
+    // Display reputation is separate: batched ratee_id lookup, one query per 30.
+    firebase.auth().currentUser = { uid: bobUid };
+    const rep = await window.db.getReputations([bobUid, 'someone-with-no-ratings']);
+    assert.strictEqual(rep[bobUid].average, 4.5, 'batched reputation should match');
+    assert.strictEqual(rep[bobUid].count, 2);
+    assert.strictEqual(rep['someone-with-no-ratings'].count, 0);
+    assert.strictEqual(rep['someone-with-no-ratings'].average, 5.0, 'unrated default is 5.0');
 });
 
 // --- E2E / FUNCTIONAL TESTS ---
@@ -610,11 +743,24 @@ await test('E2E: Full Borrow Lifecycle and User Review/Reputation Update', async
         comment: 'Responsible borrower!'
     });
 
-    // 7. Verify updated reputation scores
+    // 7. Verify reputation.
+    // reputation_score on the profile is server-owned (firestore.rules blocks
+    // client writes), so the score is DERIVED from the ratings ledger via
+    // getReputation(). Asserting on the profile field only verified a value
+    // that production never actually updates.
+    const aliceRep = await window.db.getReputation(aliceUid);
+    const bobRep = await window.db.getReputation(bobUid);
+    assert.strictEqual(aliceRep.average, 4.0, "Alice's single rating of 4.0 -> average 4.0");
+    assert.strictEqual(aliceRep.count, 1, 'Alice should have 1 rating');
+    assert.strictEqual(bobRep.average, 5.0, "Bob's single rating of 5.0 -> average 5.0");
+    assert.strictEqual(bobRep.count, 1, 'Bob should have 1 rating');
+
+    // Profiles are still readable and keep their seed score; nothing the
+    // client did may have changed the server-owned field.
     const aliceProfile = await window.db.getProfile(aliceUid);
     const bobProfile = await window.db.getProfile(bobUid);
-    assert.strictEqual(aliceProfile.reputation_score, 4.0, 'Alice initial reputation: 5.0, new rating: 4.0 -> average should be 4.0');
-    assert.strictEqual(bobProfile.reputation_score, 5.0, 'Bob initial reputation: 5.0, new rating: 5.0 -> average should be 5.0');
+    assert.strictEqual(aliceProfile.reputation_score, 5.0, 'profile reputation_score must remain server-owned');
+    assert.strictEqual(bobProfile.reputation_score, 5.0, 'profile reputation_score must remain server-owned');
 });
 
 // --- EDGE CASES & SECURITY ---
@@ -728,7 +874,10 @@ await test('Edge Case: Transaction State Rule Violations', async () => {
     );
 
     // Rule 2: Cannot borrow unavailable item
-    firebase.firestore().collection('items').doc(itemId).update({ is_available: false });
+    // The update must be awaited: createBorrowRequest reads the item
+    // synchronously, so an un-awaited write races it and can leave the item
+    // still available.
+    await firebase.firestore().collection('items').doc(itemId).update({ is_available: false });
     firebase.auth().currentUser = { uid: bobUid };
     await assert.rejects(
         async () => {
@@ -742,8 +891,12 @@ await test('Edge Case: Transaction State Rule Violations', async () => {
         'Should reject requesting unavailable item'
     );
 
-    // Restore availability
-    firebase.firestore().collection('items').doc(itemId).update({ is_available: true });
+    // Restore availability (awaited, same reason as above). Must happen while
+    // still signed in as the item OWNER: firestore.rules only lets an owner or
+    // a request participant touch an item, and no request exists yet.
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('items').doc(itemId).update({ is_available: true });
+    firebase.auth().currentUser = { uid: bobUid };
 
     // Rule 3: Cannot double request (create active request when one already exists)
     const requestRes = await window.db.createBorrowRequest({
@@ -780,20 +933,24 @@ await test('Edge Case: Transaction State Rule Violations', async () => {
 
 await test('Edge Case: Race Conditions & Optimistic Concurrency Control', async () => {
     const db = firebase.firestore();
-    await db.collection('profiles').doc('concurrency_user').set({ full_name: 'Original Name' });
+    // Profiles are only client-writable by their owner (firestore.rules), so
+    // the concurrency fixture has to be a real user writing their own profile.
+    await window.registerWithEmail('concurrency@test.com', 'SecurePassword123', 'Concurrency');
+    const uid = firebase.auth().currentUser.uid;
+    const profileRef = db.collection('profiles').doc(uid);
+    await profileRef.set({ full_name: 'Original Name' });
 
     // Simulate concurrent modification during transaction
     await assert.rejects(
         async () => {
             await db.runTransaction(async (transaction) => {
-                const docRef = db.collection('profiles').doc('concurrency_user');
-                const doc = await transaction.get(docRef);
-                
+                const doc = await transaction.get(profileRef);
+
                 // Concurrently modify the profile outside this transaction
-                await db.collection('profiles').doc('concurrency_user').set({ full_name: 'Concurrent Interruption' });
+                await profileRef.set({ full_name: 'Concurrent Interruption' });
 
                 // Try to commit the transaction
-                transaction.update(docRef, { full_name: 'Transaction Name' });
+                transaction.update(profileRef, { full_name: 'Transaction Name' });
             });
         },
         /Transaction failed due to concurrent modification/,
@@ -801,8 +958,63 @@ await test('Edge Case: Race Conditions & Optimistic Concurrency Control', async 
     );
 
     // Verify transaction did not overwrite concurrent modification
-    const finalDoc = await db.collection('profiles').doc('concurrency_user').get();
+    const finalDoc = await profileRef.get();
     assert.strictEqual(finalDoc.data().full_name, 'Concurrent Interruption');
+});
+
+await test('Integration: getCircleItems and getActiveRequest security scoping', async () => {
+    // 1. Setup users
+    await window.registerWithEmail('alice@test.com', 'SecurePassword123', 'Alice');
+    const aliceUid = firebase.auth().currentUser.uid;
+    await window.registerWithEmail('bob@test.com', 'SecurePassword123', 'Bob');
+    const bobUid = firebase.auth().currentUser.uid;
+
+    // 2. Alice lists items in different circles
+    firebase.auth().currentUser = { uid: aliceUid };
+    const item1 = await window.db.addItem({
+        name: 'Hammer',
+        circle_id: 'circleA',
+        owner_id: aliceUid,
+        is_available: true
+    });
+    const item2 = await window.db.addItem({
+        name: 'Saw',
+        circle_ids: ['circleB', 'circleC'],
+        owner_id: aliceUid,
+        is_available: true
+    });
+
+    // 3. Test getCircleItems
+    const circleAItems = await window.db.getCircleItems('circleA');
+    assert.strictEqual(circleAItems.length, 1);
+    assert.strictEqual(circleAItems[0].name, 'Hammer');
+
+    const circleBItems = await window.db.getCircleItems('circleB');
+    assert.strictEqual(circleBItems.length, 1);
+    assert.strictEqual(circleBItems[0].name, 'Saw');
+
+    // 4. Test getActiveRequest
+    let activeReq = await window.db.getActiveRequest(item1.id, aliceUid, bobUid);
+    assert.strictEqual(activeReq, null);
+
+    // Bob requests to borrow
+    firebase.auth().currentUser = { uid: bobUid };
+    const req = await window.db.createBorrowRequest({
+        item_id: item1.id,
+        borrower_id: bobUid,
+        lender_id: aliceUid
+    });
+
+    // Verify Bob can fetch the active request
+    activeReq = await window.db.getActiveRequest(item1.id, aliceUid, bobUid);
+    assert.ok(activeReq);
+    assert.strictEqual(activeReq.id, req.id);
+
+    // Verify Alice can fetch the active request
+    firebase.auth().currentUser = { uid: aliceUid };
+    activeReq = await window.db.getActiveRequest(item1.id, aliceUid, bobUid);
+    assert.ok(activeReq);
+    assert.strictEqual(activeReq.id, req.id);
 });
 
 // ==========================================

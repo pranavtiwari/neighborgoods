@@ -221,6 +221,13 @@
     let mapInstance = null;
     let mapMarkers = [];
 
+    // Feed pagination. The catalogue read is cursor-paginated (ITEMS_PAGE_SIZE),
+    // so the grid is re-rendered from the ACCUMULATED list on each page rather
+    // than replacing it — search/filter and the map both work off allExploredItems.
+    let feedPage = { items: [], nextCursor: null, hasMore: false };
+    let feedCtx = { user: null, userPos: null, listingRatings: {}, reputations: {}, pendingRequestsMap: {} };
+    let feedLoading = false;
+
     // Haversine distance calculator
     function calculateDistance(lat1, lon1, lat2, lon2) {
         if (lat1 === null || lon1 === null || lat2 === null || lon2 === null) return null;
@@ -269,7 +276,7 @@
         try {
             const userPos = await getCurrentPositionPromise() || { lat: 37.7749, lng: -122.4194 }; // SF default
             const ratingsSummary = await window.db.getRatingsSummary();
-            const { listingRatings, userRatings } = ratingsSummary;
+            const { listingRatings } = ratingsSummary;
 
             let items = await window.db.getItems('all', user ? user.uid : null);
             // Filter out items that are currently borrowed
@@ -277,7 +284,20 @@
             if (user) {
                 items = items.filter(item => item.owner_id !== user.uid);
             }
-                
+
+            // Reputation for the item owners on this page comes from a batched
+            // ratee_id lookup, not from ratingsSummary.userRatings: the summary
+            // is scoped to the viewer's own requests, so it cannot report a
+            // score for a neighbor the viewer has not dealt with.
+            //
+            // This block MUST follow the fetch above: `items` is block-scoped,
+            // so reading it earlier was a temporal-dead-zone ReferenceError
+            // that aborted fetchItems entirely and left the grid empty.
+            const ownerIds = [...new Set(
+                items.map(i => i.owner_id).filter(Boolean)
+            )];
+            const reputations = await window.db.getReputations(ownerIds);
+
             if (!items || items.length === 0) {
                 grid.innerHTML = `
                     <div class="col-span-2 md:col-span-3 flex flex-col items-center justify-center py-12">
@@ -307,6 +327,9 @@
 
             // Get pending requests map
             const pendingRequestsMap = user ? await getPendingRequestsMap(user.uid) : {};
+            // Everything the card renderer needs, in one place so load-more can
+            // re-render the accumulated feed without refetching context.
+            feedCtx = { user, userPos, listingRatings, reputations, pendingRequestsMap };
 
             // Populate Hot Near You carousel (sort by distance ascending, show top 5)
             const nearbyItems = [...items].sort((a, b) => a.distanceVal - b.distanceVal);
@@ -337,7 +360,7 @@
                         ? `<span class="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-amber-400 text-[10px] font-black px-2.5 py-1 rounded-md flex items-center gap-1 shadow-sm"><span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">star</span> ${itemRatingVal} (${itemRatingCount})</span>`
                         : '';
 
-                    const ownerRating = userRatings[item.owner_id];
+                    const ownerRating = reputations[item.owner_id];
                     const ownerRatingVal = ownerRating && ownerRating.count > 0 ? ownerRating.average.toFixed(1) : 'New';
 
                     return `
@@ -376,7 +399,7 @@
                 const itemRatingVal = itemRating && itemRating.count > 0 ? itemRating.average.toFixed(1) : null;
                 const itemRatingCount = itemRating && itemRating.count > 0 ? itemRating.count : 0;
                 
-                const ownerRating = userRatings[item.owner_id];
+                const ownerRating = reputations[item.owner_id];
                 const ownerRatingVal = ownerRating && ownerRating.count > 0 ? ownerRating.average.toFixed(1) : 'New';
 
                 // Skills and Neighbour Help have a distinct horizontal card style
@@ -494,6 +517,7 @@
                         }
                     </div>
                 </div>`;
+            }).join('');
             // Call dynamic categories rendering
             renderCategoryChips(items);
             

@@ -230,6 +230,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     window.db = {
         profilesCache: {},
         _profilePromises: {},
+        _reputationCache: {},
 
         escapeHtml: function(str) {
             if (!str) return '';
@@ -596,59 +597,181 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         },
 
         // --- Items ---
-        getItems: async function(category = 'all', userId = null) {
+        // Page size for catalogue reads. Previously this was an unbounded `.get()`
+        // over the entire `items` collection followed by in-memory filtering,
+        // so cost and latency grew linearly with the whole catalogue and the
+        // 1500-read cap silently truncated results.
+        ITEMS_PAGE_SIZE: 24,
+
+        /**
+         * Paginated catalogue read.
+         * @param {string} category    'all' or a category id
+         * @param {string|null} userId viewer uid for circle-scoped visibility
+         * @param {object} opts        { pageSize, cursor }
+         * @returns {{items: Array, nextCursor: any|null, hasMore: boolean}}
+         */
+        getItemsPage: async function(category = 'all', userId = null, opts = {}) {
+            const pageSize = opts.pageSize || this.ITEMS_PAGE_SIZE;
+            const cursor = opts.cursor || null;
             try {
-                let query = firebase.firestore().collection('items');
-                const snapshot = await query.get();
-                let items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                
-                // Category filtering
-                if (category !== 'all') {
-                    items = items.filter(item => {
-                        if (item.categories && Array.isArray(item.categories)) {
-                            return item.categories.includes(category);
+                const db = firebase.firestore();
+
+                // Push filtering into Firestore where it is expressible, so the
+                // server bounds the result set instead of us reading everything
+                // and discarding most of it. `categories` is an array on newer
+                // listings and `category` a scalar on older ones.
+                // One query shape, reused by the initial read and the refill
+                // loop below. The fallback variant simply drops the server-side
+                // category filter (and the ordering, if that fails too) while
+                // keeping `pageSize + 1` and the cursor, so `hasMore` and
+                // `nextCursor` mean the same thing on every path.
+                let useServerCategoryFilter = category !== 'all';
+                const buildPageQuery = (cursorIn) => {
+                    let q = db.collection('items');
+                    if (useServerCategoryFilter) {
+                        q = q.where('categories', 'array-contains', category);
+                    }
+                    q = q.orderBy('created_at', 'desc').limit(pageSize + 1);
+                    return cursorIn ? q.startAfter(cursorIn) : q;
+                };
+
+                let snapshot = null;
+                let ordered = true;
+                try {
+                    snapshot = await buildPageQuery(cursor).get();
+                } catch (qErr) {
+                    // Only retry when there is a filter left to drop. With
+                    // category === 'all' the first attempt was already bare,
+                    // so retrying it would just repeat the same failure.
+                    if (useServerCategoryFilter) {
+                        useServerCategoryFilter = false;
+                        try {
+                            snapshot = await buildPageQuery(cursor).get();
+                        } catch (orderErr) {
+                            snapshot = null;
                         }
-                        return item.category === category;
-                    });
+                    }
+                    if (!snapshot) {
+                        // Missing composite index (or no created_at values
+                        // yet). Read unordered and stop paginating rather than
+                        // failing the whole page.
+                        ordered = false;
+                        let bare = db.collection('items').limit(pageSize + 1);
+                        if (cursor) bare = bare.startAfter(cursor);
+                        snapshot = await bare.get();
+                    }
                 }
-                
-                // Circle-scoped visibility filtering
+
+                const docs = snapshot.docs;
+                const hasMore = ordered && docs.length > pageSize;
+                const page = docs.slice(0, pageSize);
+
+                let items = page.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Legacy listings only carry the scalar `category`.
+                if (category !== 'all') {
+                    items = items.filter(item =>
+                        (item.categories && Array.isArray(item.categories) && item.categories.includes(category))
+                        || item.category === category
+                    );
+                }
+
+                // Circle-scoped visibility filtering.
+                // Hoisted: the refill loop below re-applies the same predicate.
+                let myCircleIds = null;
                 if (userId) {
                     const memberships = await this.getMyMemberships(userId);
-                    const myCircleIds = new Set(memberships.map(m => m.circle_id));
-                    items = items.filter(item => {
+                    myCircleIds = new Set(memberships.map(m => m.circle_id));
+                }
+                const isVisible = item => {
+                    if (userId) {
                         if (item.circle_ids && item.circle_ids.length > 0) {
                             return item.circle_ids.some(cid => myCircleIds.has(cid));
                         }
                         return !item.circle_id || myCircleIds.has(item.circle_id);
-                    });
-                } else {
-                    // Unauthenticated: only show items with no circle_id and no circle_ids
-                    items = items.filter(item => !item.circle_id && (!item.circle_ids || item.circle_ids.length === 0));
+                    }
+                    // Unauthenticated: only show items with no circle scope.
+                    return !item.circle_id && (!item.circle_ids || item.circle_ids.length === 0);
+                };
+                items = items.filter(isVisible);
+
+                // Circle-scoped visibility can empty a page that is otherwise
+                // full (or entirely), so keep pulling until we fill the page
+                // or run out of documents.
+                //
+                // This used to be gated on `!usedServerCategoryFilter && hasMore`,
+                // which was always false — `hasMore` is forced false on the
+                // fallback path — so the refill never ran in either branch and
+                // a viewer whose circles hid everything saw a blank grid while
+                // `hasMore` still said there was more to load.
+                let nextCursor = page.length ? page[page.length - 1] : null;
+                let exhausted = !hasMore;
+                while (!exhausted && ordered && items.length < pageSize) {
+                    let more;
+                    try {
+                        more = await buildPageQuery(nextCursor).get();
+                    } catch (refillErr) {
+                        break;
+                    }
+                    if (more.empty) break;
+                    const moreDocs = more.docs.slice(0, pageSize);
+                    if (moreDocs.length === 0) break;
+                    exhausted = more.docs.length <= pageSize;
+                    nextCursor = moreDocs[moreDocs.length - 1];
+                    let moreItems = moreDocs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    if (category !== 'all') {
+                        moreItems = moreItems.filter(item =>
+                            (item.categories && Array.isArray(item.categories) && item.categories.includes(category))
+                            || item.category === category
+                        );
+                    }
+                    items = items.concat(moreItems.filter(isVisible));
                 }
 
-                // Sort in memory by created_at descending
-                items.sort((a, b) => {
-                    const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
-                    const dateB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
-                    return dateB - dateA;
-                });
-                return items;
+                return {
+                    items,
+                    nextCursor,
+                    hasMore: !exhausted
+                };
             } catch (err) {
                 console.error("Error getting items:", err);
-                return [];
+                return { items: [], nextCursor: null, hasMore: false };
+            }
+        },
+
+        // Back-compat wrapper: returns just the first page as an array.
+        getItems: async function(category = 'all', userId = null) {
+            const page = await this.getItemsPage(category, userId, {});
+            return page.items;
+        },
+
+        getMyItemsPage: async function(ownerId, opts = {}) {
+            const pageSize = opts.pageSize || this.ITEMS_PAGE_SIZE;
+            const cursor = opts.cursor || null;
+            try {
+                let query = firebase.firestore().collection('items')
+                    .where('owner_id', '==', ownerId)
+                    .orderBy('created_at', 'desc')
+                    .limit(pageSize + 1);
+                if (cursor) query = query.startAfter(cursor);
+                const snapshot = await query.get();
+                const docs = snapshot.docs;
+                const hasMore = docs.length > pageSize;
+                const page = hasMore ? docs.slice(0, pageSize) : docs;
+                return {
+                    items: page.map(doc => ({ id: doc.id, ...doc.data() })),
+                    nextCursor: page.length ? page[page.length - 1] : null,
+                    hasMore
+                };
+            } catch (err) {
+                console.error("Error getting my items:", err);
+                return { items: [], nextCursor: null, hasMore: false };
             }
         },
 
         getMyItems: async function(ownerId) {
-            try {
-                const snapshot = await firebase.firestore().collection('items')
-                    .where('owner_id', '==', ownerId).get();
-                return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            } catch (err) {
-                console.error("Error getting my items:", err);
-                return [];
-            }
+            const page = await this.getMyItemsPage(ownerId, {});
+            return page.items;
         },
 
         getCircleItems: async function(circleId) {
@@ -700,12 +823,30 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     }
                 }
 
-                const ref = await firebase.firestore().collection('items').add({
+                const doc = {
                     ...itemData,
                     owner_name: ownerName,
                     owner_avatar: ownerAvatar,
                     created_at: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                };
+
+                // Book spine fields. `name` is the display title used by the
+                // existing item-details/explore UI; metadata is kept alongside
+                // so the catalogue can be searched without loading everything.
+                if (doc.isbn13) {
+                    doc.isbn13 = String(doc.isbn13).replace(/[^0-9Xx]/g, '').toUpperCase();
+                }
+                if (!doc.root_category && doc.category) {
+                    doc.root_category = doc.category;
+                }
+                doc.status = doc.status || 'available';
+                doc.is_available = doc.is_available !== false;
+
+                // A list without an explicit orderBy index (created_at) cannot
+                // be queried efficiently, so an explicit doc id lets callers
+                // page without a composite index.
+                const ref = firebase.firestore().collection('items').doc();
+                await ref.set(doc);
                 return { id: ref.id };
             } catch (err) {
                 console.error("Error adding item:", err);
@@ -968,9 +1109,19 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     const circleId = itemData.circle_id || null;
                     const circleIds = itemData.circle_ids || [];
                     
+                    // lender_id is DERIVED from the item doc, never taken from the
+                    // client. firestore.rules requires it to be present and to
+                    // differ from the borrower, and getBorrowRequestsForUser /
+                    // getRatingsSummary both query on it — so omitting it here
+                    // denied every borrow write and starved lenders of
+                    // reputation. Strip any client-supplied value first so a
+                    // caller cannot spoof a different lender.
+                    const { lender_id: _ignoredLenderId, ...safeRequestData } = requestData;
+
                     const newRequestRef = db.collection('requests').doc();
                     transaction.set(newRequestRef, {
-                        ...requestData,
+                        ...safeRequestData,
+                        lender_id: itemData.owner_id,
                         circle_id: circleId,
                         circle_ids: circleIds,
                         status: 'pending',
@@ -1075,9 +1226,17 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     });
 
                     // Update item status to approved (reserved) and is_available to false
+                    //
+                    // FIX: firestore.rules can only authorise a borrower's
+                    // later item writes (markPickedUp / markReturned) by
+                    // reading a single document — rules have no query
+                    // primitive. The owner writes the active request id here,
+                    // at the moment the approval is legitimately theirs to
+                    // grant, and it is cleared again when the request ends.
                     transaction.update(itemRef, {
                         status: 'approved',
-                        is_available: false
+                        is_available: false,
+                        active_request_id: requestId
                     });
                 });
             } catch (err) {
@@ -1344,7 +1503,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         confirmReturn: async function(requestId) {
             try {
                 const db = firebase.firestore();
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error("You must be signed in to confirm a return.");
                 const requestRef = db.collection('requests').doc(requestId);
+
+                let ledgerWrites = [];
+                let beneficiaries = [];
 
                 await db.runTransaction(async (transaction) => {
                     const requestDoc = await transaction.get(requestRef);
@@ -1370,32 +1534,57 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         delete this.profilesCache[lenderId];
                         delete this.profilesCache[borrowerId];
 
-                        // Mark item as available again (or completed if giveaway)
-                        if (itemData.listing_type === 'giveaway') {
+                        // Mark item as available again (or completed if giveaway).
+                        // active_request_id is cleared: the request is terminal,
+                        // so firestore.rules must stop granting the participants
+                        // write access to this item.
+                        if (itemData.listing_type === 'giveaway' || itemData.intent === 'donate') {
                             transaction.update(itemRef, {
                                 status: 'completed',
-                                is_available: false
+                                is_available: false,
+                                active_request_id: null
                             });
                         } else {
                             transaction.update(itemRef, {
                                 status: 'available',
-                                is_available: true
+                                is_available: true,
+                                active_request_id: null
                             });
                         }
 
-                        // Increment carbon_saved_kg by 2 on lender profile
-                        const lenderProfileRef = db.collection('profiles').doc(lenderId);
-                        const lenderDoc = await transaction.get(lenderProfileRef);
-                        const currentLenderCarbon = lenderDoc.exists ? (lenderDoc.data().carbon_saved_kg || 0) : 0;
-                        transaction.update(lenderProfileRef, { carbon_saved_kg: currentLenderCarbon + 2 });
-
-                        // Increment carbon_saved_kg by 2 on borrower profile as well
-                        const borrowerProfileRef = db.collection('profiles').doc(borrowerId);
-                        const borrowerDoc = await transaction.get(borrowerProfileRef);
-                        const currentBorrowerCarbon = borrowerDoc.exists ? (borrowerDoc.data().carbon_saved_kg || 0) : 0;
-                        transaction.update(borrowerProfileRef, { carbon_saved_kg: currentBorrowerCarbon + 2 });
+                        // FIX VULN-14: carbon_saved_kg is server-owned
+                        // (firestore.rules blocks cross-profile writes), so the
+                        // old approach of crediting BOTH profiles here was denied
+                        // in production and failed the whole confirmation.
+                        // Record an append-only ledger row per participant
+                        // instead; the aggregate is derived from these rows.
+                        const isDonation = itemData.listing_type === 'giveaway' || itemData.intent === 'donate';
+                        const creditKg = isDonation ? 2 : 2;
+                        beneficiaries = [
+                            { id: lenderId, role: 'lender' },
+                            { id: borrowerId, role: 'borrower' }
+                        ];
+                        ledgerWrites = beneficiaries.map(b => ({
+                            ref: db.collection('impact_events').doc(),
+                            data: {
+                                actor_id: user.uid,
+                                beneficiary_id: b.id,
+                                role: b.role,
+                                credit_kg: creditKg,
+                                request_id: requestId,
+                                item_id: requestData.item_id,
+                                kind: isDonation ? 'donation' : 'loan',
+                                created_at: firebase.firestore.FieldValue.serverTimestamp()
+                            }
+                        }));
                     }
                 });
+
+                // Ledger writes are outside the transaction so a credit-write
+                // failure can never roll back a confirmed return.
+                await Promise.all(ledgerWrites.map(w => w.ref.set(w.data)));
+
+                return { credited: beneficiaries.length };
             } catch (err) {
                 console.error("Error confirming return:", err);
                 throw err;
@@ -1423,10 +1612,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         confirmed_at: null
                     });
                     
-                    // Revert item status to available
+                    // Revert item status to available and drop the active
+                    // request link, so the borrower can no longer write it.
                     transaction.update(itemRef, {
                         status: 'available',
-                        is_available: true
+                        is_available: true,
+                        active_request_id: null
                     });
                 });
             } catch (err) {
@@ -1503,8 +1694,11 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         undoConfirmReturn: async function(requestId) {
             try {
                 const db = firebase.firestore();
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error("You must be signed in to undo a confirmation.");
                 const requestRef = db.collection('requests').doc(requestId);
-                
+                let impactRefs = [];
+
                 await db.runTransaction(async (transaction) => {
                     const requestDoc = await transaction.get(requestRef);
                     if (!requestDoc.exists) throw new Error("Request not found");
@@ -1517,7 +1711,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     const itemDoc = await transaction.get(itemRef);
                     if (!itemDoc.exists) throw new Error("Item not found");
                     const itemData = itemDoc.data();
-                    const isGiveaway = itemData.listing_type === 'giveaway';
+                    const isGiveaway = itemData.listing_type === 'giveaway' || itemData.intent === 'donate';
                     
                     // Revert request status to returned (or approved if giveaway)
                     const targetStatus = isGiveaway ? 'approved' : 'returned';
@@ -1526,28 +1720,49 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         completed_at: null
                     });
                     
-                    // Revert item status to returned (or approved if giveaway) and make unavailable
+                    // Revert item status to returned (or approved if giveaway)
+                    // and make unavailable. The request is live again, so the
+                    // active_request_id link is restored.
                     transaction.update(itemRef, {
                         status: targetStatus,
-                        is_available: false
+                        is_available: false,
+                        active_request_id: requestId
                     });
-                    
-                    // Revert carbon savings (-2 for both profiles)
-                    const lenderId = itemData.owner_id;
-                    const borrowerId = requestData.borrower_id;
-                    delete this.profilesCache[lenderId];
-                    delete this.profilesCache[borrowerId];
-                    
-                    const lenderProfileRef = db.collection('profiles').doc(lenderId);
-                    const lenderDoc = await transaction.get(lenderProfileRef);
-                    const currentLenderCarbon = lenderDoc.exists ? (lenderDoc.data().carbon_saved_kg || 0) : 0;
-                    transaction.update(lenderProfileRef, { carbon_saved_kg: Math.max(0, currentLenderCarbon - 2) });
-                    
-                    const borrowerProfileRef = db.collection('profiles').doc(borrowerId);
-                    const borrowerDoc = await transaction.get(borrowerProfileRef);
-                    const currentBorrowerCarbon = borrowerDoc.exists ? (borrowerDoc.data().carbon_saved_kg || 0) : 0;
-                    transaction.update(borrowerProfileRef, { carbon_saved_kg: Math.max(0, currentBorrowerCarbon - 2) });
+
+                    // VULN-14: the impact ledger is append-only and immutable
+                    // (firestore.rules: allow update, delete: if false), so the
+                    // credit is reversed by appending compensating rows that
+                    // cancel it, rather than by mutating history.
+                    const ledgerSnap = await transaction.get(
+                        db.collection('impact_events').where('request_id', '==', requestId)
+                    );
+                    impactRefs = ledgerSnap.docs
+                        .filter(d => {
+                            const v = d.data().credit_kg;
+                            return typeof v === 'number' && v > 0;
+                        })
+                        .map(d => ({
+                            ref: d.ref,
+                            amount: d.data().credit_kg,
+                            beneficiaryId: d.data().beneficiary_id
+                        }));
                 });
+
+                await Promise.all(impactRefs.map(({ ref, amount, beneficiaryId }) =>
+                    db.collection('impact_events').doc().set({
+                        actor_id: user.uid,
+                        // Carry the ORIGINAL beneficiary so the credit sums back
+                        // to zero for that person. A reversal row is a normal
+                        // negative entry, not a write against history.
+                        beneficiary_id: beneficiaryId || 'none',
+                        role: 'reversal',
+                        credit_kg: -amount,
+                        reverses_event_id: ref.id,
+                        request_id: requestId,
+                        kind: 'reversal',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    })
+                ));
             } catch (err) {
                 console.error("Error undoing confirm return:", err);
                 throw err;
@@ -1623,14 +1838,114 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
-        _ratingsSummaryCache: null,
+        // Derive a user's total impact credit from the append-only ledger.
+        // carbon_saved_kg on the profile is server-owned and not client-writable
+        // (firestore.rules), so the ledger is the source of truth for the UI.
+        getImpactSummary: async function(profileId) {
+            try {
+                if (!profileId) return { credit_kg: 0, donations: 0, loans: 0, reversals: 0 };
+                const snap = await firebase.firestore().collection('impact_events')
+                    .where('beneficiary_id', '==', profileId)
+                    .get();
+                const rows = snap.docs.map(d => d.data());
+                let credit_kg = 0, donations = 0, loans = 0, reversals = 0;
+                rows.forEach(r => {
+                    const v = Number(r.credit_kg) || 0;
+                    credit_kg += v;
+                    if (r.kind === 'donation' && v > 0) donations += 1;
+                    else if (r.kind === 'loan' && v > 0) loans += 1;
+                    else if (r.kind === 'reversal') reversals += 1;
+                });
+                return {
+                    credit_kg: Math.max(0, Math.round(credit_kg * 10) / 10),
+                    donations,
+                    loans,
+                    reversals
+                };
+            } catch (err) {
+                console.error("Error getting impact summary:", err);
+                return { credit_kg: 0, donations: 0, loans: 0, reversals: 0 };
+            }
+        },
+
+        /**
+         * Batched reputation lookup for display.
+         *
+         * getRatingsSummary() is deliberately scoped to the viewer's own
+         * requests, because reading the whole `ratings` collection leaked
+         * every rating and rater profile in the app to any signed-in user.
+         * That scope means a page showing several counterparties needs each
+         * one's score independently.
+         *
+         * Fetching one query per person does not scale, so this batches with
+         * `ratee_id in [...]` (Firestore caps `in` at 30 values), turning N
+         * reads into ceil(N/30). Supported by the
+         * ratings(ratee_id ASC, created_at DESC) index.
+         *
+         * @param {string[]} userIds
+         * @returns {Promise<Object<string, {average:number,count:number}>>}
+         */
+        getReputations: async function(userIds) {
+            const result = {};
+            const unique = [...new Set((userIds || []).filter(Boolean))];
+            if (!unique.length) return result;
+
+            if (!this._reputationCache) this._reputationCache = {};
+            const pending = unique.filter(id => !this._reputationCache[id]);
+            unique.forEach(id => {
+                if (this._reputationCache[id]) result[id] = this._reputationCache[id];
+            });
+
+            const CHUNK = 30;
+            for (let i = 0; i < pending.length; i += CHUNK) {
+                const chunk = pending.slice(i, i + CHUNK);
+                try {
+                    const snap = await firebase.firestore().collection('ratings')
+                        .where('ratee_id', 'in', chunk)
+                        .limit(Math.min(1000, chunk.length * 50))
+                        .get();
+                    const byRatee = {};
+                    snap.docs.forEach(d => {
+                        const { ratee_id: rateeId, score } = d.data();
+                        if (!rateeId) return;
+                        const s = Number(score);
+                        if (!Number.isFinite(s)) return;
+                        if (!byRatee[rateeId]) byRatee[rateeId] = { total: 0, count: 0 };
+                        byRatee[rateeId].total += s;
+                        byRatee[rateeId].count += 1;
+                    });
+                    chunk.forEach(id => {
+                        const agg = byRatee[id];
+                        const entry = agg && agg.count > 0
+                            ? { average: Number((agg.total / agg.count).toFixed(1)), count: agg.count }
+                            : { average: 5.0, count: 0 };
+                        this._reputationCache[id] = entry;
+                        result[id] = entry;
+                    });
+                } catch (err) {
+                    console.error("Error getting batched reputations:", err);
+                    chunk.forEach(id => {
+                        const entry = { average: 5.0, count: 0 };
+                        this._reputationCache[id] = entry;
+                        result[id] = entry;
+                    });
+                }
+            }
+            return result;
+        },
+
+        // Keyed by uid. A single shared cache leaked one signed-in user's ratings
+        // summary to the next user on the same device, and the scope is
+        // viewer-specific, so it can never be shared across identities.
+        _ratingsSummaryCache: {},
 
         getRatingsSummary: async function() {
-            if (this._ratingsSummaryCache) {
-                return this._ratingsSummaryCache;
+            const user = firebase.auth().currentUser;
+            const cacheKey = user ? user.uid : '__anon__';
+            if (this._ratingsSummaryCache[cacheKey]) {
+                return this._ratingsSummaryCache[cacheKey];
             }
             try {
-                const user = firebase.auth().currentUser;
                 let requestsDocs = [];
                 
                 if (user) {
@@ -1642,7 +1957,29 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     requestsDocs = [...borrowerSnap.docs, ...lenderSnap.docs];
                 }
 
-                const ratingsSnap = await firebase.firestore().collection('ratings').get();
+                // Ratings are only meaningful for requests the viewer participates in, so
+                // scope to those rather than scanning the entire `ratings`
+                // collection. A rating whose request is not visible to this
+                // viewer is dropped anyway, so the visible result is unchanged.
+                let ratingsDocs = [];
+                if (user) {
+                    const viewerRequestIds = new Set(requestsDocs.map(d => d.id));
+                    if (viewerRequestIds.size) {
+                        const chunkSize = 30; // Firestore 'in' supports max 30
+                        const ids = [...viewerRequestIds];
+                        const chunks = [];
+                        for (let i = 0; i < ids.length; i += chunkSize) {
+                            chunks.push(ids.slice(i, i + chunkSize));
+                        }
+                        const snaps = await Promise.all(chunks.map(chunk =>
+                            firebase.firestore().collection('ratings')
+                                .where('request_id', 'in', chunk)
+                                .limit(Math.min(1000, chunk.length * 4))
+                                .get()
+                        ));
+                        ratingsDocs = snaps.flatMap(s => s.docs);
+                    }
+                }
                 
                 const requestsMap = {};
                 requestsDocs.forEach(doc => {
@@ -1661,7 +1998,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 };
 
                 const ratings = [];
-                for (const doc of ratingsSnap.docs) {
+                for (const doc of ratingsDocs) {
                     const rating = { id: doc.id, ...doc.data() };
                     ratings.push(rating);
                 }
@@ -1725,7 +2062,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 }
                 
                 const summary = { listingRatings, userRatings, requestsMap };
-                this._ratingsSummaryCache = summary;
+                this._ratingsSummaryCache[cacheKey] = summary;
                 return summary;
             } catch (err) {
                 console.error("Error getting ratings summary:", err);
@@ -1733,50 +2070,53 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
+        // Derive a user's reputation from their ratings.
+        //
+        // profiles.reputation_score is server-owned: firestore.rules:30 blocks
+        // the client from writing it. createRating used to attempt that write
+        // and swallow the PERMISSION_DENIED, so reputation NEVER actually
+        // updated in production. The aggregate is computed from `ratings`
+        // instead, which is the record of truth.
+        getReputation: async function(userId) {
+            if (!userId) return { average: 5.0, count: 0 };
+            if (this._reputationCache && this._reputationCache[userId]) {
+                return this._reputationCache[userId];
+            }
+            if (!this._reputationCache) this._reputationCache = {};
+            try {
+                const snap = await firebase.firestore().collection('ratings')
+                    .where('ratee_id', '==', userId).get();
+                const scores = snap.docs
+                    .map(d => Number(d.data().score))
+                    .filter(s => Number.isFinite(s));
+                const result = scores.length > 0
+                    ? { average: Number((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)), count: scores.length }
+                    : { average: 5.0, count: 0 };
+                this._reputationCache[userId] = result;
+                return result;
+            } catch (err) {
+                console.error("Error getting reputation:", err);
+                return { average: 5.0, count: 0 };
+            }
+        },
+
         createRating: async function(ratingData) {
-            this._ratingsSummaryCache = null; // Clear ratings cache
+            // A new rating changes every viewer's summary, and the cache is
+            // per-viewer, so drop all of it rather than guessing who is looking.
+            this._ratingsSummaryCache = {};
+            if (!this._reputationCache) this._reputationCache = {};
             if (ratingData.ratee_id) {
                 delete this.profilesCache[ratingData.ratee_id];
+                delete this._reputationCache[ratingData.ratee_id];
             }
             try {
+                // VULN-15: reputation_score on the profile is not client-writable
+                // (firestore.rules:30), so writing it here was always denied.
+                // The rating row is the record; getReputation() derives the score.
                 const ref = await firebase.firestore().collection('ratings').add({
                     ...ratingData,
                     created_at: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                
-                // Update ratee's reputation_score on their profile
-                const rateeId = ratingData.ratee_id;
-                const ratingsSnap = await firebase.firestore().collection('ratings')
-                    .where('ratee_id', '==', rateeId)
-                    .get();
-                
-                const ratings = ratingsSnap.docs.map(d => d.data());
-                let totalScore = ratingData.score;
-                let count = 1;
-                let foundNew = false;
-                
-                ratings.forEach(r => {
-                    if (r.request_id === ratingData.request_id && r.rater_id === ratingData.rater_id) {
-                        foundNew = true;
-                    }
-                    totalScore += r.score;
-                    count++;
-                });
-                
-                if (foundNew) {
-                    totalScore -= ratingData.score;
-                    count--;
-                }
-
-                const avgScore = Number((totalScore / count).toFixed(1));
-                
-                try {
-                    await firebase.firestore().collection('profiles').doc(rateeId).update({
-                        reputation_score: avgScore
-                    });
-                } catch (profileUpdateErr) {
-                    console.warn("Could not update profile reputation_score client-side (this is expected if reputation_score direct-write rules are disabled):", profileUpdateErr);
-                }
 
                 return { id: ref.id };
             } catch (err) {

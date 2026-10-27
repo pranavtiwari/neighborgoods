@@ -177,10 +177,19 @@
                 document.getElementById('target-name').textContent = profileData.full_name || 'Anonymous User';
                 if (profileData.avatar_url) document.getElementById('target-avatar').src = profileData.avatar_url;
                 
-                // Get reputation from ratingsSummary or fallback to profileData.reputation_score
-                const userRating = ratingsSummary.userRatings[targetUserId];
-                const ratingVal = userRating ? userRating.average : (profileData.reputation_score || 5.0);
-                document.getElementById('target-rating-text').textContent = `${Number(ratingVal).toFixed(1)} reputation`;
+                // Reputation comes from the batched ratee_id lookup. Both
+                // ratingsSummary.userRatings (scoped to the viewer's own
+                // requests) and the stale profile.reputation_score field
+                // (server-owned, never written) are unusable here.
+                const reputations = await window.db.getReputations([targetUserId]);
+                const userRating = reputations[targetUserId];
+                if (userRating && userRating.count > 0) {
+                    document.getElementById('target-rating-text').textContent =
+                        `${userRating.average.toFixed(1)} reputation (${userRating.count})`;
+                } else {
+                    const badge = document.getElementById('target-rating-badge');
+                    if (badge) badge.classList.add('hidden');
+                }
             } else {
                 document.getElementById('target-name').textContent = 'Unknown User';
                 const badge = document.getElementById('target-rating-badge');
