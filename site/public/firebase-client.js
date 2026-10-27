@@ -2649,7 +2649,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
                     message: totalCopies + ' copy in circulation, currently checked out.',
                     actionLabel: 'Add to Want List',
-                    ctaUrl: bookId ? '/item-details.html?book_id=' + encodeURIComponent(bookId) + '#want' : '#'
+                    ctaUrl: bookId ? 'book-detail.html?id=' + encodeURIComponent(bookId) + '#want' : '#'
                 };
             }
 
@@ -2661,7 +2661,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
                 message: availableCopies + ' of ' + totalCopies + ' copies ready to borrow or swap.',
                 actionLabel: 'View Copies',
-                ctaUrl: bookId ? '/item-details.html?book_id=' + encodeURIComponent(bookId) : '#'
+                ctaUrl: bookId ? 'book-detail.html?id=' + encodeURIComponent(bookId) : '#'
             };
         },
 
@@ -2875,6 +2875,97 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
 
             return results;
+        },
+
+        getBookCopies: async function(bookId, filters = {}) {
+            if (!bookId) return [];
+            try {
+                const snap = await firebase.firestore().collection('items')
+                    .where('book_id', '==', bookId)
+                    .get();
+
+                let copies = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Populate owner profiles
+                const ownerIds = [...new Set(copies.map(c => c.owner_id).filter(Boolean))];
+                const profilesMap = {};
+                await Promise.all(ownerIds.map(async (uid) => {
+                    try {
+                        const prof = await this.getProfile(uid);
+                        if (prof) profilesMap[uid] = prof;
+                    } catch (e) {
+                        console.warn('Could not load owner profile:', uid, e);
+                    }
+                }));
+
+                // Populate circle names if copies are bound to a circle
+                const circleIds = [...new Set(copies.map(c => c.circle_id).filter(Boolean))];
+                const circlesMap = {};
+                await Promise.all(circleIds.map(async (cid) => {
+                    try {
+                        const circle = await this.getCircle(cid);
+                        if (circle) circlesMap[cid] = circle;
+                    } catch (e) {
+                        console.warn('Could not load circle:', cid, e);
+                    }
+                }));
+
+                // Enrich copy objects and enforce location privacy (never expose exact_address)
+                copies = copies.map(copy => {
+                    const owner = profilesMap[copy.owner_id] || {};
+                    const circle = circlesMap[copy.circle_id] || null;
+                    const area = copy.location_area || copy.location || owner.location || 'Local area';
+                    const enriched = {
+                        ...copy,
+                        owner_profile: owner,
+                        owner_name: owner.full_name || copy.owner_name || 'Neighbor',
+                        owner_avatar: owner.avatar_url || 'https://placehold.co/100x100?text=U',
+                        circle_name: circle ? circle.name : (copy.circle_name || null),
+                        display_area: area
+                    };
+                    delete enriched.exact_address;
+                    return enriched;
+                });
+
+                // Filter by listing_type if specified ('borrow', 'giveaway', 'swap')
+                if (filters.listing_type && filters.listing_type !== 'all') {
+                    copies = copies.filter(c => c.listing_type === filters.listing_type);
+                }
+
+                // Filter by available_only
+                if (filters.available_only) {
+                    copies = copies.filter(c => c.is_available !== false && (!c.status || c.status === 'available'));
+                }
+
+                // Filter by condition
+                if (filters.condition && filters.condition !== 'all') {
+                    copies = copies.filter(c => c.condition === filters.condition);
+                }
+
+                // Sort: available first, then newest
+                copies.sort((a, b) => {
+                    const aAvail = a.is_available !== false && (!a.status || a.status === 'available') ? 1 : 0;
+                    const bAvail = b.is_available !== false && (!b.status || b.status === 'available') ? 1 : 0;
+                    if (aAvail !== bAvail) return bAvail - aAvail;
+                    const aTime = a.created_at?.toMillis ? a.created_at.toMillis() : (a.created_at ? new Date(a.created_at).getTime() : 0);
+                    const bTime = b.created_at?.toMillis ? b.created_at.toMillis() : (b.created_at ? new Date(b.created_at).getTime() : 0);
+                    return bTime - aTime;
+                });
+
+                return copies;
+            } catch (err) {
+                console.error('Error fetching book copies:', err);
+                return [];
+            }
+        },
+
+        getBookWithCopies: async function(bookId, filters = {}) {
+            if (!bookId) return null;
+            const book = await this.getBook(bookId);
+            if (!book) return null;
+            const copies = await this.getBookCopies(bookId, filters);
+            const copiesStatus = this.getBookCopiesStatus(book);
+            return { book, copies, copiesStatus };
         },
 
         lookupBookMetadata: async function({ isbn, query } = {}) {

@@ -1351,15 +1351,21 @@
 
                 if (itemId) {
                     await window.db.updateItem(itemId, payload);
-                    const profileUrl = window.location.pathname.endsWith('.html') ? 'profile.html' : 'profile';
-                    window.location.href = profileUrl;
+                    if (bookId) {
+                        window.location.href = 'book-detail.html?id=' + encodeURIComponent(bookId);
+                    } else {
+                        const profileUrl = window.location.pathname.endsWith('.html') ? 'profile.html' : 'profile';
+                        window.location.href = profileUrl;
+                    }
                 } else {
                     await window.db.addItem({
                         ...payload,
                         owner_id: session.user.uid,
                         status: 'available'
                     });
-                    if (circleId) {
+                    if (bookId) {
+                        window.location.href = 'book-detail.html?id=' + encodeURIComponent(bookId);
+                    } else if (circleId) {
                         const circleUrl = window.location.pathname.endsWith('.html') ? `circle-detail.html?id=${circleId}` : `circle-detail?id=${circleId}`;
                         window.location.href = circleUrl;
                     } else if (selectedCircles.length > 0) {

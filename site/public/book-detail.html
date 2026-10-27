@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Details - Share, Instead.</title>
+    
+    <script src="config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-client.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="/style.css">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+    <style>
+        body { font-family: 'Lexend', sans-serif; min-height: max(884px, 100dvh); }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .bg-forest-gradient {
+            background: linear-gradient(135deg, #0d631b 0%, #2e7d32 100%);
+        }
+        .filter-chip.active {
+            background-color: var(--color-primary, #0d631b);
+            color: #ffffff;
+            border-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface antialiased min-h-screen pb-32">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
+        <div class="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
+            <div class="flex items-center gap-4">
+                <button id="back-nav-btn" onclick="if (history.length > 1) { history.back(); } else { window.location.href = 'explore.html'; }" class="hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors active:scale-95 duration-200 p-2 rounded-full cursor-pointer">
+                    <span class="material-symbols-outlined text-primary dark:text-emerald-400">arrow_back</span>
+                </button>
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary dark:text-emerald-400 text-2xl">auto_stories</span>
+                    <div>
+                        <span class="text-xs uppercase font-extrabold tracking-wider text-primary dark:text-emerald-400 block leading-none">A World of Books</span>
+                        <h1 class="font-lexend text-base font-bold tracking-tight text-stone-800 dark:text-stone-200 leading-tight">Book Catalog</h1>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button id="share-btn" title="Share this book" class="hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors active:scale-95 duration-200 p-2 rounded-full cursor-pointer">
+                    <span class="material-symbols-outlined text-stone-600 dark:text-stone-300">share</span>
+                </button>
+                <button id="bookmark-btn" title="Save to Want List" class="hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors active:scale-95 duration-200 p-2 rounded-full cursor-pointer">
+                    <span id="bookmark-icon" class="material-symbols-outlined text-stone-600 dark:text-stone-300">bookmark_border</span>
+                </button>
+                <div class="relative">
+                    <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-9 h-9 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
+                        <img id="header-avatar" alt="User avatar" class="w-full h-full object-cover" src="https://i.pravatar.cc/150?u=me"/>
+                    </div>
+                    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2">
+                        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">person</span>
+                            <span class="text-sm font-medium">My Profile</span>
+                        </a>
+                        <a href="explore.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">explore</span>
+                            <span class="text-sm font-medium">Explore Catalog</span>
+                        </a>
+                        <button onclick="event.stopPropagation(); firebase.auth().signOut().then(function(){window.location.href='index.html'});" class="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-error-container text-error transition-colors cursor-pointer" style="touch-action: manipulation;">
+                            <span class="material-symbols-outlined text-[20px]">logout</span>
+                            <span class="text-sm font-bold text-left">Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+
+        <!-- Loading Skeleton -->
+        <div id="loading-state" class="space-y-8 animate-pulse">
+            <div class="bg-surface-container-lowest rounded-2xl p-6 sm:p-8 shadow-sm flex flex-col md:flex-row gap-8">
+                <div class="w-48 h-72 bg-stone-200 dark:bg-stone-800 rounded-xl mx-auto md:mx-0 shrink-0"></div>
+                <div class="flex-1 space-y-4">
+                    <div class="h-8 bg-stone-200 dark:bg-stone-800 rounded w-3/4"></div>
+                    <div class="h-4 bg-stone-200 dark:bg-stone-800 rounded w-1/3"></div>
+                    <div class="h-20 bg-stone-200 dark:bg-stone-800 rounded w-full"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error / Not Found State -->
+        <div id="error-state" class="hidden text-center py-20 bg-surface-container-lowest rounded-2xl p-8 border border-outline-variant/15 max-w-lg mx-auto">
+            <span class="material-symbols-outlined text-6xl text-stone-400 mb-4">search_off</span>
+            <h2 class="text-2xl font-bold text-stone-800 dark:text-stone-100">Book Not Found</h2>
+            <p id="error-message" class="text-stone-500 mt-2 text-sm leading-relaxed">
+                The canonical book record you requested could not be found in the catalog.
+            </p>
+            <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                <a href="explore.html" class="px-6 py-2.5 bg-primary text-white font-bold rounded-xl active:scale-95 transition-transform text-sm">
+                    Browse All Titles
+                </a>
+                <a href="add-item.html" class="px-6 py-2.5 bg-surface-container border border-outline-variant/40 font-bold rounded-xl active:scale-95 transition-transform text-sm">
+                    List a New Book
+                </a>
+            </div>
+        </div>
+
+        <!-- Book Detail Content -->
+        <div id="content-container" class="hidden space-y-10">
+
+            <!-- Canonical Book Hero -->
+            <section class="bg-surface-container-lowest rounded-3xl p-6 sm:p-8 md:p-10 shadow-[0_12px_40px_rgba(51,51,51,0.04)] border border-outline-variant/15">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+                    
+                    <!-- Cover Image Column -->
+                    <div class="md:col-span-4 lg:col-span-3 flex flex-col items-center">
+                        <div class="relative w-48 sm:w-56 md:w-full aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl bg-stone-100 dark:bg-stone-900 border border-stone-200/60 dark:border-stone-800">
+                            <img id="book-cover" alt="Book cover" class="w-full h-full object-cover" src=""/>
+                            <div id="availability-pill-container" class="absolute top-3 left-3">
+                                <span id="availability-pill" class="px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase shadow-md bg-stone-800 text-white">
+                                    Checking...
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Add a Copy Quick Action Button -->
+                        <div class="mt-4 w-full">
+                            <a id="list-copy-btn" href="#" class="w-full py-3 px-4 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/50 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 active:scale-98 transition-all text-center">
+                                <span class="material-symbols-outlined text-base">add_circle</span>
+                                <span>I Have a Copy to Share</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Book Information Column -->
+                    <div class="md:col-span-8 lg:col-span-9 flex flex-col gap-6">
+                        <div>
+                            <span class="text-[11px] font-black uppercase tracking-widest text-primary dark:text-emerald-400">Canonical Title</span>
+                            <h2 id="book-title" class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-on-surface leading-tight mt-1">
+                                ...
+                            </h2>
+                            <p id="book-authors" class="text-lg sm:text-xl font-semibold text-primary dark:text-emerald-400 mt-2">
+                                ...
+                            </p>
+                        </div>
+
+                        <!-- Metadata Badges Grid -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div class="bg-surface-container-low rounded-xl p-3 border border-outline-variant/10">
+                                <span class="text-[10px] uppercase font-bold text-stone-500 tracking-wider block">Published</span>
+                                <span id="meta-year" class="text-sm font-bold text-on-surface">Unknown</span>
+                            </div>
+                            <div class="bg-surface-container-low rounded-xl p-3 border border-outline-variant/10">
+                                <span class="text-[10px] uppercase font-bold text-stone-500 tracking-wider block">Publisher</span>
+                                <span id="meta-publisher" class="text-sm font-bold text-on-surface truncate block" title="">Unknown</span>
+                            </div>
+                            <div class="bg-surface-container-low rounded-xl p-3 border border-outline-variant/10">
+                                <span class="text-[10px] uppercase font-bold text-stone-500 tracking-wider block">ISBN</span>
+                                <span id="meta-isbn" class="text-sm font-bold text-on-surface truncate block" title="">-</span>
+                            </div>
+                            <div class="bg-surface-container-low rounded-xl p-3 border border-outline-variant/10">
+                                <span class="text-[10px] uppercase font-bold text-stone-500 tracking-wider block">Total Copies</span>
+                                <span id="meta-copies-count" class="text-sm font-bold text-primary dark:text-emerald-400">0 in network</span>
+                            </div>
+                        </div>
+
+                        <!-- Description / Synopsis -->
+                        <div class="space-y-2">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-stone-600 dark:text-stone-300">Synopsis</h3>
+                            <div id="book-description-container" class="relative">
+                                <p id="book-description" class="text-on-surface-variant text-sm sm:text-base leading-relaxed line-clamp-4">
+                                    No description provided for this title yet.
+                                </p>
+                                <button id="desc-expand-btn" class="hidden text-xs font-bold text-primary hover:underline mt-1 cursor-pointer">
+                                    Show full synopsis
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Location & Privacy Guarantee Banner -->
+                        <div class="bg-surface-container rounded-2xl p-4 flex items-center gap-3 border border-outline-variant/15 text-xs text-stone-600 dark:text-stone-300">
+                            <span class="material-symbols-outlined text-primary dark:text-emerald-400 text-xl shrink-0">shield</span>
+                            <p class="leading-normal">
+                                <strong>Neighbor Privacy Protected:</strong> Only neighborhood/area-level locations are shown below. Exact pickup addresses are unlocked only after a copy request is approved by the owner.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Physical Copies Aggregation Section -->
+            <section id="copies-section" class="space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-outline-variant/15 pb-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-2xl font-bold tracking-tight text-on-surface">Physical Copies in Network</h3>
+                            <span id="copies-count-chip" class="px-2.5 py-0.5 rounded-full text-xs font-black bg-primary/10 text-primary dark:bg-emerald-950/50 dark:text-emerald-400">
+                                0
+                            </span>
+                        </div>
+                        <p class="text-xs text-stone-500 mt-1">
+                            Choose an available physical copy to borrow, claim, or propose a swap with a neighbor.
+                        </p>
+                    </div>
+
+                    <!-- Filter Bar -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Listing Type Filter Pills -->
+                        <div class="inline-flex p-1 bg-surface-container rounded-xl border border-outline-variant/20">
+                            <button data-type="all" class="filter-chip active px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer">
+                                All
+                            </button>
+                            <button data-type="borrow" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer">
+                                Borrow
+                            </button>
+                            <button data-type="giveaway" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer">
+                                Giveaway 🎁
+                            </button>
+                            <button data-type="swap" class="filter-chip px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer">
+                                Swap 🔄
+                            </button>
+                        </div>
+
+                        <!-- Available Only Toggle -->
+                        <label class="inline-flex items-center gap-2 px-3 py-2 bg-surface-container rounded-xl border border-outline-variant/20 text-xs font-semibold cursor-pointer select-none">
+                            <input id="available-only-checkbox" type="checkbox" class="w-4 h-4 rounded text-primary focus:ring-primary/20 accent-primary">
+                            <span>Available now only</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Copies List Grid -->
+                <div id="copies-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Dynamic Copy Cards injected here -->
+                </div>
+
+                <!-- Empty Filter Results State -->
+                <div id="filter-empty-state" class="hidden text-center py-12 bg-surface-container-low rounded-2xl p-6 border border-dashed border-outline-variant/30">
+                    <span class="material-symbols-outlined text-4xl text-stone-400 mb-2">filter_list_off</span>
+                    <p class="text-sm font-bold text-stone-700 dark:text-stone-300">No copies match your current filters</p>
+                    <p class="text-xs text-stone-500 mt-1">Try switching to "All" listing types or unchecking "Available now only".</p>
+                    <button onclick="resetFilters()" class="mt-4 px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg cursor-pointer hover:opacity-90">
+                        Reset Filters
+                    </button>
+                </div>
+
+                <!-- Zero-Copy Empty State (When no physical copies exist at all) -->
+                <div id="zero-copy-state" class="hidden bg-surface-container-lowest rounded-3xl p-8 sm:p-12 text-center border-2 border-dashed border-outline-variant/30 max-w-xl mx-auto space-y-4">
+                    <div class="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 flex items-center justify-center mx-auto">
+                        <span class="material-symbols-outlined text-3xl">menu_book</span>
+                    </div>
+                    <h4 class="text-xl font-extrabold text-stone-800 dark:text-stone-100">
+                        No Copies Currently Available
+                    </h4>
+                    <p class="text-sm text-stone-500 leading-relaxed max-w-md mx-auto">
+                        This canonical book is tracked in the Universal Library catalog, but no neighbor has listed an active copy yet in your circles or World of Books.
+                    </p>
+                    <div class="pt-2 flex flex-col sm:flex-row gap-3 justify-center items-center">
+                        <a id="zero-copy-add-btn" href="#" class="w-full sm:w-auto px-6 py-3 bg-gradient-to-br from-green-800 to-green-600 text-white font-bold rounded-xl active:scale-95 transition-all shadow-md text-sm flex items-center justify-center gap-2">
+                            <span class="material-symbols-outlined text-lg">add_circle</span>
+                            <span>Be the First to Share a Copy</span>
+                        </a>
+                        <button id="zero-copy-want-btn" class="w-full sm:w-auto px-6 py-3 bg-surface-container hover:bg-surface-container-high border border-outline-variant/40 font-bold rounded-xl active:scale-95 transition-all text-sm flex items-center justify-center gap-2 cursor-pointer">
+                            <span class="material-symbols-outlined text-lg">bookmark</span>
+                            <span>Add to Want List</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bottom CTA: Have a Copy to Share? -->
+                <div id="share-banner" class="mt-12 bg-gradient-to-r from-emerald-900 to-primary text-white rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 shadow-lg">
+                    <div class="space-y-1 text-center sm:text-left">
+                        <h4 class="text-xl font-black tracking-tight">Have a copy of this book on your shelf?</h4>
+                        <p class="text-white/80 text-xs sm:text-sm max-w-xl">
+                            Share it with neighbors across World of Books or inside your local book circles. Keep books circulating instead of collecting dust!
+                        </p>
+                    </div>
+                    <a id="bottom-list-btn" href="#" class="shrink-0 px-6 py-3 bg-white text-primary font-extrabold rounded-xl hover:bg-emerald-50 active:scale-95 transition-all text-sm shadow-md text-center">
+                        List Your Copy
+                    </a>
+                </div>
+
+            </section>
+        </div>
+    </main>
+
+    <!-- Feedback Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-stone-900 text-white text-xs font-bold px-4 py-3 rounded-xl shadow-2xl z-50 transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-2 pointer-events-none">
+        <span class="material-symbols-outlined text-sm text-emerald-400">check_circle</span>
+        <span id="toast-message">Message</span>
+    </div>
+
+    <!-- Script Logic -->
+    <script>
+        let currentBook = null;
+        let allCopies = [];
+        let currentListingTypeFilter = 'all';
+        let availableOnlyFilter = false;
+        let currentUser = null;
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-message');
+            if (!toast || !toastMsg) return;
+            toastMsg.textContent = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function formatConditionBadge(condition) {
+            const map = {
+                'like_new': { text: 'Like New', class: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' },
+                'very_good': { text: 'Very Good', class: 'bg-teal-100 text-teal-800 dark:bg-teal-950/40 dark:text-teal-300' },
+                'good': { text: 'Good', class: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300' },
+                'fair': { text: 'Fair', class: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300' },
+                'poor': { text: 'Poor', class: 'bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300' }
+            };
+            const c = (condition || 'good').toLowerCase().replace(/\s+/g, '_');
+            const data = map[c] || { text: condition || 'Good', class: 'bg-stone-100 text-stone-700' };
+            return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${data.class}">${db.escapeHtml(data.text)}</span>`;
+        }
+
+        function formatListingTypeBadge(type) {
+            if (type === 'giveaway') {
+                return '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-100 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300">Giveaway 🎁</span>';
+            }
+            if (type === 'swap') {
+                return '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300">Swap 🔄</span>';
+            }
+            return '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">Borrow</span>';
+        }
+
+        function formatFulfillmentBadge(method) {
+            if (method === 'shipping') {
+                return '<span class="flex items-center gap-1 text-[11px] font-medium text-stone-500"><span class="material-symbols-outlined text-[13px]">local_shipping</span> Shipping</span>';
+            }
+            if (method === 'both') {
+                return '<span class="flex items-center gap-1 text-[11px] font-medium text-stone-500"><span class="material-symbols-outlined text-[13px]">swap_horiz</span> Pickup or Shipping</span>';
+            }
+            return '<span class="flex items-center gap-1 text-[11px] font-medium text-stone-500"><span class="material-symbols-outlined text-[13px]">directions_walk</span> Local Pickup</span>';
+        }
+
+        function renderCopies() {
+            const grid = document.getElementById('copies-grid');
+            const filterEmpty = document.getElementById('filter-empty-state');
+            const zeroCopyState = document.getElementById('zero-copy-state');
+            const countChip = document.getElementById('copies-count-chip');
+
+            if (!grid) return;
+
+            // Zero copies in whole book
+            if (allCopies.length === 0) {
+                grid.innerHTML = '';
+                if (filterEmpty) filterEmpty.classList.add('hidden');
+                if (zeroCopyState) zeroCopyState.classList.remove('hidden');
+                if (countChip) countChip.textContent = '0';
+                return;
+            }
+
+            if (zeroCopyState) zeroCopyState.classList.add('hidden');
+
+            // Apply active filters
+            let filtered = allCopies.slice();
+
+            if (currentListingTypeFilter !== 'all') {
+                filtered = filtered.filter(c => c.listing_type === currentListingTypeFilter);
+            }
+
+            if (availableOnlyFilter) {
+                filtered = filtered.filter(c => c.is_available !== false && (!c.status || c.status === 'available'));
+            }
+
+            if (countChip) countChip.textContent = `${filtered.length} of ${allCopies.length}`;
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '';
+                if (filterEmpty) filterEmpty.classList.remove('hidden');
+                return;
+            }
+
+            if (filterEmpty) filterEmpty.classList.add('hidden');
+
+            grid.innerHTML = filtered.map(copy => {
+                const isOwner = currentUser && currentUser.uid === copy.owner_id;
+                const isAvailable = copy.is_available !== false && (!copy.status || copy.status === 'available');
+                const ownerName = copy.owner_name || 'Neighbor';
+                const ownerAvatar = copy.owner_avatar || 'https://placehold.co/100x100?text=U';
+                const area = copy.display_area || 'Local neighborhood';
+                const circleName = copy.circle_name;
+
+                // Status pill
+                const statusPill = isAvailable
+                    ? '<span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Available</span>'
+                    : '<span class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 dark:text-amber-400"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Currently In Use</span>';
+
+                // Action Buttons
+                let actionsHtml = '';
+                if (isOwner) {
+                    actionsHtml = `
+                        <div class="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/15">
+                            <span class="text-xs font-black uppercase tracking-wider text-stone-500 bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded-md">Your Copy</span>
+                            <a href="add-item.html?id=${encodeURIComponent(copy.id)}" class="ml-auto text-xs font-bold text-primary dark:text-emerald-400 hover:underline flex items-center gap-1">
+                                <span class="material-symbols-outlined text-sm">edit</span> Edit Listing
+                            </a>
+                        </div>`;
+                } else {
+                    let requestBtnText = 'Request to Borrow';
+                    if (copy.listing_type === 'giveaway') requestBtnText = 'Claim Free Copy 🎁';
+                    else if (copy.listing_type === 'swap') requestBtnText = 'Propose Swap 🔄';
+
+                    const primaryAction = isAvailable
+                        ? `<a href="request-borrow.html?id=${encodeURIComponent(copy.id)}" class="flex-1 py-2.5 px-3 bg-primary text-white text-xs font-bold rounded-xl text-center active:scale-95 transition-all shadow-sm hover:opacity-90">
+                            ${requestBtnText}
+                           </a>`
+                        : `<button disabled class="flex-1 py-2.5 px-3 bg-stone-200 dark:bg-stone-800 text-stone-500 text-xs font-bold rounded-xl text-center cursor-not-allowed">
+                            Currently In Use
+                           </button>`;
+
+                    actionsHtml = `
+                        <div class="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/15">
+                            ${primaryAction}
+                            <a href="chat.html?userId=${encodeURIComponent(copy.owner_id)}&itemId=${encodeURIComponent(copy.id)}" title="Message Owner" class="p-2.5 bg-surface-container hover:bg-surface-container-high rounded-xl text-on-surface active:scale-95 transition-all flex items-center justify-center">
+                                <span class="material-symbols-outlined text-base">chat_bubble</span>
+                            </a>
+                            <a href="item-details.html?id=${encodeURIComponent(copy.id)}" title="Copy details" class="p-2.5 bg-surface-container hover:bg-surface-container-high rounded-xl text-stone-500 active:scale-95 transition-all flex items-center justify-center">
+                                <span class="material-symbols-outlined text-base">info</span>
+                            </a>
+                        </div>`;
+                }
+
+                // Circle Chip
+                const circleChip = circleName
+                    ? `<span class="inline-flex items-center gap-1 text-[10px] font-bold text-stone-600 dark:text-stone-300 bg-surface-container px-2 py-0.5 rounded-md truncate max-w-[160px]" title="${db.escapeAttr(circleName)}">
+                        <span class="material-symbols-outlined text-[12px]">group</span> ${db.escapeHtml(circleName)}
+                       </span>`
+                    : '<span class="inline-flex items-center gap-1 text-[10px] font-bold text-stone-500 bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-md"><span class="material-symbols-outlined text-[12px]">public</span> World of Books</span>';
+
+                // Condition Notes
+                const notesHtml = copy.condition_notes
+                    ? `<p class="text-xs text-stone-600 dark:text-stone-300 italic line-clamp-2 mt-2 bg-surface-container-low p-2 rounded-lg border border-outline-variant/10">"${db.escapeHtml(copy.condition_notes)}"</p>`
+                    : '';
+
+                // Edition Notes
+                const editionHtml = copy.edition_notes
+                    ? `<span class="text-[11px] text-stone-500 block mt-1">Edition: <strong class="text-stone-700 dark:text-stone-300">${db.escapeHtml(copy.edition_notes)}</strong></span>`
+                    : '';
+
+                return `
+                <div class="bg-surface-container-lowest rounded-2xl p-5 shadow-sm border border-outline-variant/15 flex flex-col justify-between hover:shadow-md transition-shadow">
+                    <div>
+                        <!-- Header: Owner info & area -->
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <div class="flex items-center gap-2.5 cursor-pointer" onclick="window.location.href='profile.html?userId=${encodeURIComponent(copy.owner_id)}'">
+                                <img src="${db.sanitizeUrl(ownerAvatar)}" class="w-9 h-9 rounded-full object-cover border border-primary/20 shrink-0" alt="Owner avatar">
+                                <div>
+                                    <h4 class="text-sm font-bold text-on-surface hover:underline leading-tight truncate max-w-[140px] sm:max-w-[180px]">
+                                        ${db.escapeHtml(ownerName)}
+                                    </h4>
+                                    <div class="flex items-center gap-1 text-stone-500 text-[11px] mt-0.5">
+                                        <span class="material-symbols-outlined text-[12px] text-primary">location_on</span>
+                                        <span class="truncate max-w-[150px]">${db.escapeHtml(area)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            ${statusPill}
+                        </div>
+
+                        <!-- Listing type and condition badges -->
+                        <div class="flex items-center flex-wrap gap-1.5 my-2">
+                            ${formatListingTypeBadge(copy.listing_type)}
+                            ${formatConditionBadge(copy.condition)}
+                            ${circleChip}
+                        </div>
+
+                        <!-- Edition and condition notes -->
+                        ${editionHtml}
+                        ${notesHtml}
+
+                        <!-- Fulfillment method -->
+                        <div class="mt-3">
+                            ${formatFulfillmentBadge(copy.fulfillment_method)}
+                        </div>
+                    </div>
+
+                    <!-- Bottom Actions -->
+                    ${actionsHtml}
+                </div>`;
+            }).join('');
+        }
+
+        function resetFilters() {
+            currentListingTypeFilter = 'all';
+            availableOnlyFilter = false;
+            document.querySelectorAll('.filter-chip').forEach(b => {
+                b.classList.toggle('active', b.dataset.type === 'all');
+            });
+            const chk = document.getElementById('available-only-checkbox');
+            if (chk) chk.checked = false;
+            renderCopies();
+        }
+
+        async function initBookDetail() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const bookId = urlParams.get('id') || urlParams.get('book_id');
+            const isbnQuery = urlParams.get('isbn');
+
+            const loadingEl = document.getElementById('loading-state');
+            const errorEl = document.getElementById('error-state');
+            const contentEl = document.getElementById('content-container');
+
+            if (!bookId && !isbnQuery) {
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (errorEl) errorEl.classList.remove('hidden');
+                const errMsg = document.getElementById('error-message');
+                if (errMsg) errMsg.textContent = "Please provide a valid book ID or ISBN in the URL.";
+                return;
+            }
+
+            try {
+                let book = null;
+                if (bookId) {
+                    book = await window.db.getBook(bookId);
+                }
+
+                // Fallback to findBook if not found by direct ID or if isbn provided
+                if (!book && (isbnQuery || (bookId && bookId.startsWith('isbn_')))) {
+                    const isbn = isbnQuery || bookId.replace('isbn_', '');
+                    book = await window.db.findBook({ isbn });
+                }
+
+                if (!book) {
+                    if (loadingEl) loadingEl.classList.add('hidden');
+                    if (errorEl) errorEl.classList.remove('hidden');
+                    return;
+                }
+
+                currentBook = book;
+
+                // Sync page title
+                document.title = `${book.title} - Universal Library`;
+
+                // Populate book details in DOM
+                const coverImg = document.getElementById('book-cover');
+                if (coverImg) {
+                    const fallback = 'https://placehold.co/400x600?text=' + encodeURIComponent(book.title || 'Book');
+                    coverImg.src = db.sanitizeUrl(book.cover_url) || fallback;
+                    coverImg.onerror = () => { coverImg.src = fallback; };
+                }
+
+                const titleEl = document.getElementById('book-title');
+                if (titleEl) titleEl.textContent = book.title;
+
+                const authorsEl = document.getElementById('book-authors');
+                if (authorsEl) {
+                    const authorsStr = Array.isArray(book.authors) && book.authors.length > 0 
+                        ? book.authors.join(', ') 
+                        : 'Unknown Author';
+                    authorsEl.textContent = `by ${authorsStr}`;
+                }
+
+                const metaYear = document.getElementById('meta-year');
+                if (metaYear) metaYear.textContent = book.published_year || 'Unknown';
+
+                const metaPublisher = document.getElementById('meta-publisher');
+                if (metaPublisher) {
+                    metaPublisher.textContent = book.publisher || 'Unknown';
+                    metaPublisher.title = book.publisher || '';
+                }
+
+                const metaIsbn = document.getElementById('meta-isbn');
+                if (metaIsbn) {
+                    const displayIsbn = book.isbn_13 || book.isbn_10 || (book.isbns && book.isbns[0]) || 'Not provided';
+                    metaIsbn.textContent = displayIsbn;
+                    metaIsbn.title = displayIsbn;
+                }
+
+                // Description
+                const descEl = document.getElementById('book-description');
+                const descBtn = document.getElementById('desc-expand-btn');
+                if (descEl) {
+                    const descText = book.description || 'No detailed description available for this catalog title yet.';
+                    descEl.textContent = descText;
+                    if (descText.length > 300 && descBtn) {
+                        descBtn.classList.remove('hidden');
+                        descBtn.onclick = () => {
+                            if (descEl.classList.contains('line-clamp-4')) {
+                                descEl.classList.remove('line-clamp-4');
+                                descBtn.textContent = 'Show less';
+                            } else {
+                                descEl.classList.add('line-clamp-4');
+                                descBtn.textContent = 'Show full synopsis';
+                            }
+                        };
+                    }
+                }
+
+                // CTAs pointing to add-item.html?book_id=...
+                const listUrl = `add-item.html?book_id=${encodeURIComponent(book.id)}`;
+                const listBtn = document.getElementById('list-copy-btn');
+                if (listBtn) listBtn.href = listUrl;
+                const bottomListBtn = document.getElementById('bottom-list-btn');
+                if (bottomListBtn) bottomListBtn.href = listUrl;
+                const zeroAddBtn = document.getElementById('zero-copy-add-btn');
+                if (zeroAddBtn) zeroAddBtn.href = listUrl;
+
+                // Want list button actions
+                const setupWantList = (btnId) => {
+                    const btn = document.getElementById(btnId);
+                    if (btn) {
+                        btn.onclick = () => {
+                            showToast(`"${book.title}" added to your Want List!`);
+                            const bIcon = document.getElementById('bookmark-icon');
+                            if (bIcon) bIcon.style.fontVariationSettings = "'FILL' 1";
+                        };
+                    }
+                };
+                setupWantList('bookmark-btn');
+                setupWantList('zero-copy-want-btn');
+
+                // Share button
+                const shareBtn = document.getElementById('share-btn');
+                if (shareBtn) {
+                    shareBtn.onclick = async () => {
+                        const shareData = {
+                            title: `${book.title} on Share, Instead.`,
+                            text: `Borrow or swap "${book.title}" on the Universal Library!`,
+                            url: window.location.href
+                        };
+                        if (navigator.share) {
+                            try {
+                                await navigator.share(shareData);
+                            } catch (e) {}
+                        } else {
+                            try {
+                                await navigator.clipboard.writeText(window.location.href);
+                                showToast('Link copied to clipboard!');
+                            } catch (e) {
+                                showToast('Share URL: ' + window.location.href);
+                            }
+                        }
+                    };
+                }
+
+                // Load physical copies
+                allCopies = await window.db.getBookCopies(book.id);
+
+                // Update copies counts & availability badge
+                const copiesStatus = window.db.getBookCopiesStatus({
+                    ...book,
+                    copies_count: allCopies.length,
+                    available_copies_count: allCopies.filter(c => c.is_available !== false && (!c.status || c.status === 'available')).length
+                });
+
+                const availPill = document.getElementById('availability-pill');
+                if (availPill) {
+                    availPill.textContent = copiesStatus.badge;
+                    availPill.className = `px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase shadow-md ${copiesStatus.badgeClass}`;
+                }
+
+                const metaCopies = document.getElementById('meta-copies-count');
+                if (metaCopies) {
+                    metaCopies.textContent = `${copiesStatus.totalCopies} copy (${copiesStatus.availableCopies} available)`;
+                }
+
+                // Render copies list
+                renderCopies();
+
+                // Setup Filter Listeners
+                document.querySelectorAll('.filter-chip').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        currentListingTypeFilter = btn.dataset.type || 'all';
+                        renderCopies();
+                    });
+                });
+
+                const availCheckbox = document.getElementById('available-only-checkbox');
+                if (availCheckbox) {
+                    availCheckbox.addEventListener('change', (e) => {
+                        availableOnlyFilter = e.target.checked;
+                        renderCopies();
+                    });
+                }
+
+                // Display content
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (contentEl) contentEl.classList.remove('hidden');
+
+            } catch (err) {
+                console.error('Error initializing book detail page:', err);
+                if (loadingEl) loadingEl.classList.add('hidden');
+                if (errorEl) errorEl.classList.remove('hidden');
+                const errMsg = document.getElementById('error-message');
+                if (errMsg) errMsg.textContent = "Failed to load book: " + err.message;
+            }
+        }
+
+        // Auth state listener for user recognition
+        firebase.auth().onAuthStateChanged((user) => {
+            currentUser = user;
+            if (user) {
+                const avatar = document.getElementById('header-avatar');
+                if (avatar && user.photoURL) avatar.src = user.photoURL;
+            }
+            if (allCopies.length > 0) {
+                renderCopies();
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', initBookDetail);
+    </script>
+</body>
+</html>

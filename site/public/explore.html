@@ -363,8 +363,9 @@
                     const ownerRating = reputations[item.owner_id];
                     const ownerRatingVal = ownerRating && ownerRating.count > 0 ? ownerRating.average.toFixed(1) : 'New';
 
+                    const itemUrl = item.book_id ? ('book-detail.html?id=' + encodeURIComponent(item.book_id)) : ('item-details.html?id=' + encodeURIComponent(item.id));
                     return `
-                    <div onclick="window.location.href='item-details.html?id=' + encodeURIComponent(this.dataset.itemId)" data-item-id="${db.escapeAttr(item.id)}" class="min-w-[280px] md:min-w-[360px] aspect-[4/3] rounded-xl relative overflow-hidden group cursor-pointer shadow-md shrink-0">
+                    <div onclick="window.location.href='${itemUrl}'" data-item-id="${db.escapeAttr(item.id)}" class="min-w-[280px] md:min-w-[360px] aspect-[4/3] rounded-xl relative overflow-hidden group cursor-pointer shadow-md shrink-0">
                         ${badgeHtml}
                         ${listingRatingHtml}
                         <img alt="${escapeHtml(item.name)}" class="absolute inset-0 w-full h-full object-contain bg-stone-900 dark:bg-stone-950 group-hover:scale-105 transition-transform duration-700" src="${db.sanitizeUrl(item.image_url) || 'https://placehold.co/600x400?text=' + encodeURIComponent(item.name)}"/>
@@ -474,6 +475,7 @@
                         ${badgeHtml}
                         <img alt="${escapeHtml(item.name)}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900" src="${db.sanitizeUrl(item.image_url) || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
                         <div class="absolute top-3 left-3 flex flex-col gap-1.5 items-start">
+                            ${bookBadge}
                             ${typeBadge}
                             ${listingRatingHtml}
                         </div>
@@ -492,7 +494,7 @@
                                    <span class="text-xs text-on-surface-variant font-bold hover:underline">${escapeHtml(ownerName)} (★ ${ownerRatingVal})</span>
                                </div>
                                <div class="flex gap-2">
-                                   <button onclick="event.stopPropagation(); window.location.href='item-details.html?id=' + encodeURIComponent(this.dataset.itemId)" data-item-id="${db.escapeAttr(item.id)}" class="flex-1 py-3 bg-primary-container text-on-primary font-bold rounded-xl active:scale-95 transition-transform">View Details</button>
+                                   <button onclick="event.stopPropagation(); window.location.href='${itemUrl}'" data-item-id="${db.escapeAttr(item.id)}" class="flex-1 py-3 bg-primary-container text-on-primary font-bold rounded-xl active:scale-95 transition-transform">${item.book_id ? 'View Book Copies' : 'View Details'}</button>
                                    <a href="chat.html?userId=${db.escapeAttr(item.owner_id)}&itemId=${db.escapeAttr(item.id)}" onclick="event.stopPropagation()" class="w-12 h-12 bg-surface-container-highest flex items-center justify-center rounded-xl text-on-surface active:scale-95 transition-transform">
                                        <span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
                                    </a>
@@ -778,12 +780,13 @@
             const lng = item.longitude;
             if (lat === undefined || lng === undefined || lat === null || lng === null) return;
 
+            const mapItemUrl = item.book_id ? ('book-detail.html?id=' + encodeURIComponent(item.book_id)) : ('item-details.html?id=' + encodeURIComponent(item.id));
             const popupContent = `
                 <div class="flex flex-col gap-2 p-1 min-w-[200px]" style="font-family: 'Lexend', sans-serif;">
                     ${item.image_url ? `<img src="${db.sanitizeUrl(item.image_url)}" class="w-full h-24 object-cover rounded-lg bg-stone-100" />` : ''}
                     <h4 class="font-bold text-sm text-stone-900 m-0 leading-tight">${escapeHtml(item.name)}</h4>
                     <p class="text-xs text-stone-500 m-0">${item.distanceStr} away &bull; by ${escapeHtml(item.owner_name || 'Neighbor')}</p>
-                    <button onclick="window.location.href='item-details.html?id=' + encodeURIComponent(this.dataset.itemId)" data-item-id="${db.escapeAttr(item.id)}" class="mt-2 w-full py-1.5 bg-primary text-white text-xs font-bold rounded-lg border-none active:scale-95 transition-all text-center cursor-pointer">View Details</button>
+                    <button onclick="window.location.href='${mapItemUrl}'" class="mt-2 w-full py-1.5 bg-primary text-white text-xs font-bold rounded-lg border-none active:scale-95 transition-all text-center cursor-pointer">${item.book_id ? 'View Book Copies' : 'View Details'}</button>
                 </div>
             `;
 

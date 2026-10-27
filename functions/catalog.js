@@ -284,7 +284,7 @@ export function getBookCopiesStatus(book) {
             badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
             message: `${totalCopies} copy in circulation, currently checked out.`,
             actionLabel: 'Add to Want List',
-            ctaUrl: bookId ? `/item-details.html?book_id=${encodeURIComponent(bookId)}#want` : '#'
+            ctaUrl: bookId ? `/book-detail.html?id=${encodeURIComponent(bookId)}#want` : '#'
         };
     }
 
@@ -296,6 +296,6 @@ export function getBookCopiesStatus(book) {
         badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
         message: `${availableCopies} of ${totalCopies} copies ready to borrow or swap.`,
         actionLabel: 'View Copies',
-        ctaUrl: bookId ? `/item-details.html?book_id=${encodeURIComponent(bookId)}` : '#'
+        ctaUrl: bookId ? `/book-detail.html?id=${encodeURIComponent(bookId)}` : '#'
     };
 }

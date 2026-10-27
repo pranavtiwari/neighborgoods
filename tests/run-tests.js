@@ -1179,6 +1179,163 @@ await test('Flow 7: Book copies attach to one canonical book and use v1 listing 
     assert.strictEqual(storedLegacyAttempt.listing_type, 'borrow');
 });
 
+await test('Flow 8: Canonical book detail page aggregation, copy filtering, zero-copy empty state, and location privacy', async () => {
+    resetSandbox();
+    const aliceUid = 'alice-detail-uid';
+    const bobUid = 'bob-detail-uid';
+    const charlieUid = 'charlie-detail-uid';
+
+    // Seed profiles with area location
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('profiles').doc(aliceUid).set({
+        id: aliceUid,
+        full_name: 'Alice Reader',
+        avatar_url: 'https://example.com/alice.jpg',
+        location: 'Mission District, San Francisco',
+        created_at: new Date()
+    });
+    firebase.auth().currentUser = { uid: bobUid };
+    await firebase.firestore().collection('profiles').doc(bobUid).set({
+        id: bobUid,
+        full_name: 'Bob Bibliophile',
+        avatar_url: 'https://example.com/bob.jpg',
+        location: 'SoMa, San Francisco',
+        created_at: new Date()
+    });
+    firebase.auth().currentUser = { uid: charlieUid };
+    await firebase.firestore().collection('profiles').doc(charlieUid).set({
+        id: charlieUid,
+        full_name: 'Charlie Collector',
+        avatar_url: 'https://example.com/charlie.jpg',
+        location: 'Sunset, San Francisco',
+        created_at: new Date()
+    });
+
+    // Create a canonical book
+    firebase.auth().currentUser = { uid: aliceUid };
+    const book = await window.db.createBook({
+        title: 'Klara and the Sun',
+        authors: ['Kazuo Ishiguro'],
+        isbn: '9780593318171',
+        publisher: 'Knopf',
+        published_year: 2021,
+        description: 'A brilliant novel about love and humanity.'
+    });
+    assert.ok(book.id);
+
+    // 1. Zero-copy state check BEFORE copies are added
+    const zeroCopies = await window.db.getBookCopies(book.id);
+    assert.strictEqual(zeroCopies.length, 0);
+
+    const zeroStatus = window.db.getBookCopiesStatus(book);
+    assert.strictEqual(zeroStatus.hasCopies, false);
+    assert.strictEqual(zeroStatus.totalCopies, 0);
+    assert.strictEqual(zeroStatus.badge, 'No copies yet');
+    assert.ok(zeroStatus.ctaUrl.includes('add-item.html?book_id=' + encodeURIComponent(book.id)));
+
+    // 2. Add 3 physical copies from different neighbors
+    // Copy 1: Alice lists a borrow copy
+    firebase.auth().currentUser = { uid: aliceUid };
+    const aliceCopy = await window.db.addItem({
+        name: book.title,
+        kind: 'book',
+        book_id: book.id,
+        owner_id: aliceUid,
+        listing_type: 'borrow',
+        condition: 'good',
+        condition_notes: 'Clean pages, minor corner wear',
+        edition_notes: '1st US Hardcover',
+        fulfillment_method: 'pickup',
+        location_area: 'Mission District',
+        exact_address: '123 Secret Mission St',
+        is_available: true,
+        status: 'available'
+    });
+
+    // Copy 2: Bob lists a giveaway copy
+    firebase.auth().currentUser = { uid: bobUid };
+    const bobCopy = await window.db.addItem({
+        name: book.title,
+        kind: 'book',
+        book_id: book.id,
+        owner_id: bobUid,
+        listing_type: 'giveaway',
+        condition: 'like_new',
+        condition_notes: 'Unread copy',
+        fulfillment_method: 'both',
+        location_area: 'SoMa',
+        exact_address: '456 Hidden Alley',
+        is_available: true,
+        status: 'available'
+    });
+
+    // Copy 3: Charlie lists a swap copy currently checked out
+    firebase.auth().currentUser = { uid: charlieUid };
+    const charlieCopy = await window.db.addItem({
+        name: book.title,
+        kind: 'book',
+        book_id: book.id,
+        owner_id: charlieUid,
+        listing_type: 'swap',
+        condition: 'fair',
+        condition_notes: 'Marked text',
+        fulfillment_method: 'shipping',
+        location_area: 'Sunset',
+        exact_address: '789 Private Way',
+        is_available: false,
+        status: 'borrowed'
+    });
+
+    // 3. Test getBookCopies aggregation
+    const allCopies = await window.db.getBookCopies(book.id);
+    assert.strictEqual(allCopies.length, 3, 'Should aggregate all 3 physical copies under one book');
+
+    // 4. Test Location Privacy: exact address must NEVER be exposed
+    for (const copy of allCopies) {
+        assert.strictEqual(copy.exact_address, undefined, 'exact_address must never be revealed on book copies');
+        assert.ok(copy.display_area, 'display_area must be present');
+        assert.ok(copy.owner_name, 'owner_name must be populated');
+        assert.ok(copy.owner_avatar, 'owner_avatar must be populated');
+    }
+
+    // 5. Test Listing Type Filters
+    const borrowCopies = await window.db.getBookCopies(book.id, { listing_type: 'borrow' });
+    assert.strictEqual(borrowCopies.length, 1);
+    assert.strictEqual(borrowCopies[0].id, aliceCopy.id);
+    assert.strictEqual(borrowCopies[0].listing_type, 'borrow');
+
+    const giveawayCopies = await window.db.getBookCopies(book.id, { listing_type: 'giveaway' });
+    assert.strictEqual(giveawayCopies.length, 1);
+    assert.strictEqual(giveawayCopies[0].id, bobCopy.id);
+    assert.strictEqual(giveawayCopies[0].listing_type, 'giveaway');
+
+    const swapCopies = await window.db.getBookCopies(book.id, { listing_type: 'swap' });
+    assert.strictEqual(swapCopies.length, 1);
+    assert.strictEqual(swapCopies[0].id, charlieCopy.id);
+    assert.strictEqual(swapCopies[0].listing_type, 'swap');
+
+    // 6. Test Available Only Filter
+    const availableOnly = await window.db.getBookCopies(book.id, { available_only: true });
+    assert.strictEqual(availableOnly.length, 2, 'Only Alice and Bob copies are available');
+    assert.ok(availableOnly.every(c => c.is_available === true));
+
+    // 7. Test Condition Filter
+    const likeNewCopies = await window.db.getBookCopies(book.id, { condition: 'like_new' });
+    assert.strictEqual(likeNewCopies.length, 1);
+    assert.strictEqual(likeNewCopies[0].id, bobCopy.id);
+
+    // 8. Test getBookWithCopies
+    const combined = await window.db.getBookWithCopies(book.id);
+    assert.ok(combined.book);
+    assert.strictEqual(combined.book.title, 'Klara and the Sun');
+    assert.strictEqual(combined.copies.length, 3);
+    assert.strictEqual(combined.copiesStatus.hasCopies, true);
+    assert.strictEqual(combined.copiesStatus.totalCopies, 3);
+    assert.strictEqual(combined.copiesStatus.availableCopies, 2);
+    assert.strictEqual(combined.copiesStatus.badge, '2 available');
+    assert.ok(combined.copiesStatus.ctaUrl.includes('book-detail.html?id=' + encodeURIComponent(book.id)));
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================
