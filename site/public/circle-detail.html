@@ -616,7 +616,7 @@
                         return data.status === 'completed' && (data.circle_id === circleId || (data.circle_ids && data.circle_ids.includes(circleId)));
                     });
                 }
-                document.getElementById('circle-stats-transactions').textContent = userCircleRequests.length || '3';
+                document.getElementById('circle-stats-transactions').textContent = userCircleRequests ? userCircleRequests.length : 0;
 
                 // 3. Chats count: query messages involving the logged-in user in this circle
                 let userCircleMessages = [];
@@ -635,7 +635,7 @@
                         return data.circle_id === circleId || (data.circle_ids && data.circle_ids.includes(circleId));
                     });
                 }
-                document.getElementById('circle-stats-chats').textContent = userCircleMessages.length || '5';
+                document.getElementById('circle-stats-chats').textContent = userCircleMessages ? userCircleMessages.length : 0;
             } catch (err) {
                 console.error("Error loading circle stats:", err);
             }

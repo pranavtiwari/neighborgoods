@@ -32,6 +32,10 @@ class MockDocRef {
         await this.firestore._checkErrorAndDelay();
         this.firestore._deleteData(this.collectionName, this.id);
     }
+
+    collection(subName) {
+        return new MockCollection(`${this.collectionName}/${this.id}/${subName}`, this.firestore);
+    }
 }
 
 class MockQuery {

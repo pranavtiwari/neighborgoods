@@ -315,6 +315,88 @@ await test('ratings: rater_id must be the authenticated user', async () => {
     }));
 });
 
+// -------------------------------------------------------- transaction_events
+await test('transaction_events: actor may append own event', async () => {
+    await assertSucceeds(dbFor(ALICE).collection('transaction_events').doc('ev1').set({
+        actor_id: ALICE,
+        request_id: 'req1',
+        item_id: 'item1',
+        event_type: 'requested'
+    }));
+});
+
+await test('transaction_events: actor_id must match authenticated user', async () => {
+    await assertFails(dbFor(ALICE).collection('transaction_events').doc('ev2').set({
+        actor_id: BOB,
+        request_id: 'req1',
+        item_id: 'item1',
+        event_type: 'requested'
+    }));
+});
+
+await test('transaction_events: immutable (no update, no delete)', async () => {
+    await seed(async db => db.collection('transaction_events').doc('ev3').set({
+        actor_id: ALICE, request_id: 'req1', item_id: 'item1', event_type: 'requested'
+    }));
+    await assertFails(dbFor(ALICE).collection('transaction_events').doc('ev3').update({ event_type: 'tampered' }));
+    await assertFails(dbFor(ALICE).collection('transaction_events').doc('ev3').delete());
+});
+
+// ---------------------------------------------------- private item location
+await test('private location: owner may write and read exact address', async () => {
+    await seed(async db => db.collection('items').doc('item1').set({
+        owner_id: ALICE, name: 'Book', location_area: 'Springfield'
+    }));
+    await assertSucceeds(dbFor(ALICE).collection('items').doc('item1')
+        .collection('private').doc('location').set({
+            exact_address: '123 Main St, Springfield'
+        }));
+    await assertSucceeds(dbFor(ALICE).collection('items').doc('item1')
+        .collection('private').doc('location').get());
+});
+
+await test('private location: stranger cannot read exact address', async () => {
+    await seed(async db => {
+        await db.collection('items').doc('item1').set({
+            owner_id: ALICE, name: 'Book', location_area: 'Springfield'
+        });
+        await db.collection('items').doc('item1').collection('private').doc('location').set({
+            exact_address: '123 Main St, Springfield'
+        });
+    });
+    await assertFails(dbFor(CAROL).collection('items').doc('item1')
+        .collection('private').doc('location').get());
+});
+
+await test('private location: borrower cannot read before approval, but can read after approval', async () => {
+    await seed(async db => {
+        await db.collection('items').doc('item1').set({
+            owner_id: ALICE, name: 'Book', location_area: 'Springfield',
+            active_request_id: 'req1'
+        });
+        await db.collection('items').doc('item1').collection('private').doc('location').set({
+            exact_address: '123 Main St, Springfield'
+        });
+        // Initially request is pending
+        await db.collection('requests').doc('req1').set({
+            item_id: 'item1', lender_id: ALICE, borrower_id: BOB, status: 'pending'
+        });
+    });
+
+    // Bob cannot read while pending
+    await assertFails(dbFor(BOB).collection('items').doc('item1')
+        .collection('private').doc('location').get());
+
+    // Once approved:
+    await seed(async db => {
+        await db.collection('requests').doc('req1').update({ status: 'approved' });
+    });
+
+    // Bob CAN read exact address once approved!
+    await assertSucceeds(dbFor(BOB).collection('items').doc('item1')
+        .collection('private').doc('location').get());
+});
+
 // ----------------------------------------------------------- unauthenticated
 await test('all writes require authentication', async () => {
     const anon = testEnv.unauthenticatedContext().firestore(CLIENT_SETTINGS);

@@ -457,20 +457,18 @@
             
             try {
                 let autoMsg = '';
-                if (prevStatusKey === 'pending') {
-                    await window.db.undoConfirmBorrowRequest(activeRequest.id);
-                    autoMsg = '📢 *Transaction Update:* I reverted the approval (Back to Pending).';
-                } else if (prevStatusKey === 'approved') {
-                    // For borrowed -> approved
-                    await window.db.undoMarkPickedUp(activeRequest.id, contextItemId);
-                    autoMsg = '📢 *Transaction Update:* I reverted the pickup status (Back to Approved).';
-                } else if (prevStatusKey === 'borrowed') {
-                    await window.db.undoMarkReturned(activeRequest.id);
-                    autoMsg = '📢 *Transaction Update:* I reverted the return status (Back to Borrowed).';
-                } else if (prevStatusKey === 'returned' || prevStatusKey === 'approved') {
-                    // Revert from completed
+                if (activeRequest.status === 'completed') {
                     await window.db.undoConfirmReturn(activeRequest.id);
                     autoMsg = '📢 *Transaction Update:* I reverted the completion confirmation.';
+                } else if (activeRequest.status === 'returned') {
+                    await window.db.undoMarkReturned(activeRequest.id);
+                    autoMsg = '📢 *Transaction Update:* I reverted the return status (Back to Borrowed).';
+                } else if (activeRequest.status === 'borrowed') {
+                    await window.db.undoMarkPickedUp(activeRequest.id, contextItemId);
+                    autoMsg = '📢 *Transaction Update:* I reverted the pickup status (Back to Approved).';
+                } else if (activeRequest.status === 'approved') {
+                    await window.db.undoConfirmBorrowRequest(activeRequest.id);
+                    autoMsg = '📢 *Transaction Update:* I reverted the approval (Back to Pending).';
                 }
 
                 if (autoMsg) {
@@ -656,7 +654,13 @@
                 } else if (newStatus === 'returned') {
                     await window.db.markReturned(activeRequest.id);
                 } else if (newStatus === 'completed') {
-                    await window.db.confirmReturn(activeRequest.id);
+                    const itemData = await window.db.getItem(contextItemId);
+                    const isGiveaway = itemData && (itemData.listing_type === 'giveaway' || itemData.intent === 'donate');
+                    if (isGiveaway) {
+                        await window.db.completeGiveaway(activeRequest.id);
+                    } else {
+                        await window.db.confirmReturn(activeRequest.id);
+                    }
                 }
 
                 let autoMsg = '';

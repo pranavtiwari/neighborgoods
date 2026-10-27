@@ -845,8 +845,31 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 // A list without an explicit orderBy index (created_at) cannot
                 // be queried efficiently, so an explicit doc id lets callers
                 // page without a composite index.
+                // Split location into public area and private exact address (Issue #6)
+                const rawAddress = doc.exact_address || doc.location || '';
+                let areaLocation = doc.location_area || '';
+                if (rawAddress && !areaLocation) {
+                    const parts = rawAddress.split(',').map(s => s.trim()).filter(Boolean);
+                    areaLocation = parts.length >= 3 ? `${parts[parts.length - 2]}, ${parts[parts.length - 1]}` : (parts[parts.length - 1] || rawAddress);
+                }
+                doc.location_area = areaLocation;
+                doc.location = areaLocation || rawAddress;
+                delete doc.exact_address;
+
                 const ref = firebase.firestore().collection('items').doc();
                 await ref.set(doc);
+
+                if (rawAddress) {
+                    try {
+                        await ref.collection('private').doc('location').set({
+                            exact_address: rawAddress,
+                            pickup_instructions: itemData.pickup_instructions || '',
+                            created_at: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    } catch (locErr) {
+                        console.warn("Could not save private location subcollection:", locErr);
+                    }
+                }
                 return { id: ref.id };
             } catch (err) {
                 console.error("Error adding item:", err);
@@ -869,10 +892,27 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
         deleteItem: async function(itemId) {
             try {
+                const docSnap = await firebase.firestore().collection('items').doc(itemId).get();
+                if (docSnap.exists && docSnap.data().active_request_id) {
+                    throw new Error("Cannot delete item with an active circulation transaction.");
+                }
                 await firebase.firestore().collection('items').doc(itemId).delete();
             } catch (err) {
                 console.error("Error deleting item:", err);
                 throw err;
+            }
+        },
+
+        getItemPrivateLocation: async function(itemId) {
+            if (!itemId) return null;
+            try {
+                const snap = await firebase.firestore().collection('items').doc(itemId).collection('private').doc('location').get();
+                if (snap.exists) {
+                    return snap.data();
+                }
+                return null;
+            } catch (err) {
+                return null;
             }
         },
 
@@ -1118,13 +1158,31 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     // caller cannot spoof a different lender.
                     const { lender_id: _ignoredLenderId, ...safeRequestData } = requestData;
 
+                    const requestType = requestData.type || (
+                        (itemData.listing_type === 'giveaway' || itemData.intent === 'donate') ? 'giveaway' : 'borrow'
+                    );
+
                     const newRequestRef = db.collection('requests').doc();
                     transaction.set(newRequestRef, {
                         ...safeRequestData,
                         lender_id: itemData.owner_id,
+                        type: requestType,
                         circle_id: circleId,
                         circle_ids: circleIds,
                         status: 'pending',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // Append immutable transaction event (Issue #2 & #3)
+                    const eventRef = db.collection('transaction_events').doc();
+                    transaction.set(eventRef, {
+                        request_id: newRequestRef.id,
+                        item_id: requestData.item_id,
+                        actor_id: requestData.borrower_id,
+                        event_type: 'requested',
+                        from_status: null,
+                        to_status: 'pending',
+                        metadata: { type: requestType, duration: requestData.duration || 'flexible' },
                         created_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
                     
@@ -1238,6 +1296,17 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         is_available: false,
                         active_request_id: requestId
                     });
+
+                    const eventRef = db.collection('transaction_events').doc();
+                    transaction.set(eventRef, {
+                        request_id: requestId,
+                        item_id: itemId,
+                        actor_id: itemData.owner_id,
+                        event_type: 'approved',
+                        from_status: 'pending',
+                        to_status: 'approved',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
                 });
             } catch (err) {
                 console.error("Error confirming borrow request:", err);
@@ -1261,6 +1330,17 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     transaction.update(requestRef, {
                         status: 'declined',
                         declined_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    const eventRef = db.collection('transaction_events').doc();
+                    transaction.set(eventRef, {
+                        request_id: requestId,
+                        item_id: requestData.item_id,
+                        actor_id: requestData.lender_id,
+                        event_type: 'declined',
+                        from_status: 'pending',
+                        to_status: 'declined',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 });
             } catch (err) {
@@ -1458,6 +1538,17 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         status: 'borrowed',
                         is_available: false
                     });
+
+                    const eventRef = db.collection('transaction_events').doc();
+                    transaction.set(eventRef, {
+                        request_id: requestId,
+                        item_id: itemId,
+                        actor_id: requestData.borrower_id,
+                        event_type: 'picked_up',
+                        from_status: 'approved',
+                        to_status: 'borrowed',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
                 });
             } catch (err) {
                 console.error("Error marking as picked up:", err);
@@ -1493,6 +1584,17 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                             status: 'returned'
                         });
                     }
+
+                    const eventRef = db.collection('transaction_events').doc();
+                    transaction.set(eventRef, {
+                        request_id: requestId,
+                        item_id: requestData.item_id,
+                        actor_id: requestData.borrower_id,
+                        event_type: 'returned',
+                        from_status: 'borrowed',
+                        to_status: 'returned',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
                 });
             } catch (err) {
                 console.error("Error marking as returned:", err);
@@ -1587,6 +1689,85 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 return { credited: beneficiaries.length };
             } catch (err) {
                 console.error("Error confirming return:", err);
+                throw err;
+            }
+        },
+
+        
+        completeGiveaway: async function(requestId) {
+            try {
+                const db = firebase.firestore();
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error("You must be signed in to complete a giveaway.");
+                const requestRef = db.collection('requests').doc(requestId);
+
+                let ledgerWrites = [];
+                let beneficiaries = [];
+
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+                    if (requestData.status !== 'approved' && requestData.status !== 'borrowed') {
+                        throw new Error("Giveaway must be approved before completion.");
+                    }
+
+                    transaction.update(requestRef, {
+                        status: 'completed',
+                        completed_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    const itemRef = db.collection('items').doc(requestData.item_id);
+                    const itemDoc = await transaction.get(itemRef);
+                    if (itemDoc.exists) {
+                        const itemData = itemDoc.data();
+                        const lenderId = itemData.owner_id;
+                        const borrowerId = requestData.borrower_id;
+                        delete this.profilesCache[lenderId];
+                        delete this.profilesCache[borrowerId];
+
+                        transaction.update(itemRef, {
+                            status: 'transferred',
+                            is_available: false,
+                            active_request_id: null
+                        });
+
+                        beneficiaries = [
+                            { id: lenderId, role: 'lender' },
+                            { id: borrowerId, role: 'borrower' }
+                        ];
+                        ledgerWrites = beneficiaries.map(b => ({
+                            ref: db.collection('impact_events').doc(),
+                            data: {
+                                actor_id: user.uid,
+                                beneficiary_id: b.id,
+                                role: b.role,
+                                credit_kg: 2,
+                                request_id: requestId,
+                                item_id: requestData.item_id,
+                                kind: 'donation',
+                                created_at: firebase.firestore.FieldValue.serverTimestamp()
+                            }
+                        }));
+                    }
+
+                    const eventRef = db.collection('transaction_events').doc();
+                    transaction.set(eventRef, {
+                        request_id: requestId,
+                        item_id: requestData.item_id,
+                        actor_id: user.uid,
+                        event_type: 'giveaway_completed',
+                        from_status: requestData.status,
+                        to_status: 'completed',
+                        metadata: { type: 'giveaway' },
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                });
+
+                await Promise.all(ledgerWrites.map(w => w.ref.set(w.data)));
+                return { credited: beneficiaries.length };
+            } catch (err) {
+                console.error("Error completing giveaway:", err);
                 throw err;
             }
         },
