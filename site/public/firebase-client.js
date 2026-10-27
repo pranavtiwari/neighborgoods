@@ -2758,6 +2758,146 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
 
             return results;
+        },
+
+        lookupBookMetadata: async function({ isbn, query } = {}) {
+            // 1. Try server-side callable if available
+            try {
+                if (typeof firebase.functions === 'function') {
+                    const fn = firebase.functions().httpsCallable('lookupBookMetadata');
+                    const res = await fn({ isbn, query });
+                    if (res && res.data && (res.data.found || (res.data.candidates && res.data.candidates.length > 0))) {
+                        return res.data;
+                    }
+                }
+            } catch (err) {
+                console.warn('Server callable lookup failed, using client fallback:', err.message);
+            }
+
+            // 2. Client-side fallback to Open Library with Google Books fallback
+            const cleanIsbn = this.cleanIsbn(isbn || '');
+            const cleanQuery = (query || '').trim();
+
+            if (cleanIsbn) {
+                // Try Open Library (Primary)
+                try {
+                    const olUrl = 'https://openlibrary.org/api/books?bibkeys=ISBN:' + cleanIsbn + '&format=json&jscmd=data';
+                    const res = await fetch(olUrl);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const item = data['ISBN:' + cleanIsbn];
+                        if (item && item.title) {
+                            const authors = (item.authors || []).map(a => a.name).filter(Boolean);
+                            const normIsbn = this.normalizeIsbn(cleanIsbn);
+                            let cover = item.cover?.large || item.cover?.medium || ('https://covers.openlibrary.org/b/isbn/' + cleanIsbn + '-L.jpg');
+                            if (cover && cover.startsWith('http://')) cover = 'https://' + cover.substring(7);
+                            const book = {
+                                title: item.title,
+                                authors: authors.length > 0 ? authors : ['Unknown Author'],
+                                isbn: cleanIsbn,
+                                isbn_10: normIsbn.isbn10 || null,
+                                isbn_13: normIsbn.isbn13 || null,
+                                isbns: normIsbn.isbns,
+                                publisher: item.publishers?.[0]?.name || null,
+                                published_year: item.publish_date ? parseInt(String(item.publish_date).match(/\b(1[4-9]\d{2}|20\d{2})\b/)?.[0] || '0', 10) || null : null,
+                                cover_url: cover,
+                                description: typeof item.notes === 'string' ? item.notes : (typeof item.description === 'string' ? item.description : null),
+                                source: 'open_library'
+                            };
+                            return { found: true, source: 'open_library', book, candidates: [book] };
+                        }
+                    }
+                } catch (e) {}
+
+                // Fallback Google Books
+                try {
+                    const gbUrl = 'https://www.googleapis.com/books/v1/volumes?q=isbn:' + cleanIsbn + '&maxResults=1';
+                    const res = await fetch(gbUrl);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const item = data.items?.[0]?.volumeInfo;
+                        if (item && item.title) {
+                            let cover = item.imageLinks?.thumbnail || item.imageLinks?.smallThumbnail || null;
+                            if (cover && cover.startsWith('http://')) cover = 'https://' + cover.substring(7);
+                            const normIsbn = this.normalizeIsbn(cleanIsbn);
+                            const book = {
+                                title: item.title + (item.subtitle ? ': ' + item.subtitle : ''),
+                                authors: item.authors || ['Unknown Author'],
+                                isbn: cleanIsbn,
+                                isbn_10: normIsbn.isbn10 || null,
+                                isbn_13: normIsbn.isbn13 || null,
+                                isbns: normIsbn.isbns,
+                                publisher: item.publisher || null,
+                                published_year: item.publishedDate ? parseInt(String(item.publishedDate).match(/\b(1[4-9]\d{2}|20\d{2})\b/)?.[0] || '0', 10) || null : null,
+                                cover_url: cover,
+                                description: item.description || null,
+                                source: 'google_books'
+                            };
+                            return { found: true, source: 'google_books', book, candidates: [book] };
+                        }
+                    }
+                } catch (e) {}
+            } else if (cleanQuery) {
+                // Open Library search (Primary)
+                try {
+                    const olUrl = 'https://openlibrary.org/search.json?q=' + encodeURIComponent(cleanQuery) + '&limit=5';
+                    const res = await fetch(olUrl);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.docs && data.docs.length > 0) {
+                            const candidates = data.docs.map(doc => {
+                                const isbns = doc.isbn || [];
+                                const prim = isbns[0] || '';
+                                const normIsbn = this.normalizeIsbn(prim);
+                                let cover = doc.cover_i ? ('https://covers.openlibrary.org/b/id/' + doc.cover_i + '-L.jpg') : (prim ? ('https://covers.openlibrary.org/b/isbn/' + prim + '-L.jpg') : null);
+                                if (cover && cover.startsWith('http://')) cover = 'https://' + cover.substring(7);
+                                return {
+                                    title: doc.title,
+                                    authors: doc.author_name || ['Unknown Author'],
+                                    isbn: prim,
+                                    isbn_10: normIsbn.isbn10 || null,
+                                    isbn_13: normIsbn.isbn13 || null,
+                                    isbns,
+                                    publisher: doc.publisher?.[0] || null,
+                                    published_year: doc.first_publish_year || null,
+                                    cover_url: cover,
+                                    source: 'open_library'
+                                };
+                            });
+                            return { found: true, source: 'open_library', book: candidates[0], candidates };
+                        }
+                    }
+                } catch (e) {}
+
+                // Fallback Google Books search
+                try {
+                    const gbUrl = 'https://www.googleapis.com/books/v1/volumes?q=' + encodeURIComponent(cleanQuery) + '&maxResults=5';
+                    const res = await fetch(gbUrl);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.items && data.items.length > 0) {
+                            const candidates = data.items.map(it => {
+                                const vi = it.volumeInfo || {};
+                                let cover = vi.imageLinks?.thumbnail || vi.imageLinks?.smallThumbnail || null;
+                                if (cover && cover.startsWith('http://')) cover = 'https://' + cover.substring(7);
+                                return {
+                                    title: vi.title + (vi.subtitle ? ': ' + vi.subtitle : ''),
+                                    authors: vi.authors || ['Unknown Author'],
+                                    isbn: vi.industryIdentifiers?.[0]?.identifier || '',
+                                    publisher: vi.publisher || null,
+                                    published_year: vi.publishedDate ? parseInt(String(vi.publishedDate).match(/\b(1[4-9]\d{2}|20\d{2})\b/)?.[0] || '0', 10) || null : null,
+                                    cover_url: cover,
+                                    description: vi.description || null,
+                                    source: 'google_books'
+                                };
+                            });
+                            return { found: true, source: 'google_books', book: candidates[0], candidates };
+                        }
+                    }
+                } catch (e) {}
+            }
+
+            return { found: false, source: null, book: null, candidates: [] };
         }
     };
 

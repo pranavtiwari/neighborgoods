@@ -16,6 +16,13 @@ import {
     buildCanonicalBookPayload,
     getBookCopiesStatus
 } from './catalog.js';
+import {
+    lookupBookMetadata as performLookup,
+    checkRateLimit,
+    searchGoogleBooks,
+    fetchOpenLibraryByIsbn,
+    searchOpenLibrary
+} from './book-lookup.js';
 
 initializeApp();
 const db = getFirestore();
@@ -360,6 +367,23 @@ export const findOrCreateBook = onCall({ cors: true }, async (request) => {
     }
 });
 
+/**
+ * Callable Function: lookupBookMetadata
+ * Server-side metadata lookup with Open Library as primary and Google Books
+ * as fallback, with rate limiting and caching.
+ */
+export const lookupBookMetadata = onCall({ cors: true }, async (request) => {
+    const actorId = request.auth ? request.auth.uid : null;
+    const { isbn, query } = request.data || {};
+
+    try {
+        const result = await performLookup({ isbn, query, actorId }, { db });
+        return result;
+    } catch (err) {
+        throw new HttpsError('internal', err.message);
+    }
+});
+
 export {
     TRANSACTION_TYPES,
     REQUEST_STATUSES,
@@ -370,5 +394,6 @@ export {
     normalizeAuthor,
     normalizeAuthors,
     buildCanonicalBookPayload,
-    getBookCopiesStatus
+    getBookCopiesStatus,
+    performLookup
 };
