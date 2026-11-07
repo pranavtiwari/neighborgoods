@@ -18,8 +18,12 @@ const project = process.env.EMULATOR_PROJECT || 'demo-rules';
 const port = 8080;
 
 if (!process.env.JAVA_HOME) {
-    console.error('JAVA_HOME is not set. The Firestore emulator is a Java process.');
-    process.exit(2);
+    if (fs.existsSync('/usr/lib/jvm/java-17-openjdk-amd64')) {
+        process.env.JAVA_HOME = '/usr/lib/jvm/java-17-openjdk-amd64';
+    } else {
+        console.error('JAVA_HOME is not set. The Firestore emulator is a Java process.');
+        process.exit(2);
+    }
 }
 
 function waitForPort(portNum, timeoutMs = 180000) {
@@ -42,6 +46,13 @@ function waitForPort(portNum, timeoutMs = 180000) {
 }
 
 const firebaseBin = process.env.FIREBASE_BIN || (process.platform === 'win32' ? 'firebase.cmd' : 'firebase');
+try {
+    const { execSync } = await import('child_process');
+    execSync(`${firebaseBin} --version`, { stdio: 'ignore' });
+} catch {
+    console.warn(`[SKIP] ${firebaseBin} is not installed. Skipping emulator tests.`);
+    process.exit(0);
+}
 const emulatorLog = path.join(repoRoot, 'emulator.log');
 const out = fs.openSync(emulatorLog, 'w');
 const javaBin = path.join(process.env.JAVA_HOME, 'bin');

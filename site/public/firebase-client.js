@@ -65,16 +65,21 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     // makes firebase.auth().signInWithPopup() unreliable (auth/cancelled-popup-request).
     const REDIRECT_LOGIN_FLAG = 'pg_login_in_progress';
     const REDIRECT_TARGET_KEY = 'post_auth_redirect';
+    function safeSessionStorage() {
+        if (typeof window !== 'undefined' && window.sessionStorage) return window.sessionStorage;
+        if (typeof sessionStorage !== 'undefined') return sessionStorage;
+        return { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+    }
     window.loginWithGoogle = async function(redirectTo = 'explore.html') {
-        sessionStorage.setItem(REDIRECT_LOGIN_FLAG, '1');
-        sessionStorage.setItem(REDIRECT_TARGET_KEY, redirectTo || 'explore.html');
+        safeSessionStorage().setItem(REDIRECT_LOGIN_FLAG, '1');
+        safeSessionStorage().setItem(REDIRECT_TARGET_KEY, redirectTo || 'explore.html');
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         try {
             await firebase.auth().signInWithRedirect(provider);
         } catch (error) {
-            sessionStorage.removeItem(REDIRECT_LOGIN_FLAG);
-            sessionStorage.removeItem(REDIRECT_TARGET_KEY);
+            safeSessionStorage().removeItem(REDIRECT_LOGIN_FLAG);
+            safeSessionStorage().removeItem(REDIRECT_TARGET_KEY);
             console.error('Login error:', error);
             alert('Login failed: ' + error.message);
         }
@@ -83,16 +88,16 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     // Complete a Google redirect sign-in on the way back from accounts.google.com
     firebase.auth().getRedirectResult().then(async (result) => {
         // Always clear the flag — whether the redirect succeeded, was cancelled, or there was no pending redirect
-        const target = sessionStorage.getItem(REDIRECT_TARGET_KEY) || 'explore.html';
-        sessionStorage.removeItem(REDIRECT_LOGIN_FLAG);
-        sessionStorage.removeItem(REDIRECT_TARGET_KEY);
+        const target = safeSessionStorage().getItem(REDIRECT_TARGET_KEY) || 'explore.html';
+        safeSessionStorage().removeItem(REDIRECT_LOGIN_FLAG);
+        safeSessionStorage().removeItem(REDIRECT_TARGET_KEY);
         if (!result || !result.user) return;
         const user = result.user;
         await ensureProfile(user);
         window.location.href = safeRedirect(target);
     }).catch((error) => {
-        sessionStorage.removeItem(REDIRECT_LOGIN_FLAG);
-        sessionStorage.removeItem(REDIRECT_TARGET_KEY);
+        safeSessionStorage().removeItem(REDIRECT_LOGIN_FLAG);
+        safeSessionStorage().removeItem(REDIRECT_TARGET_KEY);
         console.error('Redirect login error:', error);
         alert('Login failed: ' + error.message);
     });
@@ -599,35 +604,63 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         // --- Items ---
         // Page size for catalogue reads. Previously this was an unbounded `.get()`
         // over the entire `items` collection followed by in-memory filtering,
-        // so cost and latency grew linearly with the whole catalogue and the
-        // 1500-read cap silently truncated results.
+        // so cost and latency grew linearly with the whole catalogue.
         ITEMS_PAGE_SIZE: 24,
+        MAX_PAGE_SIZE: 50,
+        MAX_REFILL_ROUNDS: 5,
 
         /**
-         * Paginated catalogue read.
+         * Paginated, indexed catalogue read with server-side query pushing,
+         * cursor pagination, visibility scoping, and query safeguards.
+         *
          * @param {string} category    'all' or a category id
          * @param {string|null} userId viewer uid for circle-scoped visibility
-         * @param {object} opts        { pageSize, cursor }
-         * @returns {{items: Array, nextCursor: any|null, hasMore: boolean}}
+         * @param {object} opts        { pageSize, cursor, listing_type, available_only, book_id, circle_id, owner_id, exclude_owner_id, search, maxRefillRounds }
+         * @returns {{items: Array, nextCursor: any|null, hasMore: boolean, totalFetched: number}}
          */
         getItemsPage: async function(category = 'all', userId = null, opts = {}) {
-            const pageSize = opts.pageSize || this.ITEMS_PAGE_SIZE;
+            const rawPageSize = Number(opts.pageSize) || this.ITEMS_PAGE_SIZE;
+            const pageSize = Math.max(1, Math.min(rawPageSize, this.MAX_PAGE_SIZE));
             const cursor = opts.cursor || null;
+            const listingType = (opts.listing_type && opts.listing_type !== 'all') ? opts.listing_type : null;
+            const availableOnly = !!opts.available_only;
+            const bookId = opts.book_id || null;
+            const circleId = opts.circle_id || null;
+            const ownerId = opts.owner_id || null;
+            const excludeOwnerId = opts.exclude_owner_id || null;
+            const searchQuery = typeof opts.search === 'string' ? opts.search.trim() : null;
+            const maxRounds = typeof opts.maxRefillRounds === 'number' ? Math.max(1, opts.maxRefillRounds) : this.MAX_REFILL_ROUNDS;
+
             try {
                 const db = firebase.firestore();
 
-                // Push filtering into Firestore where it is expressible, so the
-                // server bounds the result set instead of us reading everything
-                // and discarding most of it. `categories` is an array on newer
-                // listings and `category` a scalar on older ones.
-                // One query shape, reused by the initial read and the refill
-                // loop below. The fallback variant simply drops the server-side
-                // category filter (and the ordering, if that fails too) while
-                // keeping `pageSize + 1` and the cursor, so `hasMore` and
-                // `nextCursor` mean the same thing on every path.
+                // Build server-side query with filters where supported by composite indexes.
+                // If a composite index is missing or throws at runtime, fallback gracefully
+                // to a broader query and apply the filters in-memory on the page batch.
                 let useServerCategoryFilter = category !== 'all';
+                let useServerListingTypeFilter = !!listingType;
+                let useServerBookFilter = !!bookId;
+                let useServerCircleFilter = !!circleId;
+                let useServerOwnerFilter = !!ownerId;
+                let useServerAvailableFilter = availableOnly;
+
                 const buildPageQuery = (cursorIn) => {
                     let q = db.collection('items');
+                    if (useServerBookFilter) {
+                        q = q.where('book_id', '==', bookId);
+                    }
+                    if (useServerOwnerFilter) {
+                        q = q.where('owner_id', '==', ownerId);
+                    }
+                    if (useServerCircleFilter) {
+                        q = q.where('circle_id', '==', circleId);
+                    }
+                    if (useServerListingTypeFilter) {
+                        q = q.where('listing_type', '==', listingType);
+                    }
+                    if (useServerAvailableFilter) {
+                        q = q.where('is_available', '==', true);
+                    }
                     if (useServerCategoryFilter) {
                         q = q.where('categories', 'array-contains', category);
                     }
@@ -637,83 +670,126 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
                 let snapshot = null;
                 let ordered = true;
+
+                // Primary attempt: full server-side filters + ordering
                 try {
                     snapshot = await buildPageQuery(cursor).get();
                 } catch (qErr) {
-                    // Only retry when there is a filter left to drop. With
-                    // category === 'all' the first attempt was already bare,
-                    // so retrying it would just repeat the same failure.
-                    if (useServerCategoryFilter) {
+                    // Gradual fallback: drop composite equality/array filters if missing index
+                    useServerListingTypeFilter = false;
+                    useServerAvailableFilter = false;
+                    try {
+                        snapshot = await buildPageQuery(cursor).get();
+                    } catch (secErr) {
                         useServerCategoryFilter = false;
+                        useServerCircleFilter = false;
                         try {
                             snapshot = await buildPageQuery(cursor).get();
-                        } catch (orderErr) {
+                        } catch (thirdErr) {
                             snapshot = null;
                         }
                     }
+
                     if (!snapshot) {
-                        // Missing composite index (or no created_at values
-                        // yet). Read unordered and stop paginating rather than
-                        // failing the whole page.
+                        // Final fallback: bare query without order if created_at index missing
                         ordered = false;
                         let bare = db.collection('items').limit(pageSize + 1);
+                        if (bookId) bare = bare.where('book_id', '==', bookId);
                         if (cursor) bare = bare.startAfter(cursor);
                         snapshot = await bare.get();
                     }
                 }
 
-                const docs = snapshot.docs;
-                const hasMore = ordered && docs.length > pageSize;
-                const page = docs.slice(0, pageSize);
-
-                let items = page.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                // Legacy listings only carry the scalar `category`.
-                if (category !== 'all') {
-                    items = items.filter(item =>
-                        (item.categories && Array.isArray(item.categories) && item.categories.includes(category))
-                        || item.category === category
-                    );
-                }
-
-                // Circle-scoped visibility filtering.
-                // Hoisted: the refill loop below re-applies the same predicate.
+                // In-memory filter predicate to apply on any page batch
                 let myCircleIds = null;
                 if (userId) {
                     const memberships = await this.getMyMemberships(userId);
                     myCircleIds = new Set(memberships.map(m => m.circle_id));
                 }
-                const isVisible = item => {
-                    // V1 copies default to public in World of Books. Public
-                    // copies remain discoverable even when also listed in
-                    // circles; only explicitly circle-scoped copies are
-                    // filtered by membership.
-                    if (item.visibility === 'public' || item.visibility_scope === 'world_of_books') {
-                        return true;
-                    }
-                    if (userId) {
-                        if (item.circle_ids && item.circle_ids.length > 0) {
-                            return item.circle_ids.some(cid => myCircleIds.has(cid));
-                        }
-                        return !item.circle_id || myCircleIds.has(item.circle_id);
-                    }
-                    // Unauthenticated: only show items with no circle scope.
-                    return !item.circle_id && (!item.circle_ids || item.circle_ids.length === 0);
-                };
-                items = items.filter(isVisible);
 
-                // Circle-scoped visibility can empty a page that is otherwise
-                // full (or entirely), so keep pulling until we fill the page
-                // or run out of documents.
-                //
-                // This used to be gated on `!usedServerCategoryFilter && hasMore`,
-                // which was always false — `hasMore` is forced false on the
-                // fallback path — so the refill never ran in either branch and
-                // a viewer whose circles hid everything saw a blank grid while
-                // `hasMore` still said there was more to load.
+                const applyFilters = (rawDocs) => {
+                    return rawDocs.filter(item => {
+                        // Category filter
+                        if (category !== 'all') {
+                            const matchCat = (item.categories && Array.isArray(item.categories) && item.categories.includes(category))
+                                || item.category === category;
+                            if (!matchCat) return false;
+                        }
+
+                        // Listing type filter
+                        if (listingType && item.listing_type !== listingType) {
+                            return false;
+                        }
+
+                        // Availability filter
+                        if (availableOnly) {
+                            if (item.is_available === false || item.status === 'borrowed') {
+                                return false;
+                            }
+                        }
+
+                        // Book ID filter
+                        if (bookId && item.book_id !== bookId) {
+                            return false;
+                        }
+
+                        // Owner filter
+                        if (ownerId && item.owner_id !== ownerId) {
+                            return false;
+                        }
+
+                        // Exclude owner (e.g. viewer's own items on explore)
+                        if (excludeOwnerId && item.owner_id === excludeOwnerId) {
+                            return false;
+                        }
+
+                        // Circle filter
+                        if (circleId) {
+                            const inCircle = item.circle_id === circleId ||
+                                (item.circle_ids && Array.isArray(item.circle_ids) && item.circle_ids.includes(circleId));
+                            if (!inCircle) return false;
+                        }
+
+                        // Search query filter (fuzzy or substring on name/description/categories)
+                        if (searchQuery) {
+                            const matchesSearch = this.matchesSearchFuzzy(item, searchQuery);
+                            if (!matchesSearch) return false;
+                        }
+
+                        // Visibility scoping
+                        if (item.visibility === 'public' || item.visibility_scope === 'world_of_books') {
+                            return true;
+                        }
+                        if (userId) {
+                            if (item.circle_ids && item.circle_ids.length > 0) {
+                                return item.circle_ids.some(cid => myCircleIds.has(cid));
+                            }
+                            return !item.circle_id || myCircleIds.has(item.circle_id);
+                        }
+                        return !item.circle_id && (!item.circle_ids || item.circle_ids.length === 0);
+                    }).map(item => {
+                        // Location privacy: never reveal exact_address in public catalog reads
+                        const sanitized = { ...item };
+                        delete sanitized.exact_address;
+                        return sanitized;
+                    });
+                };
+
+                const docs = snapshot.docs;
+                const hasMoreInitial = ordered && docs.length > pageSize;
+                const page = docs.slice(0, pageSize);
+
+                let rawItems = page.map(doc => ({ id: doc.id, ...doc.data() }));
+                let filteredItems = applyFilters(rawItems);
+
+                // Refill loop: if visibility/in-memory filters hollowed out the page,
+                // fetch subsequent batches until pageSize is satisfied or maxRounds is reached.
                 let nextCursor = page.length ? page[page.length - 1] : null;
-                let exhausted = !hasMore;
-                while (!exhausted && ordered && items.length < pageSize) {
+                let exhausted = !hasMoreInitial;
+                let rounds = 0;
+
+                while (!exhausted && ordered && filteredItems.length < pageSize && rounds < maxRounds) {
+                    rounds++;
                     let more;
                     try {
                         more = await buildPageQuery(nextCursor).get();
@@ -725,25 +801,123 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     if (moreDocs.length === 0) break;
                     exhausted = more.docs.length <= pageSize;
                     nextCursor = moreDocs[moreDocs.length - 1];
-                    let moreItems = moreDocs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    if (category !== 'all') {
-                        moreItems = moreItems.filter(item =>
-                            (item.categories && Array.isArray(item.categories) && item.categories.includes(category))
-                            || item.category === category
-                        );
-                    }
-                    items = items.concat(moreItems.filter(isVisible));
+
+                    const moreRaw = moreDocs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    const moreFiltered = applyFilters(moreRaw);
+                    filteredItems = filteredItems.concat(moreFiltered);
                 }
 
                 return {
-                    items,
-                    nextCursor,
-                    hasMore: !exhausted
+                    items: filteredItems.slice(0, pageSize),
+                    nextCursor: nextCursor,
+                    hasMore: !exhausted && (filteredItems.length >= pageSize || docs.length > pageSize),
+                    totalFetched: filteredItems.length
                 };
             } catch (err) {
-                console.error("Error getting items:", err);
+                console.error("Error getting items page:", err);
+                return { items: [], nextCursor: null, hasMore: false, totalFetched: 0 };
+            }
+        },
+
+        /**
+         * Paginated reads for circle-scoped inventory.
+         * @param {string} circleId
+         * @param {object} opts { pageSize, cursor, available_only, listing_type }
+         * @returns {{items: Array, nextCursor: any|null, hasMore: boolean}}
+         */
+        getCircleItemsPage: async function(circleId, opts = {}) {
+            const rawPageSize = Number(opts.pageSize) || this.ITEMS_PAGE_SIZE;
+            const pageSize = Math.max(1, Math.min(rawPageSize, this.MAX_PAGE_SIZE));
+            const cursor = opts.cursor || null;
+
+            try {
+                const db = firebase.firestore();
+                let q = db.collection('items')
+                    .where('circle_id', '==', circleId)
+                    .orderBy('created_at', 'desc')
+                    .limit(pageSize + 1);
+                if (cursor) q = q.startAfter(cursor);
+
+                let snapshot;
+                try {
+                    snapshot = await q.get();
+                } catch (e) {
+                    // Fallback without ordering if index not yet provisioned
+                    let bare = db.collection('items').where('circle_id', '==', circleId).limit(pageSize + 1);
+                    if (cursor) bare = bare.startAfter(cursor);
+                    snapshot = await bare.get();
+                }
+
+                const docs = snapshot.docs;
+                const hasMore = docs.length > pageSize;
+                const page = docs.slice(0, pageSize);
+                let items = page.map(d => {
+                    const data = d.data();
+                    delete data.exact_address;
+                    return { id: d.id, ...data };
+                });
+
+                if (opts.available_only) {
+                    items = items.filter(i => i.is_available !== false && i.status !== 'borrowed');
+                }
+                if (opts.listing_type && opts.listing_type !== 'all') {
+                    items = items.filter(i => i.listing_type === opts.listing_type);
+                }
+
+                const nextCursor = page.length ? page[page.length - 1] : null;
+                return {
+                    items,
+                    nextCursor,
+                    hasMore
+                };
+            } catch (err) {
+                console.error("Error getting circle items page:", err);
                 return { items: [], nextCursor: null, hasMore: false };
             }
+        },
+
+        /**
+         * Unified search over both canonical books (ISBN, title prefix, author)
+         * and physical/general items.
+         */
+        searchCatalog: async function({ query = '', category = 'all', listing_type = 'all', available_only = false, limit = 20, userId = null } = {}) {
+            const cleanQuery = (query || '').trim();
+            const results = {
+                books: [],
+                items: [],
+                totalResults: 0
+            };
+
+            // 1. If there's a search query, search canonical books first (ISBN, title prefix, author)
+            if (cleanQuery) {
+                try {
+                    const matchedBooks = await this.searchBooks({ query: cleanQuery, limit: Math.min(limit, 10) });
+                    results.books = matchedBooks.map(b => ({
+                        ...b,
+                        copiesStatus: this.getBookCopiesStatus(b)
+                    }));
+                } catch (err) {
+                    console.warn('searchCatalog: books search error:', err);
+                }
+            }
+
+            // 2. Fetch matching items via getItemsPage
+            try {
+                const pageResult = await this.getItemsPage(category, userId, {
+                    pageSize: limit,
+                    listing_type: listing_type !== 'all' ? listing_type : null,
+                    available_only: !!available_only,
+                    search: cleanQuery || null
+                });
+                results.items = pageResult.items;
+                results.hasMore = pageResult.hasMore;
+                results.nextCursor = pageResult.nextCursor;
+            } catch (err) {
+                console.warn('searchCatalog: items search error:', err);
+            }
+
+            results.totalResults = results.books.length + results.items.length;
+            return results;
         },
 
         // Back-compat wrapper: returns just the first page as an array.
@@ -781,19 +955,27 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             return page.items;
         },
 
-        getCircleItems: async function(circleId) {
+        getCircleItems: async function(circleId, opts = {}) {
+            if (opts.pageSize || opts.cursor) {
+                const page = await this.getCircleItemsPage(circleId, opts);
+                return page.items;
+            }
             try {
                 const dbRef = firebase.firestore().collection('items');
                 const [snap1, snap2] = await Promise.all([
-                    dbRef.where('circle_id', '==', circleId).get(),
-                    dbRef.where('circle_ids', 'array-contains', circleId).get()
+                    dbRef.where('circle_id', '==', circleId).limit(50).get(),
+                    dbRef.where('circle_ids', 'array-contains', circleId).limit(50).get()
                 ]);
                 const itemsMap = {};
                 snap1.docs.forEach(doc => {
-                    itemsMap[doc.id] = { id: doc.id, ...doc.data() };
+                    const data = doc.data();
+                    delete data.exact_address;
+                    itemsMap[doc.id] = { id: doc.id, ...data };
                 });
                 snap2.docs.forEach(doc => {
-                    itemsMap[doc.id] = { id: doc.id, ...doc.data() };
+                    const data = doc.data();
+                    delete data.exact_address;
+                    itemsMap[doc.id] = { id: doc.id, ...data };
                 });
                 return Object.values(itemsMap);
             } catch (err) {
@@ -2613,6 +2795,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 const norm = this.normalizeAuthor(trimmed);
                 if (norm && !normalizedAuthors.includes(norm)) {
                     normalizedAuthors.push(norm);
+                }
+                const tokens = norm.split(/\s+/).filter(t => t.length > 1);
+                for (const tok of tokens) {
+                    if (!normalizedAuthors.includes(tok)) {
+                        normalizedAuthors.push(tok);
+                    }
                 }
             }
 

@@ -128,7 +128,7 @@
     </div>
 </section>
 <!-- Category Chips & View Toggle -->
-<section class="mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6">
+<section class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6">
 <div id="category-chips" class="flex gap-3 overflow-x-auto hide-scrollbar flex-1">
 <button data-category="all" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-primary-container text-on-primary font-semibold text-sm tracking-wide">All</button>
 </div>
@@ -143,32 +143,101 @@
     </button>
 </div>
 </section>
+
+<!-- Secondary Filters: Listing Type & Availability -->
+<section class="mb-10 px-6 flex flex-wrap items-center justify-between gap-3 text-xs">
+    <div id="listing-type-filters" class="flex items-center gap-1 overflow-x-auto hide-scrollbar bg-surface-container-low border border-outline-variant/10 p-1 rounded-xl">
+        <button onclick="setListingType('all')" data-type="all" class="listing-type-btn px-3 py-1.5 rounded-lg font-bold bg-primary text-white transition-all border-none cursor-pointer">All Types</button>
+        <button onclick="setListingType('borrow')" data-type="borrow" class="listing-type-btn px-3 py-1.5 rounded-lg font-medium text-stone-600 dark:text-stone-300 hover:text-primary transition-all border-none bg-transparent cursor-pointer">Borrow</button>
+        <button onclick="setListingType('giveaway')" data-type="giveaway" class="listing-type-btn px-3 py-1.5 rounded-lg font-medium text-stone-600 dark:text-stone-300 hover:text-primary transition-all border-none bg-transparent cursor-pointer">Give Away</button>
+        <button onclick="setListingType('swap')" data-type="swap" class="listing-type-btn px-3 py-1.5 rounded-lg font-medium text-stone-600 dark:text-stone-300 hover:text-primary transition-all border-none bg-transparent cursor-pointer">Swap</button>
+        <button onclick="setListingType('rental')" data-type="rental" class="listing-type-btn px-3 py-1.5 rounded-lg font-medium text-stone-600 dark:text-stone-300 hover:text-primary transition-all border-none bg-transparent cursor-pointer">Rental</button>
+    </div>
+    <div class="flex items-center gap-2">
+        <button id="available-toggle-btn" onclick="toggleAvailableOnly()" class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-outline-variant/20 bg-surface-container-low font-bold text-stone-600 dark:text-stone-300 hover:border-primary/50 transition-all cursor-pointer">
+            <span class="material-symbols-outlined text-[16px] text-stone-400" id="available-toggle-icon">radio_button_unchecked</span>
+            <span>Available now</span>
+        </button>
+        <button id="clear-filters-quick" onclick="clearAllFilters()" class="hidden text-xs text-primary font-bold underline px-2 py-1 cursor-pointer border-none bg-transparent">Reset</button>
+    </div>
+</section>
+
+<!-- Canonical Books Search Results (Shown when search matches canonical titles/ISBNs/authors) -->
+<section id="search-books-section" class="hidden px-6 mb-12">
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-2xl">auto_stories</span>
+            <h3 class="text-xl font-bold tracking-tight text-on-surface">Books in A World of Books</h3>
+        </div>
+        <span id="search-books-count" class="text-xs font-bold text-stone-500 uppercase tracking-wider"></span>
+    </div>
+    <div id="search-books-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <!-- Rendered canonical book cards -->
+    </div>
+</section>
+
 <!-- Featured Carousel: Hot Near You -->
 <section id="hot-carousel-section" class="mb-12">
 <div class="px-6 mb-6 flex justify-between items-end">
 <h2 class="text-2xl font-bold tracking-tight text-on-surface">Hot Near You</h2>
-<button class="text-primary font-semibold text-sm hover:underline">View all</button>
+<button class="text-primary font-semibold text-sm hover:underline border-none bg-transparent cursor-pointer">View all</button>
 </div>
 <div id="hot-carousel" class="flex gap-6 overflow-x-auto px-6 hide-scrollbar">
     <div class="text-stone-500 py-6 px-6 font-medium animate-pulse">Finding nearby items...</div>
 </div>
 </section>
+
 <!-- Main Discovery Feed -->
 <section class="px-6">
-<h2 id="feed-title" class="text-2xl font-bold tracking-tight text-on-surface mb-8">Recently Added</h2>
+<div class="flex justify-between items-center mb-6">
+    <h2 id="feed-title" class="text-2xl font-bold tracking-tight text-on-surface">Recently Added</h2>
+    <span id="feed-count-badge" class="text-xs font-bold text-stone-500"></span>
+</div>
 
 <!-- Map View container (hidden by default) -->
 <div id="explore-map-container" class="hidden w-full aspect-[16/9] min-h-[400px] md:min-h-[500px] rounded-2xl border border-outline-variant/10 shadow-md relative z-10 mb-8 overflow-hidden">
     <div id="explore-map" class="w-full h-full"></div>
 </div>
+
 <!-- Asymmetric Staggered Grid -->
-    <div id="items-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        <!-- Loading State -->
-        <div id="items-loading" class="col-span-1 sm:col-span-2 md:col-span-3 flex flex-col items-center justify-center py-12">
-            <span class="material-symbols-outlined animate-spin text-primary text-4xl mb-4" data-icon="progress_activity">progress_activity</span>
-            <p class="text-on-surface-variant font-medium">Discovering neighbors...</p>
-        </div>
+<div id="items-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+    <!-- Items rendered here -->
+</div>
+
+<!-- Empty State -->
+<div id="items-empty-state" class="hidden flex flex-col items-center justify-center py-16 px-4 text-center">
+    <div class="w-16 h-16 rounded-full bg-stone-100 dark:bg-stone-800 flex items-center justify-center mb-4 text-stone-400">
+        <span class="material-symbols-outlined text-3xl">search_off</span>
     </div>
+    <h3 class="text-lg font-bold text-on-surface mb-1">No listings found</h3>
+    <p class="text-sm text-stone-500 max-w-sm mb-6" id="empty-state-msg">No items matched your current search or filter combination.</p>
+    <button onclick="clearAllFilters()" class="px-5 py-2.5 bg-primary text-white text-xs font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all border-none cursor-pointer">
+        Clear All Filters
+    </button>
+</div>
+
+<!-- Error State -->
+<div id="items-error-state" class="hidden flex flex-col items-center justify-center py-16 px-4 text-center">
+    <div class="w-16 h-16 rounded-full bg-red-100 dark:bg-red-950/30 flex items-center justify-center mb-4 text-red-500">
+        <span class="material-symbols-outlined text-3xl">error_outline</span>
+    </div>
+    <h3 class="text-lg font-bold text-on-surface mb-1">Failed to load listings</h3>
+    <p class="text-sm text-stone-500 max-w-sm mb-6">There was a problem reaching the catalog. Please try again.</p>
+    <button onclick="retryFetch()" class="px-5 py-2.5 bg-primary text-white text-xs font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5 mx-auto border-none cursor-pointer">
+        <span class="material-symbols-outlined text-sm">refresh</span>
+        <span>Retry</span>
+    </button>
+</div>
+
+<!-- Pagination / Load More Controls -->
+<div id="pagination-container" class="mt-12 flex flex-col items-center justify-center gap-3">
+    <div id="pagination-status" class="text-xs font-bold text-stone-500"></div>
+    <button id="load-more-btn" onclick="loadMoreItems()" class="hidden px-8 py-3 bg-primary text-white font-bold rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-md flex items-center gap-2 cursor-pointer border-none">
+        <span id="load-more-spinner" class="material-symbols-outlined text-lg animate-spin hidden">progress_activity</span>
+        <span id="load-more-text">Load More Listings</span>
+    </button>
+    <p id="end-of-feed" class="hidden text-xs font-bold text-stone-400 uppercase tracking-widest py-4">You've reached the end of the collection</p>
+</div>
 </section>
 </main>
 <!-- BottomNavBar -->
@@ -214,19 +283,27 @@
     const searchInput = document.getElementById('search-input');
     const grid = document.getElementById('items-grid');
     
-    let currentSearch = '';
-    let currentCategory = 'all';
+    // Core feed & pagination state
+    const feedState = {
+        currentUser: null,
+        userLocation: null,
+        currentSearch: '',
+        currentCategory: 'all',
+        currentListingType: 'all',
+        currentAvailableOnly: false,
+        cursor: null,
+        hasMore: false,
+        isLoading: false,
+        items: [],
+        listingRatings: {},
+        reputations: {},
+        pendingRequestsMap: {}
+    };
+
     let allExploredItems = [];
     let userLocation = null;
     let mapInstance = null;
     let mapMarkers = [];
-
-    // Feed pagination. The catalogue read is cursor-paginated (ITEMS_PAGE_SIZE),
-    // so the grid is re-rendered from the ACCUMULATED list on each page rather
-    // than replacing it — search/filter and the map both work off allExploredItems.
-    let feedPage = { items: [], nextCursor: null, hasMore: false };
-    let feedCtx = { user: null, userPos: null, listingRatings: {}, reputations: {}, pendingRequestsMap: {} };
-    let feedLoading = false;
 
     // Haversine distance calculator
     function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -272,425 +349,561 @@
         return map;
     }
 
-    async function fetchItems(user) {
-        try {
-            const userPos = await getCurrentPositionPromise() || { lat: 37.7749, lng: -122.4194 }; // SF default
-            const ratingsSummary = await window.db.getRatingsSummary();
-            const { listingRatings } = ratingsSummary;
+    function renderSkeletonCards(count = 6) {
+        return Array.from({ length: count }).map(() => `
+            <div class="animate-pulse bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4">
+                <div class="aspect-[3/4] bg-stone-200 dark:bg-stone-800 rounded-lg"></div>
+                <div class="h-4 bg-stone-200 dark:bg-stone-800 rounded w-3/4"></div>
+                <div class="h-3 bg-stone-200 dark:bg-stone-800 rounded w-1/2"></div>
+                <div class="h-8 bg-stone-200 dark:bg-stone-800 rounded w-full mt-2"></div>
+            </div>
+        `).join('');
+    }
 
-            let items = await window.db.getItems('all', user ? user.uid : null);
-            // Filter out items that are currently borrowed
-            items = items.filter(item => item.status !== 'borrowed' && item.is_available !== false);
-            if (user) {
-                items = items.filter(item => item.owner_id !== user.uid);
-            }
+    function renderCanonicalBooks(books) {
+        const section = document.getElementById('search-books-section');
+        const gridEl = document.getElementById('search-books-grid');
+        const countEl = document.getElementById('search-books-count');
+        if (!section || !gridEl) return;
 
-            // Reputation for the item owners on this page comes from a batched
-            // ratee_id lookup, not from ratingsSummary.userRatings: the summary
-            // is scoped to the viewer's own requests, so it cannot report a
-            // score for a neighbor the viewer has not dealt with.
-            //
-            // This block MUST follow the fetch above: `items` is block-scoped,
-            // so reading it earlier was a temporal-dead-zone ReferenceError
-            // that aborted fetchItems entirely and left the grid empty.
-            const ownerIds = [...new Set(
-                items.map(i => i.owner_id).filter(Boolean)
-            )];
-            const reputations = await window.db.getReputations(ownerIds);
+        if (!books || books.length === 0) {
+            section.classList.add('hidden');
+            gridEl.innerHTML = '';
+            return;
+        }
 
-            if (!items || items.length === 0) {
-                grid.innerHTML = `
-                    <div class="col-span-2 md:col-span-3 flex flex-col items-center justify-center py-12">
-                        <span class="material-symbols-outlined text-outline text-4xl mb-4" data-icon="inbox">inbox</span>
-                        <p class="text-on-surface-variant font-medium">No items found.</p>
-                        <p class="text-sm text-outline mt-1">Be the first to share something!</p>
+        section.classList.remove('hidden');
+        if (countEl) countEl.textContent = `${books.length} title${books.length === 1 ? '' : 's'} matched`;
+
+        gridEl.innerHTML = books.map(book => {
+            const copiesStatus = window.db.getBookCopiesStatus(book);
+            const authors = (book.authors || []).join(', ') || 'Unknown author';
+            const cover = window.db.sanitizeUrl(book.cover_url) || 'https://placehold.co/120x180?text=Book';
+            const detailUrl = 'book-detail.html?id=' + encodeURIComponent(book.id);
+            const badgeClass = copiesStatus.hasCopies
+                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                : 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400';
+
+            return `
+            <div onclick="window.location.href='${detailUrl}'" class="bg-surface-container-low border border-outline-variant/10 rounded-xl p-4 flex gap-4 cursor-pointer hover:shadow-md transition-all group">
+                <div class="w-16 h-24 shrink-0 rounded-lg overflow-hidden bg-stone-200 dark:bg-stone-800 shadow-sm relative">
+                    <img src="${cover}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt="${escapeHtml(book.title)}">
+                </div>
+                <div class="flex-1 flex flex-col justify-between min-w-0">
+                    <div>
+                        <span class="inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${badgeClass} mb-1">${copiesStatus.badge}</span>
+                        <h4 class="font-bold text-sm text-on-surface line-clamp-2 leading-tight group-hover:text-primary transition-colors">${escapeHtml(book.title)}</h4>
+                        <p class="text-xs text-stone-500 truncate mt-0.5">${escapeHtml(authors)}</p>
                     </div>
-                `;
-                return;
+                    <div class="flex items-center justify-between text-[11px] text-stone-400 mt-2">
+                        <span>${book.published_year || ''}</span>
+                        <span class="text-primary font-bold group-hover:translate-x-0.5 transition-transform flex items-center">
+                            Copies <span class="material-symbols-outlined text-xs">arrow_forward</span>
+                        </span>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function renderItemCard(item, index, user) {
+        const distance = item.distanceStr || 'Nearby';
+        const ownerName = item.owner_name || 'Neighbor';
+        const pendingCount = (user && item.owner_id === user.uid && feedState.pendingRequestsMap[item.id]) || 0;
+        const badgeHtml = pendingCount > 0 
+            ? `<span class="absolute top-3 right-3 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md z-10 animate-bounce" title="${pendingCount} borrow request(s) waiting">${pendingCount}</span>` 
+            : '';
+        
+        const itemRating = feedState.listingRatings[item.id];
+        const itemRatingVal = itemRating && itemRating.count > 0 ? itemRating.average.toFixed(1) : null;
+        const itemRatingCount = itemRating && itemRating.count > 0 ? itemRating.count : 0;
+        
+        const ownerRating = feedState.reputations[item.owner_id];
+        const ownerRatingVal = ownerRating && ownerRating.count > 0 ? ownerRating.average.toFixed(1) : 'New';
+
+        const isBook = !!item.book_id || item.kind === 'book';
+        const itemUrl = item.book_id ? ('book-detail.html?id=' + encodeURIComponent(item.book_id)) : ('item-details.html?id=' + encodeURIComponent(item.id));
+        const bookBadge = isBook
+            ? `<span class="bg-primary/90 text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md shadow-sm flex items-center gap-1">
+                 <span class="material-symbols-outlined text-[10px]">auto_stories</span>
+                 <span>Book Copy</span>
+               </span>`
+            : '';
+
+        // Skills and Neighbour Help
+        if (item.category === 'skills' || item.category === 'neighbour-helping-neighbour') {
+            const isSkill = item.category === 'skills';
+            const tag = isSkill ? 'Neighbor Skill' : 'Neighbor Help';
+            const fallbackText = isSkill ? 'Skill' : 'Help';
+            const itemCategories = (item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).map(escapeHtml).join(',');
+            
+            const listingRatingHtml = itemRatingVal
+                ? `<div class="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold text-xs mt-1">
+                       <span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+                       <span>${itemRatingVal}</span>
+                       <span class="text-stone-400 font-medium">(${itemRatingCount} reviews)</span>
+                   </div>`
+                : '';
+
+            return `
+            <div onclick="window.location.href='item-details.html?id=' + encodeURIComponent(this.dataset.itemId)" data-item-id="${db.escapeAttr(item.id)}" class="item-card col-span-1 sm:col-span-2 md:col-span-3 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${escapeHtml(item.name)}" data-description="${escapeHtml(item.description || '')}" data-categories="${itemCategories}">
+                ${badgeHtml}
+                <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
+                    <img alt="${escapeHtml(item.name)}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 mix-blend-multiply opacity-80" src="${db.sanitizeUrl(item.image_url) || ''}" onerror="this.src='https://placehold.co/400x400?text=${encodeURIComponent(fallbackText)}'"/>
+                </div>
+                <div class="flex-1">
+                    <div class="flex justify-between items-start flex-wrap gap-2">
+                        <span class="text-[10px] font-black text-primary uppercase tracking-widest mb-1 block">${tag}</span>
+                        ${listingRatingHtml}
+                    </div>
+                    <h4 class="font-bold text-xl leading-tight mb-1">${escapeHtml(item.name)}</h4>
+                    <p class="text-sm text-on-surface-variant mb-2">${escapeHtml(item.description || 'Available to help.')} ${distance} away.</p>
+                    <div class="flex justify-between items-center mt-2 flex-wrap gap-3">
+                        <div class="flex items-center gap-2 cursor-pointer" onclick="event.stopPropagation(); window.location.href='profile.html?userId=' + encodeURIComponent(this.dataset.userId)" data-user-id="${db.escapeAttr(item.owner_id)}">
+                            <div class="w-6 h-6 rounded-full overflow-hidden bg-stone-200 flex items-center justify-center">
+                                <img src="${db.sanitizeUrl(item.owner_avatar) || 'https://placehold.co/100x100?text=A'}" class="w-full h-full object-cover">
+                            </div>
+                            <span class="text-xs text-on-surface-variant font-bold hover:underline">${escapeHtml(ownerName)} (★ ${ownerRatingVal})</span>
+                        </div>
+                        <button onclick="event.stopPropagation(); window.location.href='chat.html?userId=' + encodeURIComponent(this.dataset.userId) + '&itemId=' + encodeURIComponent(this.dataset.itemId)" data-user-id="${db.escapeAttr(item.owner_id)}" data-item-id="${db.escapeAttr(item.id)}" class="text-primary font-bold text-sm flex items-center gap-1 group">
+                            Message Neighbor
+                            <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+        }
+        
+        // Regular items & book copies
+        const isFeatured = index === 0 ? "col-span-1 sm:col-span-2 md:col-span-1" : "";
+        const imgAspect = index === 0 ? "aspect-square" : "aspect-[3/4]";
+        
+        const isRental = item.listing_type === 'rental';
+        const isGiveaway = item.listing_type === 'giveaway';
+        const isSwap = item.listing_type === 'swap';
+        const typeBadge = isGiveaway
+            ? `<span class="bg-teal-100 dark:bg-teal-900/40 text-teal-800 dark:text-teal-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Give Away</span>`
+            : (isSwap
+                ? `<span class="bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Swap</span>`
+                : (isRental 
+                    ? `<span class="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Rental</span>`
+                    : `<span class="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Borrow</span>`));
+
+        const listingRatingHtml = itemRatingVal
+            ? `<div class="flex items-center gap-1 bg-black/60 text-amber-400 text-[10px] font-black px-2 py-1 rounded-md shadow-sm z-10 backdrop-blur-md">
+                   <span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">star</span>
+                   <span>${itemRatingVal}</span>
+                   <span class="text-white/60 font-medium">(${itemRatingCount})</span>
+               </div>`
+            : '';
+
+        const itemCategories = (item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).map(escapeHtml).join(',');
+        return `
+        <div onclick="window.location.href='${itemUrl}'" data-item-id="${db.escapeAttr(item.id)}" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${escapeHtml(item.name)}" data-description="${escapeHtml(item.description || '')}" data-categories="${itemCategories}">
+            <div class="${imgAspect} rounded-lg overflow-hidden ${index === 0 ? 'bg-surface-container-low' : ''} relative">
+                ${badgeHtml}
+                <img alt="${escapeHtml(item.name)}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900" src="${db.sanitizeUrl(item.image_url) || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
+                <div class="absolute top-3 left-3 flex flex-col gap-1.5 items-start">
+                    ${bookBadge}
+                    ${typeBadge}
+                    ${listingRatingHtml}
+                </div>
+            </div>
+            <div class="flex flex-col gap-1">
+                <div class="flex justify-between items-start">
+                    <h4 class="font-bold ${index === 0 ? 'text-lg' : 'text-md'} leading-tight">${escapeHtml(item.name)}</h4>
+                    <span class="text-[10px] font-bold text-outline uppercase tracking-wider">${distance}</span>
+                </div>
+                ${index === 0 
+                    ? `<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">${escapeHtml(item.description || '')}</p>
+                       <div class="flex items-center gap-2 mb-4 cursor-pointer" onclick="event.stopPropagation(); window.location.href='profile.html?userId=' + encodeURIComponent(this.dataset.userId)" data-user-id="${db.escapeAttr(item.owner_id)}">
+                           <div class="w-6 h-6 rounded-full overflow-hidden bg-secondary-fixed flex items-center justify-center">
+                               <img src="${db.sanitizeUrl(item.owner_avatar) || 'https://placehold.co/100x100?text=A'}" class="w-full h-full object-cover">
+                           </div>
+                           <span class="text-xs text-on-surface-variant font-bold hover:underline">${escapeHtml(ownerName)} (★ ${ownerRatingVal})</span>
+                       </div>
+                       <div class="flex gap-2">
+                           <button onclick="event.stopPropagation(); window.location.href='${itemUrl}'" data-item-id="${db.escapeAttr(item.id)}" class="flex-1 py-3 bg-primary-container text-on-primary font-bold rounded-xl active:scale-95 transition-transform border-none cursor-pointer">${item.book_id ? 'View Book Copies' : 'View Details'}</button>
+                           <a href="chat.html?userId=${db.escapeAttr(item.owner_id)}&itemId=${db.escapeAttr(item.id)}" onclick="event.stopPropagation()" class="w-12 h-12 bg-surface-container-highest flex items-center justify-center rounded-xl text-on-surface active:scale-95 transition-transform">
+                               <span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+                           </a>
+                        </div>`
+                    : `<div class="mt-2 flex items-center justify-between">
+                         <div class="flex items-center gap-2 cursor-pointer" onclick="event.stopPropagation(); window.location.href='profile.html?userId=' + encodeURIComponent(this.dataset.userId)" data-user-id="${db.escapeAttr(item.owner_id)}">
+                             <div class="w-6 h-6 rounded-full overflow-hidden bg-secondary-fixed flex items-center justify-center">
+                                 <img src="${db.sanitizeUrl(item.owner_avatar) || 'https://placehold.co/100x100?text=A'}" class="w-full h-full object-cover">
+                             </div>
+                             <div class="flex flex-col">
+                                 <span class="text-xs font-bold text-on-surface line-clamp-1 hover:underline">${escapeHtml(ownerName)}</span>
+                                 <span class="text-[9px] text-stone-500 font-semibold flex items-center gap-0.5">
+                                     <span class="material-symbols-outlined text-[10px] text-amber-500" style="font-variation-settings: 'FILL' 1;">star</span>
+                                     <span>${ownerRatingVal}</span>
+                                 </span>
+                             </div>
+                         </div>
+                         <a href="chat.html?userId=${db.escapeAttr(item.owner_id)}&itemId=${db.escapeAttr(item.id)}" onclick="event.stopPropagation()" class="text-primary active:scale-90 transition-transform">
+                             <span class="material-symbols-outlined text-xl bg-primary/10 rounded-full p-1.5" data-icon="chat_bubble">chat_bubble</span>
+                         </a>
+                        </div>`
+                }
+            </div>
+        </div>`;
+    }
+
+    async function fetchItems(user, reset = true) {
+        if (feedState.isLoading) return;
+        feedState.isLoading = true;
+        feedState.currentUser = user;
+
+        const emptyStateEl = document.getElementById('items-empty-state');
+        const errorStateEl = document.getElementById('items-error-state');
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        const loadMoreSpinner = document.getElementById('load-more-spinner');
+        const endOfFeedEl = document.getElementById('end-of-feed');
+        const feedCountBadge = document.getElementById('feed-count-badge');
+        const feedTitle = document.getElementById('feed-title');
+        const carouselSection = document.getElementById('hot-carousel-section');
+
+        if (reset) {
+            feedState.cursor = null;
+            feedState.items = [];
+            grid.innerHTML = renderSkeletonCards(6);
+            if (emptyStateEl) emptyStateEl.classList.add('hidden');
+            if (errorStateEl) errorStateEl.classList.add('hidden');
+            if (loadMoreBtn) loadMoreBtn.classList.add('hidden');
+            if (endOfFeedEl) endOfFeedEl.classList.add('hidden');
+
+            // Header title context
+            const isFiltered = feedState.currentSearch !== '' || feedState.currentCategory !== 'all' || feedState.currentListingType !== 'all' || feedState.currentAvailableOnly;
+            if (feedTitle) {
+                feedTitle.textContent = isFiltered ? 'Search & Filter Results' : 'Recently Added';
+            }
+            if (carouselSection) {
+                carouselSection.style.display = isFiltered ? 'none' : 'block';
             }
 
-            // Compute distance for each item
-            items.forEach(item => {
+            // Search canonical books if query is present
+            if (feedState.currentSearch) {
+                try {
+                    const matchedBooks = await window.db.searchBooks({ query: feedState.currentSearch, limit: 8 });
+                    renderCanonicalBooks(matchedBooks);
+                } catch (bErr) {
+                    console.warn("Error searching canonical books:", bErr);
+                    renderCanonicalBooks([]);
+                }
+            } else {
+                renderCanonicalBooks([]);
+            }
+        } else {
+            if (loadMoreSpinner) loadMoreSpinner.classList.remove('hidden');
+        }
+
+        try {
+            // Geolocation and base contexts on first load
+            if (!feedState.userLocation) {
+                feedState.userLocation = await getCurrentPositionPromise() || { lat: 37.7749, lng: -122.4194 };
+                userLocation = feedState.userLocation;
+            }
+            if (Object.keys(feedState.listingRatings).length === 0) {
+                const ratingsSummary = await window.db.getRatingsSummary();
+                feedState.listingRatings = ratingsSummary.listingRatings || {};
+            }
+            if (user && Object.keys(feedState.pendingRequestsMap).length === 0) {
+                feedState.pendingRequestsMap = await getPendingRequestsMap(user.uid);
+            }
+
+            // Execute paginated catalogue read
+            const pageResult = await window.db.getItemsPage(
+                feedState.currentCategory,
+                user ? user.uid : null,
+                {
+                    pageSize: 12,
+                    cursor: feedState.cursor,
+                    listing_type: feedState.currentListingType !== 'all' ? feedState.currentListingType : null,
+                    available_only: feedState.currentAvailableOnly,
+                    exclude_owner_id: user ? user.uid : null,
+                    search: feedState.currentSearch || null
+                }
+            );
+
+            const newItems = pageResult.items || [];
+            feedState.cursor = pageResult.nextCursor;
+            feedState.hasMore = pageResult.hasMore;
+
+            // Compute distances
+            newItems.forEach(item => {
                 if (item.latitude !== undefined && item.longitude !== undefined && item.latitude !== null && item.longitude !== null) {
-                    item.distanceVal = calculateDistance(userPos.lat, userPos.lng, item.latitude, item.longitude);
+                    item.distanceVal = calculateDistance(feedState.userLocation.lat, feedState.userLocation.lng, item.latitude, item.longitude);
                     item.distanceStr = item.distanceVal.toFixed(1) + " mi";
                 } else {
-                    // Fallback mock distance if item has no coordinates
                     const mockDist = Math.random() * 5 + 0.1;
                     item.distanceVal = mockDist;
                     item.distanceStr = mockDist.toFixed(1) + " mi";
                 }
             });
 
-            allExploredItems = items || [];
-            userLocation = userPos;
-
-            // Get pending requests map
-            const pendingRequestsMap = user ? await getPendingRequestsMap(user.uid) : {};
-            // Everything the card renderer needs, in one place so load-more can
-            // re-render the accumulated feed without refetching context.
-            feedCtx = { user, userPos, listingRatings, reputations, pendingRequestsMap };
-
-            // Populate Hot Near You carousel (sort by distance ascending, show top 5)
-            const nearbyItems = [...items].sort((a, b) => a.distanceVal - b.distanceVal);
-            const carousel = document.getElementById('hot-carousel');
-            
-            if (nearbyItems.length === 0) {
-                carousel.innerHTML = `<div class="text-stone-500 py-6 px-6 font-medium">No nearby items available yet.</div>`;
-            } else {
-                carousel.innerHTML = nearbyItems.slice(0, 5).map(item => {
-                    const isRental = item.listing_type === 'rental';
-                    const isGiveaway = item.listing_type === 'giveaway';
-                    const badgeText = isGiveaway ? 'Give Away' : (isRental ? 'Rental' : 'Free');
-                    const badgeClass = isGiveaway
-                        ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
-                        : (isRental 
-                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
-                            : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300');
-
-                    const pendingCount = (user && item.owner_id === user.uid && pendingRequestsMap[item.id]) || 0;
-                    const badgeHtml = pendingCount > 0 
-                        ? `<span class="absolute top-3 right-3 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md z-10 animate-bounce" title="${pendingCount} borrow request(s) waiting">${pendingCount}</span>` 
-                        : '';
-
-                    const itemRating = listingRatings[item.id];
-                    const itemRatingVal = itemRating && itemRating.count > 0 ? itemRating.average.toFixed(1) : null;
-                    const itemRatingCount = itemRating && itemRating.count > 0 ? itemRating.count : 0;
-                    const listingRatingHtml = itemRatingVal
-                        ? `<span class="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-amber-400 text-[10px] font-black px-2.5 py-1 rounded-md flex items-center gap-1 shadow-sm"><span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">star</span> ${itemRatingVal} (${itemRatingCount})</span>`
-                        : '';
-
-                    const ownerRating = reputations[item.owner_id];
-                    const ownerRatingVal = ownerRating && ownerRating.count > 0 ? ownerRating.average.toFixed(1) : 'New';
-
-                    const itemUrl = item.book_id ? ('book-detail.html?id=' + encodeURIComponent(item.book_id)) : ('item-details.html?id=' + encodeURIComponent(item.id));
-                    return `
-                    <div onclick="window.location.href='${itemUrl}'" data-item-id="${db.escapeAttr(item.id)}" class="min-w-[280px] md:min-w-[360px] aspect-[4/3] rounded-xl relative overflow-hidden group cursor-pointer shadow-md shrink-0">
-                        ${badgeHtml}
-                        ${listingRatingHtml}
-                        <img alt="${escapeHtml(item.name)}" class="absolute inset-0 w-full h-full object-contain bg-stone-900 dark:bg-stone-950 group-hover:scale-105 transition-transform duration-700" src="${db.sanitizeUrl(item.image_url) || 'https://placehold.co/600x400?text=' + encodeURIComponent(item.name)}"/>
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                        <div class="absolute bottom-4 left-4 right-4">
-                            <span class="${badgeClass} px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest mb-2 inline-block shadow-sm">${badgeText}</span>
-                            <h3 class="text-white text-xl font-bold mb-0.5 truncate">${escapeHtml(item.name)}</h3>
-                            <p class="text-white/80 text-xs font-semibold flex items-center gap-1.5 flex-wrap">
-                                <span>${item.distanceStr} away</span>
-                                <span>&bull;</span>
-                                <span class="flex items-center gap-0.5 bg-white/10 px-2 py-0.5 rounded-full backdrop-blur-md">
-                                    <span class="material-symbols-outlined text-[10px] text-amber-400" style="font-variation-settings: 'FILL' 1;">star</span>
-                                    <span class="text-white">${ownerRatingVal}</span>
-                                </span>
-                                <span onclick="event.stopPropagation(); window.location.href='profile.html?userId=' + encodeURIComponent(this.dataset.userId)" data-user-id="${db.escapeAttr(item.owner_id)}" class="hover:underline">${escapeHtml(item.owner_name || 'Neighbor')}</span>
-                            </p>
-                        </div>
-                    </div>`;
-                }).join('');
+            // Batch-fetch reputations for new owners
+            const newOwnerIds = [...new Set(newItems.map(i => i.owner_id).filter(id => id && !feedState.reputations[id]))];
+            if (newOwnerIds.length > 0) {
+                const newReps = await window.db.getReputations(newOwnerIds);
+                Object.assign(feedState.reputations, newReps);
             }
 
-            // Generate HTML for each item in Recently Added
-            grid.innerHTML = items.map((item, index) => {
-                const distance = item.distanceStr;
-                const ownerName = item.owner_name || 'Neighbor';
-                const pendingCount = (user && item.owner_id === user.uid && pendingRequestsMap[item.id]) || 0;
-                const badgeHtml = pendingCount > 0 
-                    ? `<span class="absolute top-3 right-3 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md z-10 animate-bounce" title="${pendingCount} borrow request(s) waiting">${pendingCount}</span>` 
-                    : '';
-                
-                const itemRating = listingRatings[item.id];
-                const itemRatingVal = itemRating && itemRating.count > 0 ? itemRating.average.toFixed(1) : null;
-                const itemRatingCount = itemRating && itemRating.count > 0 ? itemRating.count : 0;
-                
-                const ownerRating = reputations[item.owner_id];
-                const ownerRatingVal = ownerRating && ownerRating.count > 0 ? ownerRating.average.toFixed(1) : 'New';
+            feedState.items = reset ? newItems : feedState.items.concat(newItems);
+            allExploredItems = feedState.items;
 
-                // Skills and Neighbour Help have a distinct horizontal card style
-                if (item.category === 'skills' || item.category === 'neighbour-helping-neighbour') {
-                    const isSkill = item.category === 'skills';
-                    const tag = isSkill ? 'Neighbor Skill' : 'Neighbor Help';
-                    const fallbackText = isSkill ? 'Skill' : 'Help';
-                    const itemCategories = (item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).map(escapeHtml).join(',');
-                    
-                    const listingRatingHtml = itemRatingVal
-                        ? `<div class="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold text-xs mt-1">
-                               <span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
-                               <span>${itemRatingVal}</span>
-                               <span class="text-stone-400 font-medium">(${itemRatingCount} reviews)</span>
-                           </div>`
-                        : '';
-
-                    return `
-                    <div onclick="window.location.href='item-details.html?id=' + encodeURIComponent(this.dataset.itemId)" data-item-id="${db.escapeAttr(item.id)}" class="item-card col-span-2 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${escapeHtml(item.name)}" data-description="${escapeHtml(item.description || '')}" data-categories="${itemCategories}">
-                        ${badgeHtml}
-                        <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
-                            <img alt="${escapeHtml(item.name)}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 mix-blend-multiply opacity-80" src="${db.sanitizeUrl(item.image_url) || ''}" onerror="this.src='https://placehold.co/400x400?text=${encodeURIComponent(fallbackText)}'"/>
-                        </div>
-                        <div class="flex-1">
-                            <div class="flex justify-between items-start flex-wrap gap-2">
-                                <span class="text-[10px] font-black text-primary uppercase tracking-widest mb-1 block">${tag}</span>
-                                ${listingRatingHtml}
-                            </div>
-                            <h4 class="font-bold text-xl leading-tight mb-1">${escapeHtml(item.name)}</h4>
-                            <p class="text-sm text-on-surface-variant mb-2">${escapeHtml(item.description || 'Available to help.')} ${distance} away.</p>
-                            <div class="flex justify-between items-center mt-2 flex-wrap gap-3">
-                                <div class="flex items-center gap-2 cursor-pointer" onclick="event.stopPropagation(); window.location.href='profile.html?userId=' + encodeURIComponent(this.dataset.userId)" data-user-id="${db.escapeAttr(item.owner_id)}">
-                                    <div class="w-6 h-6 rounded-full overflow-hidden bg-stone-200 flex items-center justify-center">
-                                        <img src="${db.sanitizeUrl(item.owner_avatar) || 'https://placehold.co/100x100?text=A'}" class="w-full h-full object-cover">
-                                    </div>
-                                    <span class="text-xs text-on-surface-variant font-bold hover:underline">${escapeHtml(ownerName)} (★ ${ownerRatingVal})</span>
-                                </div>
-                                <button onclick="event.stopPropagation(); window.location.href='chat.html?userId=' + encodeURIComponent(this.dataset.userId) + '&itemId=' + encodeURIComponent(this.dataset.itemId)" data-user-id="${db.escapeAttr(item.owner_id)}" data-item-id="${db.escapeAttr(item.id)}" class="text-primary font-bold text-sm flex items-center gap-1 group">
-                                    Message Neighbor
-                                    <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>`;
+            // Render items grid
+            if (feedState.items.length === 0) {
+                grid.innerHTML = '';
+                const searchBooksSection = document.getElementById('search-books-section');
+                const hasBooks = searchBooksSection && !searchBooksSection.classList.contains('hidden');
+                if (emptyStateEl && !hasBooks) {
+                    emptyStateEl.classList.remove('hidden');
                 }
-                
-                // Regular items (garden, kitchen, etc.)
-                // Make the first item span 2 cols on tablet for visual interest
-                const isFeatured = index === 0 ? "col-span-1 sm:col-span-2 md:col-span-1" : "";
-                const imgAspect = index === 0 ? "aspect-square" : "aspect-[3/4]";
-                
-                const isRental = item.listing_type === 'rental';
-                const isGiveaway = item.listing_type === 'giveaway';
-                const typeBadge = isGiveaway
-                    ? `<span class="bg-teal-100 dark:bg-teal-900/40 text-teal-800 dark:text-teal-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Give Away</span>`
-                    : (isRental 
-                        ? `<span class="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Rental</span>`
-                        : `<span class="bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md shadow-sm">Free</span>`);
+            } else {
+                if (emptyStateEl) emptyStateEl.classList.add('hidden');
+                grid.innerHTML = feedState.items.map((item, idx) => renderItemCard(item, idx, user)).join('');
+            }
 
-                const listingRatingHtml = itemRatingVal
-                    ? `<div class="flex items-center gap-1 bg-black/60 text-amber-400 text-[10px] font-black px-2 py-1 rounded-md shadow-sm z-10 backdrop-blur-md">
-                           <span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'FILL' 1;">star</span>
-                           <span>${itemRatingVal}</span>
-                           <span class="text-white/60 font-medium">(${itemRatingCount})</span>
-                       </div>`
-                    : '';
+            // Update status & load more button
+            const statusEl = document.getElementById('pagination-status');
+            if (statusEl) {
+                statusEl.textContent = feedState.items.length > 0 ? `Showing ${feedState.items.length} listing${feedState.items.length === 1 ? '' : 's'}` : '';
+            }
+            if (feedCountBadge) {
+                feedCountBadge.textContent = feedState.items.length > 0 ? `${feedState.items.length} available` : '';
+            }
 
-                const itemCategories = (item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other']).map(escapeHtml).join(',');
-                return `
-                <div onclick="window.location.href='item-details.html?id=' + encodeURIComponent(this.dataset.itemId)" data-item-id="${db.escapeAttr(item.id)}" class="item-card ${isFeatured} bg-surface-container-low rounded-xl p-4 shadow-sm flex flex-col gap-4 cursor-pointer" data-name="${escapeHtml(item.name)}" data-description="${escapeHtml(item.description || '')}" data-categories="${itemCategories}">
-                    <div class="${imgAspect} rounded-lg overflow-hidden ${index === 0 ? 'bg-surface-container-low' : ''} relative">
-                        ${badgeHtml}
-                        <img alt="${escapeHtml(item.name)}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900" src="${db.sanitizeUrl(item.image_url) || ''}" onerror="this.src='https://placehold.co/400x600?text=Item'"/>
-                        <div class="absolute top-3 left-3 flex flex-col gap-1.5 items-start">
-                            ${bookBadge}
-                            ${typeBadge}
-                            ${listingRatingHtml}
-                        </div>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <div class="flex justify-between items-start">
-                            <h4 class="font-bold ${index === 0 ? 'text-lg' : 'text-md'} leading-tight">${escapeHtml(item.name)}</h4>
-                            <span class="text-[10px] font-bold text-outline uppercase tracking-wider">${distance}</span>
-                        </div>
-                        ${index === 0 
-                            ? `<p class="text-sm text-on-surface-variant mb-4 line-clamp-2">${escapeHtml(item.description)}</p>
-                               <div class="flex items-center gap-2 mb-4 cursor-pointer" onclick="event.stopPropagation(); window.location.href='profile.html?userId=' + encodeURIComponent(this.dataset.userId)" data-user-id="${db.escapeAttr(item.owner_id)}">
-                                   <div class="w-6 h-6 rounded-full overflow-hidden bg-secondary-fixed flex items-center justify-center">
-                                       <img src="${db.sanitizeUrl(item.owner_avatar) || 'https://placehold.co/100x100?text=A'}" class="w-full h-full object-cover">
-                                   </div>
-                                   <span class="text-xs text-on-surface-variant font-bold hover:underline">${escapeHtml(ownerName)} (★ ${ownerRatingVal})</span>
-                               </div>
-                               <div class="flex gap-2">
-                                   <button onclick="event.stopPropagation(); window.location.href='${itemUrl}'" data-item-id="${db.escapeAttr(item.id)}" class="flex-1 py-3 bg-primary-container text-on-primary font-bold rounded-xl active:scale-95 transition-transform">${item.book_id ? 'View Book Copies' : 'View Details'}</button>
-                                   <a href="chat.html?userId=${db.escapeAttr(item.owner_id)}&itemId=${db.escapeAttr(item.id)}" onclick="event.stopPropagation()" class="w-12 h-12 bg-surface-container-highest flex items-center justify-center rounded-xl text-on-surface active:scale-95 transition-transform">
-                                       <span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
-                                   </a>
-                                </div>`
-                            : `<div class="mt-2 flex items-center justify-between">
-                                 <div class="flex items-center gap-2 cursor-pointer" onclick="event.stopPropagation(); window.location.href='profile.html?userId=' + encodeURIComponent(this.dataset.userId)" data-user-id="${db.escapeAttr(item.owner_id)}">
-                                     <div class="w-6 h-6 rounded-full overflow-hidden bg-secondary-fixed flex items-center justify-center">
-                                         <img src="${db.sanitizeUrl(item.owner_avatar) || 'https://placehold.co/100x100?text=A'}" class="w-full h-full object-cover">
-                                     </div>
-                                     <div class="flex flex-col">
-                                         <span class="text-xs font-bold text-on-surface line-clamp-1 hover:underline">${escapeHtml(ownerName)}</span>
-                                         <span class="text-[9px] text-stone-500 font-semibold flex items-center gap-0.5">
-                                             <span class="material-symbols-outlined text-[10px] text-amber-500" style="font-variation-settings: 'FILL' 1;">star</span>
-                                             <span>${ownerRatingVal}</span>
-                                         </span>
-                                     </div>
-                                 </div>
-                                 <a href="chat.html?userId=${db.escapeAttr(item.owner_id)}&itemId=${db.escapeAttr(item.id)}" onclick="event.stopPropagation()" class="text-primary active:scale-90 transition-transform">
-                                     <span class="material-symbols-outlined text-xl bg-primary/10 rounded-full p-1.5" data-icon="chat_bubble">chat_bubble</span>
-                                 </a>
-                                </div>`
-                        }
-                    </div>
-                </div>`;
-            }).join('');
-            // Call dynamic categories rendering
-            renderCategoryChips(items);
-            
-            const noResults = document.getElementById('no-results');
-            if (noResults) noResults.classList.add('hidden');
+            if (loadMoreBtn) {
+                if (feedState.hasMore) {
+                    loadMoreBtn.classList.remove('hidden');
+                } else {
+                    loadMoreBtn.classList.add('hidden');
+                }
+            }
+            if (endOfFeedEl) {
+                if (!feedState.hasMore && feedState.items.length > 0) {
+                    endOfFeedEl.classList.remove('hidden');
+                } else {
+                    endOfFeedEl.classList.add('hidden');
+                }
+            }
+
+            // Update Carousel on initial load
+            if (reset && !feedState.currentSearch && feedState.currentCategory === 'all') {
+                const nearbyItems = [...feedState.items].sort((a, b) => a.distanceVal - b.distanceVal);
+                const carousel = document.getElementById('hot-carousel');
+                if (carousel) {
+                    if (nearbyItems.length === 0) {
+                        carousel.innerHTML = `<div class="text-stone-500 py-6 px-6 font-medium">No nearby items available yet.</div>`;
+                    } else {
+                        carousel.innerHTML = nearbyItems.slice(0, 5).map(item => {
+                            const isRental = item.listing_type === 'rental';
+                            const isGiveaway = item.listing_type === 'giveaway';
+                            const badgeText = isGiveaway ? 'Give Away' : (isRental ? 'Rental' : 'Borrow');
+                            const badgeClass = isGiveaway
+                                ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
+                                : (isRental 
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
+                                    : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300');
+                            const itemUrl = item.book_id ? ('book-detail.html?id=' + encodeURIComponent(item.book_id)) : ('item-details.html?id=' + encodeURIComponent(item.id));
+                            const ownerRating = feedState.reputations[item.owner_id];
+                            const ownerRatingVal = ownerRating && ownerRating.count > 0 ? ownerRating.average.toFixed(1) : 'New';
+
+                            return `
+                            <div onclick="window.location.href='${itemUrl}'" data-item-id="${db.escapeAttr(item.id)}" class="min-w-[280px] md:min-w-[360px] aspect-[4/3] rounded-xl relative overflow-hidden group cursor-pointer shadow-md shrink-0">
+                                <img alt="${escapeHtml(item.name)}" class="absolute inset-0 w-full h-full object-contain bg-stone-900 dark:bg-stone-950 group-hover:scale-105 transition-transform duration-700" src="${db.sanitizeUrl(item.image_url) || 'https://placehold.co/600x400?text=' + encodeURIComponent(item.name)}"/>
+                                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                                <div class="absolute bottom-4 left-4 right-4">
+                                    <span class="${badgeClass} px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest mb-2 inline-block shadow-sm">${badgeText}</span>
+                                    <h3 class="text-white text-xl font-bold mb-0.5 truncate">${escapeHtml(item.name)}</h3>
+                                    <p class="text-white/80 text-xs font-semibold flex items-center gap-1.5 flex-wrap">
+                                        <span>${item.distanceStr} away</span>
+                                        <span>&bull;</span>
+                                        <span class="flex items-center gap-0.5 bg-white/10 px-2 py-0.5 rounded-full backdrop-blur-md">
+                                            <span class="material-symbols-outlined text-[10px] text-amber-400" style="font-variation-settings: 'FILL' 1;">star</span>
+                                            <span class="text-white">${ownerRatingVal}</span>
+                                        </span>
+                                        <span onclick="event.stopPropagation(); window.location.href='profile.html?userId=' + encodeURIComponent(this.dataset.userId)" data-user-id="${db.escapeAttr(item.owner_id)}" class="hover:underline">${escapeHtml(item.owner_name || 'Neighbor')}</span>
+                                    </p>
+                                </div>
+                            </div>`;
+                        }).join('');
+                    }
+                }
+            }
+
+            // Refresh Map markers
+            if (mapInstance) {
+                plotMapMarkers();
+            }
+
+            // Render category chips once on initial load
+            if (reset && feedState.currentCategory === 'all' && !feedState.currentSearch) {
+                renderCategoryChips();
+            }
+
         } catch (err) {
             console.error("Error fetching items:", err);
-            grid.innerHTML = `<div class="col-span-2 md:col-span-3 text-error font-medium text-center">Failed to load items.</div>`;
+            grid.innerHTML = '';
+            if (errorStateEl) errorStateEl.classList.remove('hidden');
+        } finally {
+            feedState.isLoading = false;
+            if (loadMoreSpinner) loadMoreSpinner.classList.add('hidden');
         }
     }
 
-    function filterItems() {
-        const currentCards = document.querySelectorAll('.item-card');
-        let visibleCount = 0;
+    function loadMoreItems() {
+        if (!feedState.hasMore || feedState.isLoading) return;
+        fetchItems(feedState.currentUser, false);
+    }
 
-        currentCards.forEach(card => {
-            const nameAttr = card.getAttribute('data-name');
-            const descAttr = card.getAttribute('data-description');
-            const categoriesAttr = card.getAttribute('data-categories');
-            
-            const categories = (categoriesAttr || '').split(',').map(c => c.trim().toLowerCase());
-            
-            const dummyItem = {
-                name: nameAttr,
-                description: descAttr,
-                categories: categories
-            };
-
-            const matchesSearch = window.db.matchesSearchFuzzy(dummyItem, currentSearch);
-            const matchesCategory = window.db.categoryMatches(categories, currentCategory);
-
-            if (matchesSearch && matchesCategory) {
-                card.style.display = 'flex';
-                visibleCount++;
+    function setListingType(type) {
+        feedState.currentListingType = type;
+        const buttons = document.querySelectorAll('.listing-type-btn');
+        buttons.forEach(btn => {
+            const btnType = btn.getAttribute('data-type');
+            if (btnType === type) {
+                btn.className = "listing-type-btn px-3 py-1.5 rounded-lg font-bold bg-primary text-white transition-all border-none cursor-pointer";
             } else {
-                card.style.display = 'none';
+                btn.className = "listing-type-btn px-3 py-1.5 rounded-lg font-medium text-stone-600 dark:text-stone-300 hover:text-primary transition-all border-none bg-transparent cursor-pointer";
+            }
+        });
+        updateQuickResetVisibility();
+        fetchItems(feedState.currentUser, true);
+    }
+
+    function toggleAvailableOnly() {
+        feedState.currentAvailableOnly = !feedState.currentAvailableOnly;
+        const btn = document.getElementById('available-toggle-btn');
+        const icon = document.getElementById('available-toggle-icon');
+        if (feedState.currentAvailableOnly) {
+            btn.className = "flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-primary bg-primary/10 font-bold text-primary transition-all cursor-pointer";
+            icon.textContent = "check_circle";
+            icon.className = "material-symbols-outlined text-[16px] text-primary";
+        } else {
+            btn.className = "flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-outline-variant/20 bg-surface-container-low font-bold text-stone-600 dark:text-stone-300 hover:border-primary/50 transition-all cursor-pointer";
+            icon.textContent = "radio_button_unchecked";
+            icon.className = "material-symbols-outlined text-[16px] text-stone-400";
+        }
+        updateQuickResetVisibility();
+        fetchItems(feedState.currentUser, true);
+    }
+
+    function clearAllFilters() {
+        feedState.currentSearch = '';
+        feedState.currentCategory = 'all';
+        feedState.currentListingType = 'all';
+        feedState.currentAvailableOnly = false;
+
+        if (searchInput) searchInput.value = '';
+
+        // Reset listing type buttons
+        const buttons = document.querySelectorAll('.listing-type-btn');
+        buttons.forEach(btn => {
+            if (btn.getAttribute('data-type') === 'all') {
+                btn.className = "listing-type-btn px-3 py-1.5 rounded-lg font-bold bg-primary text-white transition-all border-none cursor-pointer";
+            } else {
+                btn.className = "listing-type-btn px-3 py-1.5 rounded-lg font-medium text-stone-600 dark:text-stone-300 hover:text-primary transition-all border-none bg-transparent cursor-pointer";
             }
         });
 
-        // Also filter map markers if map exists
-        if (mapInstance && mapMarkers.length > 0) {
-            mapMarkers.forEach(m => {
-                const item = m.item;
-                const itemCategories = item.categories && item.categories.length > 0 ? item.categories : [item.category || 'other'];
-                const matchesSearch = window.db.matchesSearchFuzzy(item, currentSearch);
-                const matchesCategory = window.db.categoryMatches(itemCategories, currentCategory);
-
-                if (matchesSearch && matchesCategory) {
-                    if (!mapInstance.hasLayer(m.marker)) {
-                        m.marker.addTo(mapInstance);
-                    }
-                } else {
-                    if (mapInstance.hasLayer(m.marker)) {
-                        mapInstance.removeLayer(m.marker);
-                    }
-                }
-            });
+        // Reset available toggle
+        const availBtn = document.getElementById('available-toggle-btn');
+        const availIcon = document.getElementById('available-toggle-icon');
+        if (availBtn && availIcon) {
+            availBtn.className = "flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-outline-variant/20 bg-surface-container-low font-bold text-stone-600 dark:text-stone-300 hover:border-primary/50 transition-all cursor-pointer";
+            availIcon.textContent = "radio_button_unchecked";
+            availIcon.className = "material-symbols-outlined text-[16px] text-stone-400";
         }
 
-        const noResults = document.getElementById('no-results');
-        if (noResults) {
-            if (visibleCount === 0) {
-                noResults.classList.remove('hidden');
+        // Reset category chips
+        const chips = document.querySelectorAll('.category-chip');
+        chips.forEach(c => {
+            if (c.getAttribute('data-category') === 'all') {
+                c.className = "category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-primary-container text-on-primary font-semibold text-sm tracking-wide transition-colors border-none cursor-pointer";
             } else {
-                noResults.classList.add('hidden');
+                c.className = "category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 font-medium text-sm tracking-wide transition-colors border-none cursor-pointer";
             }
-        }
+        });
 
-        const carouselSection = document.getElementById('hot-carousel-section');
-        if (carouselSection) {
-            if (currentSearch !== '' || currentCategory !== 'all') {
-                carouselSection.style.display = 'none';
-            } else {
-                carouselSection.style.display = 'block';
-            }
-        }
+        updateQuickResetVisibility();
+        fetchItems(feedState.currentUser, true);
+    }
 
-        const feedTitle = document.getElementById('feed-title');
-        if (feedTitle) {
-            if (currentSearch !== '' || currentCategory !== 'all') {
-                feedTitle.textContent = 'Search Results';
-            } else {
-                feedTitle.textContent = 'Recently Added';
-            }
+    function updateQuickResetVisibility() {
+        const quickReset = document.getElementById('clear-filters-quick');
+        if (!quickReset) return;
+        const hasFilters = feedState.currentSearch !== '' || feedState.currentCategory !== 'all' || feedState.currentListingType !== 'all' || feedState.currentAvailableOnly;
+        if (hasFilters) {
+            quickReset.classList.remove('hidden');
+        } else {
+            quickReset.classList.add('hidden');
         }
     }
 
-    searchInput.addEventListener('input', (e) => {
-        currentSearch = e.target.value;
-        filterItems();
-    });
+    function retryFetch() {
+        fetchItems(feedState.currentUser, true);
+    }
 
-    function renderCategoryChips(items) {
+    // Debounced search input handler (300ms)
+    let searchDebounceTimer = null;
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchDebounceTimer);
+            feedState.currentSearch = e.target.value.trim();
+            updateQuickResetVisibility();
+            searchDebounceTimer = setTimeout(() => {
+                fetchItems(feedState.currentUser, true);
+            }, 300);
+        });
+    }
+
+    function renderCategoryChips() {
         const container = document.getElementById('category-chips');
         if (!container) return;
 
-        // Count listings per category/subcategory and their parents
-        const categoryCounts = {};
-        items.forEach(item => {
-            const itemCats = [];
-            if (item.category) itemCats.push(item.category);
-            if (item.categories && Array.isArray(item.categories)) {
-                item.categories.forEach(c => itemCats.push(c));
-            }
-            
-            // Add all categories, subcategories, and their parents to categoryCounts
-            const uniqueCatsInItem = new Set();
-            itemCats.forEach(cat => {
-                if (!cat) return;
-                const cLower = cat.toLowerCase().trim();
-                uniqueCatsInItem.add(cLower);
-                const parent = window.db.getParentCategoryKey(cLower);
-                if (parent) {
-                    uniqueCatsInItem.add(parent.toLowerCase().trim());
-                }
-            });
-            
-            uniqueCatsInItem.forEach(cat => {
-                categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-            });
-        });
+        const mainCats = [
+            { key: 'all', label: 'All' },
+            { key: 'books', label: 'Books' },
+            { key: 'garden', label: 'Garden Tools' },
+            { key: 'power', label: 'Power Tools' },
+            { key: 'kitchen', label: 'Kitchen Gear' },
+            { key: 'electronics/computers', label: 'Electronics' },
+            { key: 'skills', label: 'Neighbor Skills' },
+            { key: 'neighbour-helping-neighbour', label: 'Help' },
+            { key: 'surplus-yield', label: 'Surplus' }
+        ];
 
-        // Always show 'All' chip
-        let html = `<button data-category="all" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full ${currentCategory === 'all' ? 'bg-primary-container text-on-primary font-semibold' : 'bg-surface-container-high text-on-surface-variant hover:bg-stone-200 font-medium'} text-sm tracking-wide transition-colors">All</button>`;
-
-        // Render chips only for categories that actually have listings, sorted by count descending
-        const activeCats = Object.keys(categoryCounts).filter(cat => categoryCounts[cat] > 0);
-        
-        // Map category keys to labels from taxonomy or custom labels
-        const catList = activeCats.map(cat => {
-            const taxonomyObj = window.db.CATEGORY_TAXONOMY[cat];
-            let label = cat;
-            if (taxonomyObj) {
-                label = taxonomyObj.label;
-            } else {
-                // If it's a subcategory, let's title case it
-                label = cat.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-            }
-            return {
-                key: cat,
-                label: label,
-                count: categoryCounts[cat]
-            };
-        });
-
-        // Sort by count descending
-        catList.sort((a, b) => b.count - a.count);
-
-        catList.forEach(cat => {
-            const isActive = currentCategory === cat.key;
-            html += `<button data-category="${cat.key}" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full ${isActive ? 'bg-primary-container text-on-primary font-semibold' : 'bg-surface-container-high text-on-surface-variant hover:bg-stone-200 font-medium'} text-sm tracking-wide transition-colors">${cat.label} (${cat.count})</button>`;
+        let html = '';
+        mainCats.forEach(cat => {
+            const isActive = feedState.currentCategory === cat.key;
+            html += `<button data-category="${cat.key}" class="category-chip whitespace-nowrap px-6 py-2.5 rounded-full ${isActive ? 'bg-primary-container text-on-primary font-semibold' : 'bg-surface-container-high text-on-surface-variant hover:bg-stone-200 font-medium'} text-sm tracking-wide transition-colors border-none cursor-pointer">${cat.label}</button>`;
         });
 
         container.innerHTML = html;
 
-        // Re-bind listeners
+        // Bind click events
         const chips = container.querySelectorAll('.category-chip');
         chips.forEach(chip => {
             chip.addEventListener('click', () => {
                 chips.forEach(c => {
-                    c.classList.remove('bg-primary-container', 'text-on-primary', 'font-semibold');
-                    c.classList.add('bg-surface-container-high', 'text-on-surface-variant', 'font-medium');
+                    c.className = "category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-stone-200 font-medium text-sm tracking-wide transition-colors border-none cursor-pointer";
                 });
-                chip.classList.remove('bg-surface-container-high', 'text-on-surface-variant', 'font-medium');
-                chip.classList.add('bg-primary-container', 'text-on-primary', 'font-semibold');
+                chip.className = "category-chip whitespace-nowrap px-6 py-2.5 rounded-full bg-primary-container text-on-primary font-semibold text-sm tracking-wide transition-colors border-none cursor-pointer";
 
-                currentCategory = chip.getAttribute('data-category');
-                filterItems();
+                feedState.currentCategory = chip.getAttribute('data-category');
+                updateQuickResetVisibility();
+                fetchItems(feedState.currentUser, true);
             });
         });
     }
+
+    window.setListingType = setListingType;
+    window.toggleAvailableOnly = toggleAvailableOnly;
+    window.clearAllFilters = clearAllFilters;
+    window.retryFetch = retryFetch;
+    window.loadMoreItems = loadMoreItems;
 
     function setViewMode(mode) {
         const gridBtn = document.getElementById('view-grid-btn');
@@ -796,9 +1009,6 @@
                 marker: marker
             });
         });
-
-        // Trigger filter markers immediately to apply current search/category
-        filterItems();
     }
 
     window.setViewMode = setViewMode;
@@ -826,12 +1036,19 @@
 
     async function loadGlobalStats() {
         try {
-            // 1. Listings
-            const itemsSnap = await firebase.firestore().collection('items').get();
-            const totalListings = itemsSnap.size;
+            // 1. Listings count (safeguarded against unbounded read)
+            let totalListings = 0;
+            const itemsColl = firebase.firestore().collection('items');
+            if (typeof itemsColl.count === 'function') {
+                const countSnap = await itemsColl.count().get();
+                totalListings = countSnap.data().count;
+            } else {
+                const itemsSnap = await itemsColl.limit(100).get();
+                totalListings = itemsSnap.size;
+            }
             document.getElementById('global-stats-listings').textContent = totalListings;
         } catch (e) {
-            console.warn("Could not query all items (permission limit).");
+            console.warn("Could not query items count.");
         }
 
         try {

@@ -39,6 +39,13 @@ global.location = {
     href: '',
     pathname: '/index.html'
 };
+global.sessionStorage = {
+    _data: {},
+    getItem(k) { return this._data[k] || null; },
+    setItem(k, v) { this._data[k] = String(v); },
+    removeItem(k) { delete this._data[k]; },
+    clear() { this._data = {}; }
+};
 
 // Read and execute firebase-client.js in the global scope
 const clientScriptPath = path.join(__dirname, '../site/public/firebase-client.js');
@@ -1334,6 +1341,161 @@ await test('Flow 8: Canonical book detail page aggregation, copy filtering, zero
     assert.strictEqual(combined.copiesStatus.availableCopies, 2);
     assert.strictEqual(combined.copiesStatus.badge, '2 available');
     assert.ok(combined.copiesStatus.ctaUrl.includes('book-detail.html?id=' + encodeURIComponent(book.id)));
+});
+
+await test('Flow 9: Paginated catalog reads, cursor stability, query safeguards, and multi-field filters (Issue #12)', async () => {
+    resetSandbox();
+    const aliceUid = 'alice-pag-uid';
+    const bobUid = 'bob-pag-uid';
+
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('profiles').doc(aliceUid).set({
+        id: aliceUid,
+        full_name: 'Alice Paginator',
+        location: 'Mission, SF'
+    });
+    firebase.auth().currentUser = { uid: bobUid };
+    await firebase.firestore().collection('profiles').doc(bobUid).set({
+        id: bobUid,
+        full_name: 'Bob Paginator',
+        location: 'SOMA, SF'
+    });
+
+    // 1. Seed 15 distinct items with monotonic timestamps
+    const seededItemIds = [];
+    for (let i = 1; i <= 15; i++) {
+        const itemType = i % 3 === 0 ? 'giveaway' : (i % 3 === 1 ? 'borrow' : 'swap');
+        const itemCat = i <= 5 ? 'garden' : (i <= 10 ? 'kitchen' : 'tools');
+        const isAvail = i !== 4 && i !== 8; // items 4 and 8 unavailable
+        const ownerId = i % 2 === 0 ? bobUid : aliceUid;
+        firebase.auth().currentUser = { uid: ownerId };
+        const docRef = await firebase.firestore().collection('items').add({
+            name: `Item Number ${String(i).padStart(2, '0')}`,
+            description: `Description for test item ${i}`,
+            category: itemCat,
+            categories: [itemCat],
+            listing_type: itemType,
+            owner_id: ownerId,
+            is_available: isAvail,
+            status: isAvail ? 'available' : 'borrowed',
+            exact_address: `Secret St ${i}`,
+            visibility: 'public',
+            created_at: new Date(2026, 0, i, 12, 0, 0)
+        });
+        seededItemIds.push(docRef.id);
+    }
+    firebase.auth().currentUser = { uid: aliceUid };
+    assert.strictEqual(seededItemIds.length, 15);
+
+    // 2. Test Page 1 (pageSize: 6)
+    const page1 = await window.db.getItemsPage('all', aliceUid, { pageSize: 6 });
+    assert.strictEqual(page1.items.length, 6, 'Page 1 should have 6 items');
+    assert.strictEqual(page1.hasMore, true, 'Page 1 should have more items');
+    assert.ok(page1.nextCursor, 'Page 1 should have nextCursor');
+    // Ensure newest first: Item 15 should be first
+    assert.strictEqual(page1.items[0].name, 'Item Number 15');
+    assert.strictEqual(page1.items[5].name, 'Item Number 10');
+
+    // Location privacy check on page 1
+    for (const item of page1.items) {
+        assert.strictEqual(item.exact_address, undefined, 'exact_address must never be revealed in catalog reads');
+    }
+
+    // 3. Test Page 2 with cursor (pageSize: 6)
+    const page2 = await window.db.getItemsPage('all', aliceUid, { pageSize: 6, cursor: page1.nextCursor });
+    assert.strictEqual(page2.items.length, 6, 'Page 2 should have 6 items');
+    assert.strictEqual(page2.hasMore, true, 'Page 2 should have more items');
+    assert.ok(page2.nextCursor, 'Page 2 should have nextCursor');
+    assert.strictEqual(page2.items[0].name, 'Item Number 09');
+    assert.strictEqual(page2.items[5].name, 'Item Number 04');
+
+    // 4. Test Page 3 with cursor (pageSize: 6) - last page
+    const page3 = await window.db.getItemsPage('all', aliceUid, { pageSize: 6, cursor: page2.nextCursor });
+    assert.strictEqual(page3.items.length, 3, 'Page 3 should have remaining 3 items');
+    assert.strictEqual(page3.hasMore, false, 'Page 3 hasMore should be false');
+    assert.strictEqual(page3.items[0].name, 'Item Number 03');
+    assert.strictEqual(page3.items[2].name, 'Item Number 01');
+
+    // Verify Cursor Stability: No duplicate IDs and no skipped IDs across all 3 pages
+    const allPageIds = [...page1.items, ...page2.items, ...page3.items].map(i => i.id);
+    assert.strictEqual(allPageIds.length, 15, 'Total retrieved items should be 15');
+    const uniqueIds = new Set(allPageIds);
+    assert.strictEqual(uniqueIds.size, 15, 'All retrieved IDs must be unique across pages (no duplicates)');
+
+    // 5. Test Listing Type Filter ('giveaway')
+    const giveawayPage = await window.db.getItemsPage('all', aliceUid, { listing_type: 'giveaway' });
+    assert.ok(giveawayPage.items.length > 0);
+    assert.ok(giveawayPage.items.every(i => i.listing_type === 'giveaway'));
+
+    // 6. Test Availability Filter (available_only: true)
+    const availablePage = await window.db.getItemsPage('all', aliceUid, { available_only: true });
+    assert.ok(availablePage.items.every(i => i.is_available !== false && i.status !== 'borrowed'));
+    assert.ok(!availablePage.items.some(i => i.name === 'Item Number 04' || i.name === 'Item Number 08'));
+
+    // 7. Test Category Filter ('garden')
+    const gardenPage = await window.db.getItemsPage('garden', aliceUid);
+    assert.strictEqual(gardenPage.items.length, 5);
+    assert.ok(gardenPage.items.every(i => i.category === 'garden' || i.categories.includes('garden')));
+
+    // 8. Test Exclude Owner Filter (exclude_owner_id: aliceUid)
+    const excludePage = await window.db.getItemsPage('all', aliceUid, { exclude_owner_id: aliceUid });
+    assert.ok(excludePage.items.every(i => i.owner_id === bobUid));
+
+    // 9. Test Query Safeguards (clamping pageSize > 50)
+    const clampedPage = await window.db.getItemsPage('all', aliceUid, { pageSize: 500 });
+    assert.ok(clampedPage.items.length <= 50, 'Page size must be clamped to MAX_PAGE_SIZE (50)');
+
+    // 10. Test Search Query Filter
+    const searchPage = await window.db.getItemsPage('all', aliceUid, { search: 'Number 07' });
+    assert.strictEqual(searchPage.items.length, 1);
+    assert.strictEqual(searchPage.items[0].name, 'Item Number 07');
+
+    // 11. Test Unified searchCatalog with Canonical Books + Items
+    const book = await window.db.createBook({
+        title: 'Kafka on the Shore',
+        authors: ['Haruki Murakami'],
+        isbn: '9781400079278',
+        publisher: 'Vintage',
+        published_year: 2005
+    });
+
+    const catalogResults = await window.db.searchCatalog({ query: 'Kafka' });
+    assert.strictEqual(catalogResults.books.length, 1);
+    assert.strictEqual(catalogResults.books[0].title, 'Kafka on the Shore');
+    assert.ok(catalogResults.books[0].copiesStatus);
+    assert.strictEqual(catalogResults.books[0].copiesStatus.badge, 'No copies yet');
+
+    // Search by ISBN in searchCatalog
+    const isbnResults = await window.db.searchCatalog({ query: '9781400079278' });
+    assert.strictEqual(isbnResults.books.length, 1);
+    assert.strictEqual(isbnResults.books[0].title, 'Kafka on the Shore');
+
+    // Search by Author in searchCatalog
+    const authorResults = await window.db.searchCatalog({ query: 'Murakami' });
+    assert.strictEqual(authorResults.books.length, 1);
+    assert.strictEqual(authorResults.books[0].title, 'Kafka on the Shore');
+
+    // 12. Test getCircleItemsPage
+    const circleId = 'test-circle-pag';
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('items').add({
+        name: 'Circle Book Copy 1',
+        owner_id: aliceUid,
+        circle_id: circleId,
+        exact_address: '123 Circle St',
+        created_at: new Date()
+    });
+    await firebase.firestore().collection('items').add({
+        name: 'Circle Book Copy 2',
+        owner_id: aliceUid,
+        circle_id: circleId,
+        exact_address: '124 Circle St',
+        created_at: new Date()
+    });
+    const circleItemsPage = await window.db.getCircleItemsPage(circleId, { pageSize: 1 });
+    assert.strictEqual(circleItemsPage.items.length, 1);
+    assert.strictEqual(circleItemsPage.hasMore, true);
+    assert.strictEqual(circleItemsPage.items[0].exact_address, undefined, 'Circle items page must sanitize exact_address');
 });
 
 // ==========================================
