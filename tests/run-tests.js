@@ -2468,6 +2468,174 @@ await test('Flow 14: Wire transaction ledger across user history, circle admin, 
     assert.deepStrictEqual(legacy2Events, [], 'Legacy request without timeline field must return empty events array');
 });
 
+await test('Flow 15: Comprehensive transaction transitions, permissions, and location privacy enforcement', async () => {
+    resetSandbox();
+    const aliceUid = 'alice-flow15';
+    const bobUid = 'bob-flow15';
+    const charlieUid = 'charlie-flow15';
+
+    // Seed profiles
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('profiles').doc(aliceUid).set({ id: aliceUid, full_name: 'Alice 15' });
+    firebase.auth().currentUser = { uid: bobUid };
+    await firebase.firestore().collection('profiles').doc(bobUid).set({ id: bobUid, full_name: 'Bob 15' });
+    firebase.auth().currentUser = { uid: charlieUid };
+    await firebase.firestore().collection('profiles').doc(charlieUid).set({ id: charlieUid, full_name: 'Charlie 15' });
+
+    // 1. Private Location Access Restrictions
+    firebase.auth().currentUser = { uid: aliceUid };
+    const item = await window.db.addItem({
+        name: 'Pro Sound Mixer',
+        kind: 'thing',
+        owner_id: aliceUid,
+        listing_type: 'borrow',
+        exact_address: '100 Studio Way, Suite 4',
+        pickup_instructions: 'Call front desk'
+    });
+
+    // Non-owner (Bob) attempting to write to private location must fail
+    firebase.auth().currentUser = { uid: bobUid };
+    await assert.rejects(
+        async () => {
+            await firebase.firestore().collection(`items/${item.id}/private`).doc('location').set({
+                exact_address: 'Malicious modification'
+            });
+        },
+        /PERMISSION_DENIED/,
+        'Non-owner must not be allowed to set private location'
+    );
+
+    // Borrower requests item
+    const req = await window.db.createBorrowRequest({
+        item_id: item.id,
+        borrower_id: bobUid
+    });
+
+    // While pending, Bob and Charlie cannot read private location
+    await assert.rejects(
+        async () => {
+            await window.db.getItemPrivateLocation(item.id);
+        },
+        /PERMISSION_DENIED/,
+        'Pending borrower cannot read private location'
+    );
+    firebase.auth().currentUser = { uid: charlieUid };
+    await assert.rejects(
+        async () => {
+            await window.db.getItemPrivateLocation(item.id);
+        },
+        /PERMISSION_DENIED/,
+        'Stranger cannot read private location'
+    );
+
+    // 2. Request Transition Permissions: Stranger & self-approval rejections
+    firebase.auth().currentUser = { uid: charlieUid };
+    await assert.rejects(
+        async () => {
+            await window.db.confirmBorrowRequest(req.id, item.id);
+        },
+        /PERMISSION_DENIED|Only the lender/,
+        'Stranger cannot approve request'
+    );
+
+    firebase.auth().currentUser = { uid: bobUid };
+    await assert.rejects(
+        async () => {
+            await window.db.confirmBorrowRequest(req.id, item.id);
+        },
+        /PERMISSION_DENIED|Only the lender/,
+        'Borrower cannot self-approve request'
+    );
+
+    // Lender (Alice) approves
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmBorrowRequest(req.id, item.id);
+
+    // Approved borrower can now read private location!
+    firebase.auth().currentUser = { uid: bobUid };
+    const loc = await window.db.getItemPrivateLocation(item.id);
+    assert.strictEqual(loc.exact_address, '100 Studio Way, Suite 4');
+
+    // 3. Lifecycle Transitions: Pickup, Shipping, Delivered, Return, Complete
+    await window.db.markPickedUp(req.id, item.id);
+
+    // Borrower cannot directly complete
+    await assert.rejects(
+        async () => {
+            await firebase.firestore().collection('requests').doc(req.id).update({
+                status: 'completed',
+                completed_at: new Date()
+            });
+        },
+        /PERMISSION_DENIED/,
+        'Borrower cannot set status to completed'
+    );
+
+    // Borrower marks returned
+    await window.db.markReturned(req.id);
+
+    // Stranger cannot complete return
+    firebase.auth().currentUser = { uid: charlieUid };
+    await assert.rejects(
+        async () => {
+            await window.db.confirmReturn(req.id);
+        },
+        /PERMISSION_DENIED|Only the lender/,
+        'Stranger cannot confirm return'
+    );
+
+    // Lender completes return
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmReturn(req.id);
+
+    const completedReq = (await firebase.firestore().collection('requests').doc(req.id).get()).data();
+    assert.strictEqual(completedReq.status, 'completed');
+
+    // 4. Transaction Events Ledger Immutability & Permissions
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('transaction_events').doc('evt-test-1').set({
+        request_id: req.id,
+        item_id: item.id,
+        actor_id: aliceUid,
+        event_type: 'custom_audit',
+        created_at: new Date().toISOString()
+    });
+
+    // Stranger cannot append event claiming to be Alice
+    firebase.auth().currentUser = { uid: charlieUid };
+    await assert.rejects(
+        async () => {
+            await firebase.firestore().collection('transaction_events').doc('evt-test-2').set({
+                request_id: req.id,
+                item_id: item.id,
+                actor_id: aliceUid,
+                event_type: 'impersonated_event'
+            });
+        },
+        /PERMISSION_DENIED/,
+        'Cannot append transaction event with mismatched actor_id'
+    );
+
+    // Updates and deletes on transaction_events must fail
+    firebase.auth().currentUser = { uid: aliceUid };
+    await assert.rejects(
+        async () => {
+            await firebase.firestore().collection('transaction_events').doc('evt-test-1').update({
+                event_type: 'tampered'
+            });
+        },
+        /PERMISSION_DENIED/,
+        'Updates on transaction_events must be denied'
+    );
+    await assert.rejects(
+        async () => {
+            await firebase.firestore().collection('transaction_events').doc('evt-test-1').delete();
+        },
+        /PERMISSION_DENIED/,
+        'Deletes on transaction_events must be denied'
+    );
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================

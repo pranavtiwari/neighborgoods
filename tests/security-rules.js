@@ -81,8 +81,9 @@ function enforceDelete(collectionName, docId, data, uid, firestore) {
         }
 
         case 'impact_events':
+        case 'transaction_events':
             // firestore.rules: allow update, delete: if false
-            DENY('impact_events are immutable (append-only ledger)');
+            DENY(`${collectionName} are immutable (append-only ledger)`);
 
         case 'profiles': {
             // firestore.rules:59 - a user may delete their own profile.
@@ -104,7 +105,8 @@ function enforceDelete(collectionName, docId, data, uid, firestore) {
 // so unrelated low-level fixtures in the suite keep working.
 const ENFORCED = new Set([
     'requests', 'items', 'circle_members', 'circle_join_requests',
-    'ratings', 'wishlists', 'reports', 'blocks', 'profiles', 'impact_events'
+    'ratings', 'wishlists', 'reports', 'blocks', 'profiles', 'impact_events',
+    'transaction_events'
 ]);
 
 function buildRulesEngine(firestore) {
@@ -358,6 +360,25 @@ function buildRulesEngine(firestore) {
                     }
                 } else {
                     DENY('impact_events are immutable (append-only ledger)');
+                }
+                return;
+            }
+
+            // ── transaction_events (immutable audit log) ────────────────────
+            case 'transaction_events': {
+                if (isCreate) {
+                    if (data.actor_id !== uid) DENY('actor_id must be the authenticated user');
+                    if (typeof data.request_id !== 'string' || !data.request_id) {
+                        DENY('request_id must be a string');
+                    }
+                    if (typeof data.item_id !== 'string' || !data.item_id) {
+                        DENY('item_id must be a string');
+                    }
+                    if (typeof data.event_type !== 'string' || !data.event_type) {
+                        DENY('event_type must be a string');
+                    }
+                } else {
+                    DENY('transaction_events are immutable (append-only ledger)');
                 }
                 return;
             }

@@ -317,6 +317,258 @@ await test('requests: deletes are denied (audit trail)', async () => {
     await assertFails(dbFor(ALICE).collection('requests').doc('req1').delete());
 });
 
+// ------------------------------------------------ items/private (location privacy)
+await test('items/private: owner may write and read private location', async () => {
+    await seed(async db => db.collection('items').doc('item1').set({
+        name: 'Tent', owner_id: ALICE, is_available: true, status: 'available'
+    }));
+    await assertSucceeds(dbFor(ALICE).collection('items').doc('item1').collection('private').doc('location').set({
+        exact_address: '123 Market St, San Francisco, CA',
+        pickup_instructions: 'Gate code 4321'
+    }));
+    await assertSucceeds(dbFor(ALICE).collection('items').doc('item1').collection('private').doc('location').get());
+});
+
+await test('items/private: non-owner cannot write private location', async () => {
+    await seed(async db => db.collection('items').doc('item1').set({
+        name: 'Tent', owner_id: ALICE, is_available: true, status: 'available'
+    }));
+    await assertFails(dbFor(BOB).collection('items').doc('item1').collection('private').doc('location').set({
+        exact_address: 'Hacked address'
+    }));
+});
+
+await test('items/private: privacy before approval, reveal upon approval, and stranger denied', async () => {
+    await seed(async db => {
+        await db.collection('items').doc('item1').set({
+            name: 'Tent', owner_id: ALICE, is_available: true, status: 'available',
+            active_request_id: 'req1'
+        });
+        await db.collection('items').doc('item1').collection('private').doc('location').set({
+            exact_address: '123 Market St',
+            pickup_instructions: 'Ring doorbell'
+        });
+        await db.collection('requests').doc('req1').set({
+            item_id: 'item1', borrower_id: BOB, lender_id: ALICE,
+            status: 'pending', created_at: new Date()
+        });
+    });
+
+    // Pending borrower is denied
+    await assertFails(dbFor(BOB).collection('items').doc('item1').collection('private').doc('location').get());
+    // Stranger is denied
+    await assertFails(dbFor(CAROL).collection('items').doc('item1').collection('private').doc('location').get());
+
+    // Once approved, borrower may read
+    await seed(async db => {
+        await db.collection('items').doc('item1').update({ status: 'approved' });
+        await db.collection('requests').doc('req1').update({ status: 'approved' });
+    });
+    await assertSucceeds(dbFor(BOB).collection('items').doc('item1').collection('private').doc('location').get());
+    // Stranger is STILL denied
+    await assertFails(dbFor(CAROL).collection('items').doc('item1').collection('private').doc('location').get());
+});
+
+await test('items/private: access permitted across active lifecycle, revoked on cancel/decline', async () => {
+    for (const status of ['borrowed', 'shipped', 'delivered', 'returned', 'completed']) {
+        await seed(async db => {
+            await db.collection('items').doc('item1').set({
+                name: 'Tent', owner_id: ALICE, is_available: false, status: status,
+                active_request_id: 'req1'
+            });
+            await db.collection('items').doc('item1').collection('private').doc('location').set({
+                exact_address: '123 Market St'
+            });
+            await db.collection('requests').doc('req1').set({
+                item_id: 'item1', borrower_id: BOB, lender_id: ALICE,
+                status: status, created_at: new Date()
+            });
+        });
+        await assertSucceeds(dbFor(BOB).collection('items').doc('item1').collection('private').doc('location').get());
+    }
+
+    // Cancelled / declined revoked
+    for (const terminalStatus of ['cancelled', 'declined']) {
+        await seed(async db => {
+            await db.collection('items').doc('item1').set({
+                name: 'Tent', owner_id: ALICE, is_available: true, status: 'available',
+                active_request_id: 'req1'
+            });
+            await db.collection('items').doc('item1').collection('private').doc('location').set({
+                exact_address: '123 Market St'
+            });
+            await db.collection('requests').doc('req1').set({
+                item_id: 'item1', borrower_id: BOB, lender_id: ALICE,
+                status: terminalStatus, created_at: new Date()
+            });
+        });
+        await assertFails(dbFor(BOB).collection('items').doc('item1').collection('private').doc('location').get());
+    }
+});
+
+await test('requests: full borrow lifecycle transitions and permissions', async () => {
+    await seed(async db => {
+        await db.collection('items').doc('item1').set({
+            name: 'Lawnmower', owner_id: ALICE, is_available: true, status: 'available'
+        });
+        await db.collection('requests').doc('req1').set({
+            item_id: 'item1', borrower_id: BOB, lender_id: ALICE,
+            status: 'pending', created_at: new Date()
+        });
+    });
+
+    // 1. Borrower cannot approve own request
+    await assertFails(dbFor(BOB).collection('requests').doc('req1').update({
+        status: 'approved', confirmed_at: new Date()
+    }));
+    // Stranger cannot approve
+    await assertFails(dbFor(CAROL).collection('requests').doc('req1').update({
+        status: 'approved', confirmed_at: new Date()
+    }));
+    // Lender approves
+    await assertSucceeds(dbFor(ALICE).collection('requests').doc('req1').update({
+        status: 'approved', confirmed_at: new Date()
+    }));
+
+    // 2. Borrower marks picked up (borrowed)
+    await assertSucceeds(dbFor(BOB).collection('requests').doc('req1').update({
+        status: 'borrowed', picked_up_at: new Date()
+    }));
+
+    // 3. Borrower marks returned
+    await assertSucceeds(dbFor(BOB).collection('requests').doc('req1').update({
+        status: 'returned', returned_at: new Date()
+    }));
+
+    // 4. Borrower cannot self-complete
+    await assertFails(dbFor(BOB).collection('requests').doc('req1').update({
+        status: 'completed', completed_at: new Date()
+    }));
+    // Stranger cannot complete
+    await assertFails(dbFor(CAROL).collection('requests').doc('req1').update({
+        status: 'completed', completed_at: new Date()
+    }));
+    // Lender completes
+    await assertSucceeds(dbFor(ALICE).collection('requests').doc('req1').update({
+        status: 'completed', completed_at: new Date()
+    }));
+});
+
+await test('requests: shipping fulfillment transitions (shipped -> delivered -> returned -> completed)', async () => {
+    await seed(async db => {
+        await db.collection('items').doc('item1').set({
+            name: 'Camera', owner_id: ALICE, is_available: false, status: 'approved',
+            active_request_id: 'req1'
+        });
+        await db.collection('requests').doc('req1').set({
+            item_id: 'item1', borrower_id: BOB, lender_id: ALICE,
+            status: 'approved', fulfillment_method: 'shipping', created_at: new Date()
+        });
+    });
+
+    // Lender ships with carrier & tracking
+    await assertSucceeds(dbFor(ALICE).collection('requests').doc('req1').update({
+        status: 'shipped', shipped_at: new Date(), carrier: 'UPS', tracking_number: '1Z9999999999999999'
+    }));
+
+    // Stranger cannot deliver
+    await assertFails(dbFor(CAROL).collection('requests').doc('req1').update({
+        status: 'delivered', delivered_at: new Date()
+    }));
+
+    // Borrower marks delivered
+    await assertSucceeds(dbFor(BOB).collection('requests').doc('req1').update({
+        status: 'delivered', delivered_at: new Date()
+    }));
+
+    // Borrower marks returned from delivered
+    await assertSucceeds(dbFor(BOB).collection('requests').doc('req1').update({
+        status: 'returned', returned_at: new Date()
+    }));
+
+    // Lender confirms completion
+    await assertSucceeds(dbFor(ALICE).collection('requests').doc('req1').update({
+        status: 'completed', completed_at: new Date()
+    }));
+});
+
+await test('requests: giveaway direct completion from approved', async () => {
+    await seed(async db => {
+        await db.collection('items').doc('item1').set({
+            name: 'Desk', owner_id: ALICE, is_available: false, status: 'approved',
+            listing_type: 'giveaway', active_request_id: 'req1'
+        });
+        await db.collection('requests').doc('req1').set({
+            item_id: 'item1', borrower_id: BOB, lender_id: ALICE,
+            status: 'approved', listing_type: 'giveaway', created_at: new Date()
+        });
+    });
+
+    // Lender completes giveaway directly from approved
+    await assertSucceeds(dbFor(ALICE).collection('requests').doc('req1').update({
+        status: 'completed', completed_at: new Date()
+    }));
+});
+
+await test('requests: two-sided swap dual confirmation and permissions', async () => {
+    await seed(async db => {
+        await db.collection('items').doc('item1').set({
+            name: 'Guitar', owner_id: ALICE, is_available: false, status: 'approved',
+            listing_type: 'swap', active_request_id: 'req1'
+        });
+        await db.collection('items').doc('item2').set({
+            name: 'Keyboard', owner_id: BOB, is_available: false, status: 'approved',
+            listing_type: 'swap', active_request_id: 'req1'
+        });
+        await db.collection('requests').doc('req1').set({
+            item_id: 'item1', offered_item_id: 'item2', borrower_id: BOB, lender_id: ALICE,
+            type: 'swap', status: 'approved', created_at: new Date()
+        });
+    });
+
+    // Stranger cannot confirm
+    await assertFails(dbFor(CAROL).collection('requests').doc('req1').update({
+        borrower_confirmed_at: new Date()
+    }));
+
+    // Borrower confirms
+    await assertSucceeds(dbFor(BOB).collection('requests').doc('req1').update({
+        borrower_confirmed_at: new Date()
+    }));
+
+    // Lender confirms & completes
+    await assertSucceeds(dbFor(ALICE).collection('requests').doc('req1').update({
+        lender_confirmed_at: new Date(),
+        status: 'completed',
+        completed_at: new Date()
+    }));
+});
+
+// ---------------------------------------------------- transaction_events
+await test('transaction_events: participant may append event', async () => {
+    await assertSucceeds(dbFor(ALICE).collection('transaction_events').doc('evt1').set({
+        request_id: 'req1', item_id: 'item1', actor_id: ALICE, event_type: 'approved',
+        created_at: new Date()
+    }));
+});
+
+await test('transaction_events: stranger may not append with someone elses actor_id', async () => {
+    await assertFails(dbFor(CAROL).collection('transaction_events').doc('evt2').set({
+        request_id: 'req1', item_id: 'item1', actor_id: ALICE, event_type: 'approved',
+        created_at: new Date()
+    }));
+});
+
+await test('transaction_events: ledger is immutable (no update or delete)', async () => {
+    await seed(async db => db.collection('transaction_events').doc('evt1').set({
+        request_id: 'req1', item_id: 'item1', actor_id: ALICE, event_type: 'approved', created_at: new Date()
+    }));
+    await assertFails(dbFor(ALICE).collection('transaction_events').doc('evt1').update({
+        event_type: 'tampered'
+    }));
+    await assertFails(dbFor(ALICE).collection('transaction_events').doc('evt1').delete());
+});
+
 // ----------------------------------------------------------- impact_events
 await test('impact_events: actor may append their own credit', async () => {
     await assertSucceeds(dbFor(ALICE).collection('impact_events').doc('e1').set({

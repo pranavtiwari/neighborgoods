@@ -393,6 +393,25 @@ class MockFirestore {
         const effective = (merge && existing)
             ? { ...existing, ...resolvedData }
             : resolvedData;
+        if (this.rulesEngine && collectionName.includes('/private')) {
+            const parts = collectionName.split('/');
+            if (parts[0] === 'items' && parts[2] === 'private') {
+                const itemId = parts[1];
+                const auth = this._auth ? this._auth.currentUser : null;
+                const uid = auth ? auth.uid : null;
+                if (!uid) {
+                    const err = new Error('PERMISSION_DENIED: not signed in');
+                    err.code = 'permission-denied';
+                    throw err;
+                }
+                const itemData = this._getData('items', itemId);
+                if (!itemData || itemData.owner_id !== uid) {
+                    const err = new Error('PERMISSION_DENIED: only the item owner may set private details');
+                    err.code = 'permission-denied';
+                    throw err;
+                }
+            }
+        }
         this._assertRulesAllowed(collectionName, id, effective, isCreate);
 
         if (merge && this.db[collectionName][id]) {
