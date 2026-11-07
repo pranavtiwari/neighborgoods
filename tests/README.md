@@ -42,6 +42,13 @@ It loads and runs the actual `site/public/firebase-client.js` script inside a mo
    - Managing read/unread status (`markMessagesAsRead` and `getUnreadCount`)
    - Real-time messaging subscription simulations via `subscribeToChatMessages`
 
+6. **Phase 2: Ledger and Swaps (Flows 11-15)**
+   - **Flow 11 (Issue #13)**: Extended transaction model, swaps, fulfillment terms (`pickup`, `shipping`, `both`), append-only audit event log, and history queries.
+   - **Flow 12 (Issue #14)**: Two-sided swap workflow, item locking on proposal, decline/cancel item release, dual-confirmation exchange with bilateral impact events (+2 kg each).
+   - **Flow 13 (Issue #15)**: Shipping fulfillment lifecycle (`shipped` -> `delivered` -> `returned` -> `completed`), carrier and tracking numbers, and transactional address reveal upon approval.
+   - **Flow 14 (Issue #16)**: Transaction ledger integration across activity timeline, chat transaction bar, user profile transaction history, circle admin ledger, and defensive legacy record handling.
+   - **Flow 15 (Issue #17)**: Comprehensive transaction transitions, permission rules, stranger rejections, and location privacy enforcement.
+
 ## How to Run
 
 Run the tests directly via NPM:
