@@ -9,6 +9,36 @@ class MockDocRef {
 
     async get() {
         await this.firestore._checkErrorAndDelay();
+        if (this.firestore.rulesEngine && this.collectionName.includes('/private')) {
+            const parts = this.collectionName.split('/');
+            // Collection path: items/{itemId}/private
+            if (parts[0] === 'items' && parts[2] === 'private') {
+                const itemId = parts[1];
+                const auth = this.firestore._auth ? this.firestore._auth.currentUser : null;
+                const uid = auth ? auth.uid : null;
+                if (!uid) {
+                    const err = new Error('PERMISSION_DENIED: not signed in');
+                    err.code = 'permission-denied';
+                    throw err;
+                }
+                const itemData = this.firestore._getData('items', itemId);
+                const isOwner = itemData && itemData.owner_id === uid;
+                let isAllowed = isOwner;
+                if (!isAllowed && itemData && itemData.active_request_id) {
+                    const req = this.firestore._getData('requests', itemData.active_request_id);
+                    if (req) {
+                        const isPart = req.borrower_id === uid || req.lender_id === uid || (Array.isArray(req.participant_ids) && req.participant_ids.includes(uid));
+                        const okStatus = ['approved', 'borrowed', 'shipped', 'delivered', 'returned', 'completed'].includes(req.status);
+                        if (isPart && okStatus) isAllowed = true;
+                    }
+                }
+                if (!isAllowed) {
+                    const err = new Error('PERMISSION_DENIED: location details are only accessible to the owner or approved transaction participants');
+                    err.code = 'permission-denied';
+                    throw err;
+                }
+            }
+        }
         const data = this.firestore._getData(this.collectionName, this.id);
         return {
             exists: !!data,

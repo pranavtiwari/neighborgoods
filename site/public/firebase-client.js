@@ -1211,6 +1211,10 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 }
                 return null;
             } catch (err) {
+                if (err && err.code === 'permission-denied') {
+                    throw err;
+                }
+                console.warn("Could not retrieve private location:", err);
                 return null;
             }
         },
@@ -2420,6 +2424,189 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
+        markShipped: async function(requestId, shippingInfo = {}) {
+            try {
+                const db = firebase.firestore();
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error("Authentication required.");
+                const requestRef = db.collection('requests').doc(requestId);
+
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+
+                    if (requestData.status !== 'approved') {
+                        throw new Error(`Request must be approved before shipping (current status: ${requestData.status}).`);
+                    }
+
+                    const isLender = requestData.lender_id === user.uid;
+                    const isBorrower = requestData.borrower_id === user.uid;
+                    if (!isLender && !isBorrower) {
+                        throw new Error("Only transaction participants can mark as shipped.");
+                    }
+
+                    const eventRef = db.collection('transaction_events').doc();
+                    const now = new Date();
+                    const existingTimeline = Array.isArray(requestData.timeline) ? requestData.timeline : [];
+                    const newTimeline = [...existingTimeline, {
+                        status: 'shipped',
+                        actor_id: user.uid,
+                        event_type: 'shipped',
+                        event_id: eventRef.id,
+                        created_at: now
+                    }];
+
+                    const reqUpdates = {
+                        status: 'shipped',
+                        shipped_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        timeline: newTimeline,
+                        last_event_id: eventRef.id,
+                        last_event_type: 'shipped',
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+
+                    if (shippingInfo.tracking_number) {
+                        reqUpdates.tracking_number = String(shippingInfo.tracking_number).trim();
+                    }
+                    if (shippingInfo.carrier) {
+                        reqUpdates.carrier = String(shippingInfo.carrier).trim();
+                    }
+
+                    if (requestData.item_id) {
+                        const itemRef = db.collection('items').doc(requestData.item_id);
+                        transaction.update(itemRef, {
+                            status: 'shipped',
+                            is_available: false
+                        });
+                    }
+
+                    if (requestData.offered_item_id) {
+                        const offeredRef = db.collection('items').doc(requestData.offered_item_id);
+                        transaction.update(offeredRef, {
+                            status: 'shipped',
+                            is_available: false
+                        });
+                    }
+
+                    transaction.update(requestRef, reqUpdates);
+
+                    const participantIds = requestData.participant_ids || [requestData.borrower_id, requestData.lender_id];
+                    transaction.set(eventRef, {
+                        request_id: requestId,
+                        transaction_type: requestData.type || 'borrow',
+                        item_id: requestData.item_id,
+                        book_id: requestData.book_id || null,
+                        offered_item_id: requestData.offered_item_id || null,
+                        offered_book_id: requestData.offered_book_id || null,
+                        circle_id: requestData.circle_id || null,
+                        circle_ids: requestData.circle_ids || [],
+                        actor_id: user.uid,
+                        borrower_id: requestData.borrower_id,
+                        lender_id: requestData.lender_id,
+                        participant_ids: participantIds,
+                        event_type: 'shipped',
+                        from_status: 'approved',
+                        to_status: 'shipped',
+                        fulfillment_method: requestData.fulfillment_method || 'shipping',
+                        metadata: {
+                            carrier: reqUpdates.carrier || null,
+                            tracking_number: reqUpdates.tracking_number || null
+                        },
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                });
+            } catch (err) {
+                console.error("Error marking as shipped:", err);
+                throw err;
+            }
+        },
+
+        markDelivered: async function(requestId) {
+            try {
+                const db = firebase.firestore();
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error("Authentication required.");
+                const requestRef = db.collection('requests').doc(requestId);
+
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+
+                    if (requestData.status !== 'shipped') {
+                        throw new Error(`Item must be shipped before delivery (current status: ${requestData.status}).`);
+                    }
+
+                    const isLender = requestData.lender_id === user.uid;
+                    const isBorrower = requestData.borrower_id === user.uid;
+                    if (!isLender && !isBorrower) {
+                        throw new Error("Only transaction participants can mark as delivered.");
+                    }
+
+                    const eventRef = db.collection('transaction_events').doc();
+                    const now = new Date();
+                    const existingTimeline = Array.isArray(requestData.timeline) ? requestData.timeline : [];
+                    const newTimeline = [...existingTimeline, {
+                        status: 'delivered',
+                        actor_id: user.uid,
+                        event_type: 'delivered',
+                        event_id: eventRef.id,
+                        created_at: now
+                    }];
+
+                    if (requestData.item_id) {
+                        const itemRef = db.collection('items').doc(requestData.item_id);
+                        transaction.update(itemRef, {
+                            status: 'delivered',
+                            is_available: false
+                        });
+                    }
+
+                    if (requestData.offered_item_id) {
+                        const offeredRef = db.collection('items').doc(requestData.offered_item_id);
+                        transaction.update(offeredRef, {
+                            status: 'delivered',
+                            is_available: false
+                        });
+                    }
+
+                    transaction.update(requestRef, {
+                        status: 'delivered',
+                        delivered_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        timeline: newTimeline,
+                        last_event_id: eventRef.id,
+                        last_event_type: 'delivered',
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    const participantIds = requestData.participant_ids || [requestData.borrower_id, requestData.lender_id];
+                    transaction.set(eventRef, {
+                        request_id: requestId,
+                        transaction_type: requestData.type || 'borrow',
+                        item_id: requestData.item_id,
+                        book_id: requestData.book_id || null,
+                        offered_item_id: requestData.offered_item_id || null,
+                        offered_book_id: requestData.offered_book_id || null,
+                        circle_id: requestData.circle_id || null,
+                        circle_ids: requestData.circle_ids || [],
+                        actor_id: user.uid,
+                        borrower_id: requestData.borrower_id,
+                        lender_id: requestData.lender_id,
+                        participant_ids: participantIds,
+                        event_type: 'delivered',
+                        from_status: 'shipped',
+                        to_status: 'delivered',
+                        fulfillment_method: requestData.fulfillment_method || 'shipping',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                });
+            } catch (err) {
+                console.error("Error marking as delivered:", err);
+                throw err;
+            }
+        },
+
         markReturned: async function(requestId) {
             try {
                 const db = firebase.firestore();
@@ -2429,8 +2616,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     const requestDoc = await transaction.get(requestRef);
                     if (!requestDoc.exists) throw new Error("Request not found");
                     const requestData = requestDoc.data();
-                    if (requestData.status !== 'borrowed') {
-                        throw new Error("Only borrowed items can be marked as returned.");
+                    if (requestData.status !== 'borrowed' && requestData.status !== 'delivered') {
+                        throw new Error("Only borrowed or delivered items can be marked as returned.");
                     }
 
                     const itemRef = db.collection('items').doc(requestData.item_id);

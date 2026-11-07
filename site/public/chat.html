@@ -120,6 +120,9 @@
                     <!-- Action buttons injected dynamically -->
                 </div>
             </div>
+            <!-- Transactional Address Reveal & Fulfillment Info -->
+            <div id="transaction-location-reveal" class="hidden text-xs bg-surface-container p-2.5 rounded-lg border border-outline-variant/10 flex flex-col gap-1">
+            </div>
         </div>
     </div>
 
@@ -513,11 +516,21 @@
                 // Define step sequences
                 let steps = [];
                 const isSwap = (listingType === 'swap') || (activeRequest.type === 'swap');
+                const isShipping = activeRequest.fulfillment_method === 'shipping';
                 if (isSwap) {
                     steps = [
                         { label: 'Proposed', statusKey: 'pending' },
                         { label: 'Accepted', statusKey: 'approved' },
                         { label: 'Exchanged', statusKey: 'completed' }
+                    ];
+                } else if (isShipping) {
+                    steps = [
+                        { label: 'Requested', statusKey: 'pending' },
+                        { label: 'Approved', statusKey: 'approved' },
+                        { label: 'Shipped', statusKey: 'shipped' },
+                        { label: 'Delivered', statusKey: 'delivered' },
+                        ...(listingType === 'giveaway' ? [] : [{ label: 'Returned', statusKey: 'returned' }]),
+                        { label: 'Completed', statusKey: 'completed' }
                     ];
                 } else if (listingType === 'giveaway') {
                     steps = [
@@ -537,7 +550,6 @@
 
                 let currentStepIndex = steps.findIndex(s => s.statusKey === activeRequest.status);
                 if (currentStepIndex === -1 && activeRequest.status === 'declined') {
-                    // Handle declined status gracefully
                     currentStepIndex = -1;
                 }
 
@@ -551,6 +563,36 @@
                             <span>Transaction Cancelled or Declined</span>
                         </div>
                     `;
+                }
+
+                // Render transactional location & address reveal
+                const locReveal = document.getElementById('transaction-location-reveal');
+                if (locReveal) {
+                    const isApprovedPhase = ['approved', 'borrowed', 'shipped', 'delivered', 'returned', 'completed'].includes(activeRequest.status);
+                    if (isApprovedPhase) {
+                        try {
+                            const locData = await window.db.getItemPrivateLocation(contextItemId);
+                            let locHtml = `<div class="flex items-center gap-1 text-primary font-bold"><span class="material-symbols-outlined text-[15px]">location_on</span><span>Transactional Location Reveal</span></div>`;
+                            if (locData && locData.exact_address) {
+                                locHtml += `<div class="text-on-surface"><strong>Address:</strong> ${escapeHtml(locData.exact_address)}</div>`;
+                            }
+                            if (locData && locData.pickup_instructions) {
+                                locHtml += `<div class="text-on-surface-variant"><strong>Pickup Instructions:</strong> ${escapeHtml(locData.pickup_instructions)}</div>`;
+                            }
+                            if (activeRequest.tracking_number) {
+                                locHtml += `<div class="text-on-surface flex items-center gap-1"><span class="material-symbols-outlined text-[13px] text-primary">local_shipping</span><span><strong>Tracking:</strong> ${escapeHtml(activeRequest.carrier || '')} ${escapeHtml(activeRequest.tracking_number)}</span></div>`;
+                            }
+                            locReveal.innerHTML = locHtml;
+                            locReveal.classList.remove('hidden');
+                        } catch (locErr) {
+                            locReveal.classList.add('hidden');
+                        }
+                    } else if (activeRequest.status === 'pending') {
+                        locReveal.innerHTML = `<div class="flex items-center gap-1.5 text-on-surface-variant"><span class="material-symbols-outlined text-[15px]">lock</span><span>Exact address and pickup instructions are revealed once the request is approved.</span></div>`;
+                        locReveal.classList.remove('hidden');
+                    } else {
+                        locReveal.classList.add('hidden');
+                    }
                 }
                 
                 if (activeRequest.status === 'pending') {
@@ -609,6 +651,19 @@
                                 <button onclick="cancelCurrentRequest()" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Cancel Swap</button>
                             `;
                         }
+                    } else if (isShipping) {
+                        statusText.textContent = 'Request Approved (Shipping)';
+                        if (isLender) {
+                            helperText.textContent = 'Ready to ship. Click Mark Shipped when dispatched.';
+                            actionsDiv.innerHTML = `
+                                <button onclick="markShipped()" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">local_shipping</span> Mark Shipped
+                                </button>
+                                <button onclick="performUndo('pending')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Undo Approval</button>
+                            `;
+                        } else {
+                            helperText.textContent = 'Approved. Waiting for lender to ship the package.';
+                        }
                     } else if (listingType === 'giveaway') {
                         statusText.textContent = 'Request Approved';
                         if (isLender) {
@@ -632,6 +687,39 @@
                             actionsDiv.innerHTML = `
                                 <button onclick="performUndo('pending')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Undo Approval</button>
                             `;
+                        }
+                    }
+                } else if (activeRequest.status === 'shipped') {
+                    statusText.textContent = 'Item Shipped (In Transit)';
+                    if (isBorrower) {
+                        helperText.textContent = 'Item has been shipped! Confirm when delivered.';
+                        actionsDiv.innerHTML = `
+                            <button onclick="markDelivered()" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[14px]">inventory_2</span> Mark Delivered
+                            </button>
+                        `;
+                    } else {
+                        helperText.textContent = 'Package is currently in transit to recipient.';
+                        actionsDiv.innerHTML = `
+                            <button onclick="performUndo('approved')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Undo Shipping</button>
+                        `;
+                    }
+                } else if (activeRequest.status === 'delivered') {
+                    statusText.textContent = 'Item Delivered (In Possession)';
+                    if (isBorrower) {
+                        helperText.textContent = 'You have received the item. Return when done.';
+                        actionsDiv.innerHTML = `
+                            <button onclick="updateRequestStatus('returned')" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all">Mark Returned</button>
+                            <button onclick="performUndo('shipped')" class="bg-stone-200 text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-stone-300 active:scale-95 transition-all">Undo Delivery</button>
+                        `;
+                    } else {
+                        if (listingType === 'giveaway') {
+                            helperText.textContent = 'Package delivered! Finalize giveaway.';
+                            actionsDiv.innerHTML = `
+                                <button onclick="updateRequestStatus('completed')" class="bg-primary text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:opacity-90 active:scale-95 transition-all">Confirm Completed</button>
+                            `;
+                        } else {
+                            helperText.textContent = 'Package has been delivered to borrower.';
                         }
                     }
                 } else if (activeRequest.status === 'borrowed') {
@@ -682,6 +770,31 @@
                 console.error("Error loading transaction status:", err);
             }
         }
+
+        window.markShipped = async function() {
+            if (!activeRequest) return;
+            const carrier = prompt("Enter shipping carrier (e.g., USPS, UPS, FedEx):", "USPS") || "USPS";
+            const tracking = prompt("Enter tracking number (optional):", "") || "";
+            try {
+                await window.db.markShipped(activeRequest.id, { carrier, tracking_number: tracking });
+                await window.db.sendMessage(currentUser.uid, targetUserId, contextItemId, `📦 *Package Shipped!* Carrier: ${carrier}${tracking ? ', Tracking: ' + tracking : ''}`);
+                await loadTransactionStatus();
+            } catch (e) {
+                alert('Failed to mark shipped: ' + e.message);
+            }
+        };
+
+        window.markDelivered = async function() {
+            if (!activeRequest) return;
+            if (!confirm("Confirm package has been delivered and received?")) return;
+            try {
+                await window.db.markDelivered(activeRequest.id);
+                await window.db.sendMessage(currentUser.uid, targetUserId, contextItemId, `📬 *Package Delivered & Received!*`);
+                await loadTransactionStatus();
+            } catch (e) {
+                alert('Failed to mark delivered: ' + e.message);
+            }
+        };
 
         async function updateRequestStatus(newStatus) {
             if (!activeRequest) return;

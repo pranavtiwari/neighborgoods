@@ -292,5 +292,87 @@ const STRANGER = 'charlie-stranger';
     assert.strictEqual(finalConfirm.offeredItemUpdates.active_request_id, null);
 }
 
+// 6. Shipping Fulfillment Lifecycle & Undos (Issue #15)
+{
+    const reqShip = {
+        id: 'req_ship_1',
+        lender_id: ALICE,
+        borrower_id: BOB,
+        status: REQUEST_STATUSES.APPROVED,
+        type: TRANSACTION_TYPES.BORROW,
+        fulfillment_method: 'shipping'
+    };
+    const shipItem = { id: 'item_ship', owner_id: ALICE, is_available: false, status: 'approved' };
+
+    // Stranger cannot ship
+    assert.throws(() => validateTransition({
+        action: ACTIONS.SHIP,
+        requestData: reqShip,
+        itemData: shipItem,
+        actorId: STRANGER
+    }), /Only transaction participants/);
+
+    // Cannot ship if pending
+    assert.throws(() => validateTransition({
+        action: ACTIONS.SHIP,
+        requestData: { ...reqShip, status: REQUEST_STATUSES.PENDING },
+        itemData: shipItem,
+        actorId: ALICE
+    }), /Item must be approved before shipping/);
+
+    // Lender ships item
+    const shipRes = validateTransition({
+        action: ACTIONS.SHIP,
+        requestData: reqShip,
+        itemData: shipItem,
+        actorId: ALICE
+    });
+    assert.strictEqual(shipRes.nextStatus, REQUEST_STATUSES.SHIPPED);
+    assert.strictEqual(shipRes.eventType, 'shipped');
+    assert.strictEqual(shipRes.itemUpdates.status, 'shipped');
+    assert.ok(shipRes.requestUpdates.shipped_at);
+
+    // Borrower marks delivered
+    reqShip.status = REQUEST_STATUSES.SHIPPED;
+    const deliverRes = validateTransition({
+        action: ACTIONS.DELIVER,
+        requestData: reqShip,
+        itemData: shipItem,
+        actorId: BOB
+    });
+    assert.strictEqual(deliverRes.nextStatus, REQUEST_STATUSES.DELIVERED);
+    assert.strictEqual(deliverRes.eventType, 'delivered');
+    assert.strictEqual(deliverRes.itemUpdates.status, 'delivered');
+    assert.ok(deliverRes.requestUpdates.delivered_at);
+
+    // Return from delivered status
+    reqShip.status = REQUEST_STATUSES.DELIVERED;
+    const returnFromDelivered = validateTransition({
+        action: ACTIONS.RETURN,
+        requestData: reqShip,
+        itemData: shipItem,
+        actorId: BOB
+    });
+    assert.strictEqual(returnFromDelivered.nextStatus, REQUEST_STATUSES.RETURNED);
+
+    // Undo delivered -> shipped
+    const undoDelivered = validateTransition({
+        action: ACTIONS.UNDO,
+        requestData: reqShip,
+        actorId: BOB
+    });
+    assert.strictEqual(undoDelivered.nextStatus, REQUEST_STATUSES.SHIPPED);
+
+    // Undo shipped -> approved
+    reqShip.status = REQUEST_STATUSES.SHIPPED;
+    const undoShipped = validateTransition({
+        action: ACTIONS.UNDO,
+        requestData: reqShip,
+        actorId: ALICE
+    });
+    assert.strictEqual(undoShipped.nextStatus, REQUEST_STATUSES.APPROVED);
+}
+
 console.log('[PASS] State machine validation passed all tests.');
+
 

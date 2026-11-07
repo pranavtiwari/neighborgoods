@@ -317,13 +317,37 @@ export function validateTransition({
                 requestUpdates: { status: REQUEST_STATUSES.BORROWED, picked_up_at: new Date() }
             };
 
+        case ACTIONS.SHIP:
+            if (!isLender && !isBorrower) throw new Error('Only transaction participants can mark shipping.');
+            if (currentStatus !== REQUEST_STATUSES.APPROVED) {
+                throw new Error(`Item must be approved before shipping (current: '${currentStatus}').`);
+            }
+            return {
+                nextStatus: REQUEST_STATUSES.SHIPPED,
+                eventType: 'shipped',
+                itemUpdates: { status: 'shipped', is_available: false },
+                requestUpdates: { status: REQUEST_STATUSES.SHIPPED, shipped_at: new Date() }
+            };
+
+        case ACTIONS.DELIVER:
+            if (!isBorrower && !isLender) throw new Error('Only transaction participants can mark delivery.');
+            if (currentStatus !== REQUEST_STATUSES.SHIPPED) {
+                throw new Error(`Item must be shipped before delivery (current: '${currentStatus}').`);
+            }
+            return {
+                nextStatus: REQUEST_STATUSES.DELIVERED,
+                eventType: 'delivered',
+                itemUpdates: { status: 'delivered', is_available: false },
+                requestUpdates: { status: REQUEST_STATUSES.DELIVERED, delivered_at: new Date() }
+            };
+
         case ACTIONS.RETURN:
             if (!isBorrower) throw new Error('Only the borrower can mark an item as returned.');
             if (type === TRANSACTION_TYPES.GIVEAWAY) {
                 throw new Error('Giveaway items are permanent transfers and cannot be marked returned.');
             }
-            if (currentStatus !== REQUEST_STATUSES.BORROWED) {
-                throw new Error(`Only borrowed items can be marked returned (current: '${currentStatus}').`);
+            if (currentStatus !== REQUEST_STATUSES.BORROWED && currentStatus !== REQUEST_STATUSES.DELIVERED) {
+                throw new Error(`Only borrowed or delivered items can be marked returned (current: '${currentStatus}').`);
             }
             return {
                 nextStatus: REQUEST_STATUSES.RETURNED,
@@ -336,8 +360,8 @@ export function validateTransition({
         case ACTIONS.COMPLETE_GIVEAWAY:
             if (!isLender) throw new Error('Only the lender can confirm completion.');
             if (type === TRANSACTION_TYPES.GIVEAWAY) {
-                if (currentStatus !== REQUEST_STATUSES.APPROVED && currentStatus !== REQUEST_STATUSES.BORROWED) {
-                    throw new Error(`Giveaway must be approved before completion (current: '${currentStatus}').`);
+                if (currentStatus !== REQUEST_STATUSES.APPROVED && currentStatus !== REQUEST_STATUSES.BORROWED && currentStatus !== REQUEST_STATUSES.DELIVERED && currentStatus !== REQUEST_STATUSES.SHIPPED) {
+                    throw new Error(`Giveaway must be approved, borrowed, or delivered before completion (current: '${currentStatus}').`);
                 }
                 return {
                     nextStatus: REQUEST_STATUSES.COMPLETED,
@@ -377,6 +401,22 @@ export function validateTransition({
                     eventType: 'reversal_undo_returned',
                     itemUpdates: { status: 'borrowed' },
                     requestUpdates: { status: REQUEST_STATUSES.BORROWED, returned_at: null }
+                };
+            } else if (currentStatus === REQUEST_STATUSES.DELIVERED) {
+                if (!isBorrower && !isLender) throw new Error('Only participants can undo delivery.');
+                return {
+                    nextStatus: REQUEST_STATUSES.SHIPPED,
+                    eventType: 'reversal_undo_delivered',
+                    itemUpdates: { status: 'shipped' },
+                    requestUpdates: { status: REQUEST_STATUSES.SHIPPED, delivered_at: null }
+                };
+            } else if (currentStatus === REQUEST_STATUSES.SHIPPED) {
+                if (!isBorrower && !isLender) throw new Error('Only participants can undo shipping.');
+                return {
+                    nextStatus: REQUEST_STATUSES.APPROVED,
+                    eventType: 'reversal_undo_shipped',
+                    itemUpdates: { status: 'approved' },
+                    requestUpdates: { status: REQUEST_STATUSES.APPROVED, shipped_at: null }
                 };
             } else if (currentStatus === REQUEST_STATUSES.BORROWED) {
                 if (!isBorrower && !isLender) throw new Error('Only participants can undo pickup.');

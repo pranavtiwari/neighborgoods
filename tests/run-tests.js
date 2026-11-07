@@ -2124,6 +2124,170 @@ await test('Flow 12: Two-Sided Swap Workflow, Dual Confirmations, Item Locking, 
     assert.ok(eventTypes.includes('swap_completed'));
 });
 
+await test('Flow 13: Shipping Fulfillment Lifecycle, Tracking, and Transactional Address Reveal (Issue #15)', async () => {
+    resetSandbox();
+    const aliceUid = 'alice-ship-uid';
+    const bobUid = 'bob-ship-uid';
+    const charlieUid = 'charlie-stranger-uid';
+    const circleId = 'circle_shipping_15';
+
+    // Seed profiles
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('profiles').doc(aliceUid).set({
+        id: aliceUid,
+        full_name: 'Alice Shipper',
+        location: 'Noe Valley, SF'
+    });
+    firebase.auth().currentUser = { uid: bobUid };
+    await firebase.firestore().collection('profiles').doc(bobUid).set({
+        id: bobUid,
+        full_name: 'Bob Recipient',
+        location: 'Oakland, CA'
+    });
+    firebase.auth().currentUser = { uid: charlieUid };
+    await firebase.firestore().collection('profiles').doc(charlieUid).set({
+        id: charlieUid,
+        full_name: 'Charlie Stranger',
+        location: 'Berkeley, CA'
+    });
+
+    // Alice adds an item with private exact address and pickup instructions
+    firebase.auth().currentUser = { uid: aliceUid };
+    const aliceItem = await window.db.addItem({
+        name: 'Vintage Film Camera',
+        description: '35mm manual rangefinder camera in working condition',
+        category: 'electronics',
+        listing_type: 'borrow',
+        exact_address: '742 Evergreen Terrace, San Francisco, CA 94114',
+        pickup_instructions: 'Ring apartment 4B or leave note with doorman',
+        circle_id: circleId
+    });
+
+    // Verify item created and exact_address stripped from public catalog record
+    const publicItem = (await firebase.firestore().collection('items').doc(aliceItem.id).get()).data();
+    assert.strictEqual(publicItem.exact_address, undefined, 'Public item record must never contain exact_address');
+    assert.ok(publicItem.display_area || publicItem.location_area, 'Display area should be present');
+
+    // 1. Privacy Enforcement BEFORE transaction approval:
+    // Owner can access location
+    firebase.auth().currentUser = { uid: aliceUid };
+    const ownerLoc = await window.db.getItemPrivateLocation(aliceItem.id);
+    assert.ok(ownerLoc);
+    assert.strictEqual(ownerLoc.exact_address, '742 Evergreen Terrace, San Francisco, CA 94114');
+    assert.strictEqual(ownerLoc.pickup_instructions, 'Ring apartment 4B or leave note with doorman');
+
+    // Stranger (Charlie) is denied
+    firebase.auth().currentUser = { uid: charlieUid };
+    await assert.rejects(
+        async () => {
+            await window.db.getItemPrivateLocation(aliceItem.id);
+        },
+        /PERMISSION_DENIED/,
+        'Unrelated user must receive PERMISSION_DENIED for private location'
+    );
+
+    // Bob creates borrow request with shipping fulfillment
+    firebase.auth().currentUser = { uid: bobUid };
+    const req = await window.db.createBorrowRequest({
+        item_id: aliceItem.id,
+        borrower_id: bobUid,
+        fulfillment_method: 'shipping',
+        shipping_payer: 'requester',
+        shipping_notes: 'Please ship via USPS Priority Mail'
+    });
+    const reqDoc = (await firebase.firestore().collection('requests').doc(req.id).get()).data();
+    assert.strictEqual(reqDoc.fulfillment_method, 'shipping');
+    assert.strictEqual(reqDoc.status, 'pending');
+
+    // While request is PENDING, Bob must STILL be denied private location
+    await assert.rejects(
+        async () => {
+            await window.db.getItemPrivateLocation(aliceItem.id);
+        },
+        /PERMISSION_DENIED/,
+        'Pending borrower must receive PERMISSION_DENIED prior to approval'
+    );
+
+    // 2. Transactional Address Reveal upon Approval:
+    // Alice approves request
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmBorrowRequest(req.id, aliceItem.id);
+
+    // Bob can now access private location!
+    firebase.auth().currentUser = { uid: bobUid };
+    const revealedLoc = await window.db.getItemPrivateLocation(aliceItem.id);
+    assert.ok(revealedLoc, 'Approved borrower must receive revealed private location');
+    assert.strictEqual(revealedLoc.exact_address, '742 Evergreen Terrace, San Francisco, CA 94114');
+    assert.strictEqual(revealedLoc.pickup_instructions, 'Ring apartment 4B or leave note with doorman');
+
+    // Charlie (stranger) is still denied!
+    firebase.auth().currentUser = { uid: charlieUid };
+    await assert.rejects(
+        async () => {
+            await window.db.getItemPrivateLocation(aliceItem.id);
+        },
+        /PERMISSION_DENIED/,
+        'Stranger must still be denied private location after other user approved'
+    );
+
+    // 3. Shipping Fulfillment Transitions:
+    // Alice marks shipped with carrier and tracking number
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.markShipped(req.id, {
+        carrier: 'USPS',
+        tracking_number: '9400111899223192019'
+    });
+
+    const shippedReq = (await firebase.firestore().collection('requests').doc(req.id).get()).data();
+    assert.strictEqual(shippedReq.status, 'shipped');
+    assert.strictEqual(shippedReq.carrier, 'USPS');
+    assert.strictEqual(shippedReq.tracking_number, '9400111899223192019');
+    assert.ok(shippedReq.shipped_at);
+    assert.strictEqual(shippedReq.last_event_type, 'shipped');
+
+    const shippedItem = (await firebase.firestore().collection('items').doc(aliceItem.id).get()).data();
+    assert.strictEqual(shippedItem.status, 'shipped');
+
+    // 4. Delivery Confirmation:
+    // Bob marks delivered
+    firebase.auth().currentUser = { uid: bobUid };
+    await window.db.markDelivered(req.id);
+
+    const deliveredReq = (await firebase.firestore().collection('requests').doc(req.id).get()).data();
+    assert.strictEqual(deliveredReq.status, 'delivered');
+    assert.ok(deliveredReq.delivered_at);
+    assert.strictEqual(deliveredReq.last_event_type, 'delivered');
+
+    const deliveredItem = (await firebase.firestore().collection('items').doc(aliceItem.id).get()).data();
+    assert.strictEqual(deliveredItem.status, 'delivered');
+
+    // 5. Return & Completion:
+    // Bob marks returned from delivered status
+    await window.db.markReturned(req.id);
+    const returnedReq = (await firebase.firestore().collection('requests').doc(req.id).get()).data();
+    assert.strictEqual(returnedReq.status, 'returned');
+
+    // Alice confirms return received
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmReturn(req.id);
+
+    const completedReq = (await firebase.firestore().collection('requests').doc(req.id).get()).data();
+    assert.strictEqual(completedReq.status, 'completed');
+    const availableItem = (await firebase.firestore().collection('items').doc(aliceItem.id).get()).data();
+    assert.strictEqual(availableItem.status, 'available');
+    assert.strictEqual(availableItem.is_available, true);
+    assert.strictEqual(availableItem.active_request_id, null);
+
+    // 6. Audit Trail in Transaction Ledger:
+    const events = await window.db.getTransactionEventsForRequest(req.id);
+    const eventSequence = events.map(e => e.event_type);
+    assert.deepStrictEqual(eventSequence, ['requested', 'approved', 'shipped', 'delivered', 'returned', 'borrow_completed']);
+    const shipEvent = events.find(e => e.event_type === 'shipped');
+    assert.strictEqual(shipEvent.metadata.carrier, 'USPS');
+    assert.strictEqual(shipEvent.metadata.tracking_number, '9400111899223192019');
+});
+
+
 
 // ==========================================
 // RESULTS REPORT

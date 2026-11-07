@@ -271,6 +271,37 @@
         }
     }
 
+    async function handleMarkShipped(btnEl) {
+        const requestId = btnEl.dataset.requestId;
+        const carrier = prompt("Enter shipping carrier (e.g., USPS, UPS, FedEx):", "USPS") || "USPS";
+        const tracking = prompt("Enter tracking number (optional):", "") || "";
+        btnEl.disabled = true;
+        btnEl.textContent = 'Updating...';
+        try {
+            await window.db.markShipped(requestId, { carrier, tracking_number: tracking });
+            await fetchActivity();
+        } catch (e) {
+            alert('Failed to mark shipped: ' + e.message);
+            btnEl.disabled = false;
+            btnEl.textContent = 'Mark Shipped';
+        }
+    }
+
+    async function handleMarkDelivered(btnEl) {
+        const requestId = btnEl.dataset.requestId;
+        if (!confirm("Confirm package has been delivered and received?")) return;
+        btnEl.disabled = true;
+        btnEl.textContent = 'Updating...';
+        try {
+            await window.db.markDelivered(requestId);
+            await fetchActivity();
+        } catch (e) {
+            alert('Failed to mark delivered: ' + e.message);
+            btnEl.disabled = false;
+            btnEl.textContent = 'Mark Delivered';
+        }
+    }
+
     async function handleConfirmSwap(btnEl) {
         const requestId = btnEl.dataset.requestId;
         if (!confirm("Confirm that you have exchanged items and received your swap?")) return;
@@ -594,22 +625,58 @@
                                 class="bg-surface-container text-on-surface-variant px-4 py-2 rounded-lg text-sm font-bold hover:bg-stone-200 transition-colors active:scale-95">
                                 ✕ Cancel Request
                             </button>`;
-                    } else if (!isOwnerView && req.status === 'approved') {
+                    } else if (isOwnerView && req.status === 'approved' && req.fulfillment_method === 'shipping') {
                         actionButtons = `
                             <button
-                                onclick="handleMarkPickedUp(this)"
+                                onclick="handleMarkShipped(this)"
                                 data-request-id="${db.escapeAttr(req.id)}"
-                                data-item-id="${db.escapeAttr(item.id)}"
                                 class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
-                                <span class="material-symbols-outlined text-[16px]">shopping_bag</span> Mark Picked Up
+                                <span class="material-symbols-outlined text-[16px]">local_shipping</span> Mark Shipped
                             </button>`;
-                    } else if (!isOwnerView && req.status === 'borrowed') {
+                    } else if (!isOwnerView && req.status === 'approved') {
+                        if (req.fulfillment_method === 'shipping') {
+                            actionButtons = `
+                                <span class="text-xs text-on-surface-variant bg-surface-container px-3 py-1.5 rounded-lg flex items-center gap-1 font-semibold">
+                                    <span class="material-symbols-outlined text-sm">schedule</span> Awaiting Shipment
+                                </span>`;
+                        } else {
+                            actionButtons = `
+                                <button
+                                    onclick="handleMarkPickedUp(this)"
+                                    data-request-id="${db.escapeAttr(req.id)}"
+                                    data-item-id="${db.escapeAttr(item.id)}"
+                                    class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[16px]">shopping_bag</span> Mark Picked Up
+                                </button>`;
+                        }
+                    } else if (isOwnerView && req.status === 'shipped') {
+                        actionButtons = `
+                            <span class="text-xs text-on-surface-variant bg-surface-container px-3 py-1.5 rounded-lg flex items-center gap-1 font-semibold">
+                                <span class="material-symbols-outlined text-sm">local_shipping</span> Shipped (In Transit)
+                            </span>`;
+                    } else if (!isOwnerView && req.status === 'shipped') {
+                        actionButtons = `
+                            <button
+                                onclick="handleMarkDelivered(this)"
+                                data-request-id="${db.escapeAttr(req.id)}"
+                                class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[16px]">inventory_2</span> Mark Delivered
+                            </button>`;
+                    } else if (!isOwnerView && (req.status === 'borrowed' || req.status === 'delivered') && !isGiveaway) {
                         actionButtons = `
                             <button
                                 onclick="handleMarkReturned(this)"
                                 data-request-id="${db.escapeAttr(req.id)}"
                                 class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95 flex items-center gap-1">
                                 <span class="material-symbols-outlined text-[16px]">keyboard_return</span> Mark as Returned
+                            </button>`;
+                    } else if (isOwnerView && (req.status === 'borrowed' || req.status === 'delivered') && isGiveaway) {
+                        actionButtons = `
+                            <button
+                                onclick="handleConfirmReturn(this)"
+                                data-request-id="${db.escapeAttr(req.id)}"
+                                class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-primary/90 transition-colors active:scale-95">
+                                ✓ Confirm Handover Complete
                             </button>`;
                     } else if (isOwnerView && req.status === 'returned') {
                         actionButtons = `
@@ -643,6 +710,7 @@
                                 ${isGiveaway ? '<span class="inline-block mt-2 text-[10px] font-bold uppercase tracking-widest text-teal-600 bg-teal-50 dark:bg-teal-950/40 dark:text-teal-300 px-2 py-0.5 rounded-full">Give Away</span>' : ''}
                                 ${isSwap ? '<span class="inline-block mt-2 text-[10px] font-bold uppercase tracking-widest text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 dark:text-indigo-300 px-2 py-0.5 rounded-full flex items-center gap-1 w-max"><span class="material-symbols-outlined text-[12px]">swap_horiz</span> Swap Proposal</span>' : ''}
                                 ${req.offered_item ? `<div class="mt-2 p-2 bg-surface-container-low rounded-lg text-xs flex items-center gap-2 border border-outline-variant/10"><span class="material-symbols-outlined text-sm text-primary">swap_horiz</span><span class="truncate"><strong>Offered:</strong> ${escapeHtml(req.offered_item.name)}</span></div>` : ''}
+                                ${req.tracking_number ? `<div class="mt-2 p-2 bg-surface-container-low rounded-lg text-xs flex items-center gap-1 border border-outline-variant/10"><span class="material-symbols-outlined text-sm text-primary">local_shipping</span><span><strong>Tracking:</strong> ${escapeHtml(req.carrier || '')} ${escapeHtml(req.tracking_number)}</span></div>` : ''}
                                 ${dateInfoHtml}
                             </div>
                         </div>

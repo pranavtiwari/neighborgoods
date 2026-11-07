@@ -28,7 +28,7 @@ const DENY = (msg) => {
 // An earlier version paraphrased the *intent* ("scan all requests") instead of
 // the *mechanism*, which is exactly how the invalid `.where()` off `get()`
 // survived in the real rules file while the mock kept passing.
-const ACTIVE_REQUEST_STATUSES = ['pending', 'approved', 'borrowed', 'returned'];
+const ACTIVE_REQUEST_STATUSES = ['pending', 'approved', 'borrowed', 'returned', 'shipped', 'delivered'];
 
 function canParticipantUpdateItem(firestore, uid, itemId, activeRequestId) {
     if (typeof activeRequestId !== 'string') return false;
