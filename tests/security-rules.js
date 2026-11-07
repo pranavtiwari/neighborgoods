@@ -34,9 +34,9 @@ function canParticipantUpdateItem(firestore, uid, itemId, activeRequestId) {
     if (typeof activeRequestId !== 'string') return false;
     const req = firestore._getData('requests', activeRequestId);
     if (!req) return false;
-    return req.item_id === itemId
+    return (req.item_id === itemId || req.offered_item_id === itemId)
         && ACTIVE_REQUEST_STATUSES.includes(req.status)
-        && (req.borrower_id === uid || req.lender_id === uid);
+        && (req.borrower_id === uid || req.lender_id === uid || (Array.isArray(req.participant_ids) && req.participant_ids.includes(uid)));
 }
 
 function enforceDelete(collectionName, docId, data, uid, firestore) {
@@ -148,8 +148,8 @@ function buildRulesEngine(firestore) {
 
                     const changed = Object.keys(data).filter(k => data[k] !== prior[k]);
                     const SHARED_FIELDS = ['status', 'timeline', 'last_event_id', 'last_event_type', 'updated_at', 'cancelled_at', 'shipped_at', 'delivered_at', 'tracking_number', 'carrier'];
-                    const LENDER_FIELDS = [...SHARED_FIELDS, 'confirmed_at', 'declined_at', 'picked_up_at', 'returned_at', 'completed_at', 'donated_at'];
-                    const BORROWER_FIELDS = [...SHARED_FIELDS, 'picked_up_at', 'returned_at'];
+                    const LENDER_FIELDS = [...SHARED_FIELDS, 'confirmed_at', 'declined_at', 'picked_up_at', 'returned_at', 'completed_at', 'donated_at', 'lender_confirmed_at', 'owner_confirmed_at'];
+                    const BORROWER_FIELDS = [...SHARED_FIELDS, 'picked_up_at', 'returned_at', 'borrower_confirmed_at', 'requester_confirmed_at'];
                     if (isLender && !isBorrower) {
                         if (changed.some(k => !LENDER_FIELDS.includes(k))) DENY(`lender may only change: ${LENDER_FIELDS.join(', ')}`);
                     } else if (isBorrower && !isLender) {
@@ -199,12 +199,12 @@ function buildRulesEngine(firestore) {
                             DENY('only the owner or a participant in an active request may update an item');
                         }
                         const changed = Object.keys(data).filter(k => data[k] !== prior[k]);
-                        // `active_request_id` is deliberately absent: a
-                        // participant may not repoint the item at their own
-                        // request. Owners bypass this branch entirely.
-                        const LIFECYCLE = ['status', 'is_available', 'updated_at'];
+                        const LIFECYCLE = ['status', 'is_available', 'active_request_id', 'updated_at'];
                         if (changed.some(k => !LIFECYCLE.includes(k))) {
                             DENY(`a non-owner may only change: ${LIFECYCLE.join(', ')}`);
+                        }
+                        if ('active_request_id' in data && data.active_request_id !== null && data.active_request_id !== prior.active_request_id) {
+                            DENY('a non-owner may not repoint active_request_id to another request');
                         }
                     }
                 }
@@ -345,8 +345,8 @@ function buildRulesEngine(firestore) {
                     }
                     if (data.credit_kg > 10) DENY('credit_kg exceeds the 10kg ceiling');
                     if (data.credit_kg > 0) {
-                        if (!['loan', 'donation'].includes(data.kind)) {
-                            DENY("a positive credit must have kind 'loan' or 'donation'");
+                        if (!['loan', 'donation', 'swap'].includes(data.kind)) {
+                            DENY("a positive credit must have kind 'loan', 'donation', or 'swap'");
                         }
                     } else if (data.credit_kg < 0) {
                         if (data.kind !== 'reversal') DENY("a negative credit must have kind 'reversal'");

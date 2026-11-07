@@ -1513,6 +1513,13 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         updated_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
+                    if (requestType === 'swap' && requestData.offered_item_id) {
+                        const offeredRef = db.collection('items').doc(requestData.offered_item_id);
+                        transaction.update(offeredRef, {
+                            active_request_id: newRequestRef.id
+                        });
+                    }
+
                     // Append immutable transaction event (Issue #2, #3, #13)
                     transaction.set(eventRef, {
                         request_id: newRequestRef.id,
@@ -1782,6 +1789,19 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         active_request_id: requestId
                     });
 
+                    // In swaps, both items are marked reserved/in-transaction (Issue #14)
+                    if ((requestData.type || 'borrow') === 'swap' && requestData.offered_item_id) {
+                        const offeredRef = db.collection('items').doc(requestData.offered_item_id);
+                        const offeredDoc = await transaction.get(offeredRef);
+                        if (offeredDoc.exists) {
+                            transaction.update(offeredRef, {
+                                status: 'approved',
+                                is_available: false,
+                                active_request_id: requestId
+                            });
+                        }
+                    }
+
                     const participantIds = requestData.participant_ids || [requestData.borrower_id, itemData.owner_id];
                     transaction.set(eventRef, {
                         request_id: requestId,
@@ -1833,6 +1853,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         created_at: now
                     }];
                     
+                    if ((requestData.type || 'borrow') === 'swap' && requestData.offered_item_id) {
+                        const offeredRef = db.collection('items').doc(requestData.offered_item_id);
+                        transaction.update(offeredRef, {
+                            status: 'available',
+                            is_available: true,
+                            active_request_id: null
+                        });
+                    }
+
                     transaction.update(requestRef, {
                         status: 'declined',
                         declined_at: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1866,6 +1895,295 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             } catch (err) {
                 console.error("Error declining borrow request:", err);
                 throw err;
+            }
+        },
+
+        cancelBorrowRequest: async function(requestId) {
+            try {
+                const db = firebase.firestore();
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error("Authentication required.");
+                const requestRef = db.collection('requests').doc(requestId);
+
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+
+                    const isBorrower = requestData.borrower_id === user.uid;
+                    const isLender = requestData.lender_id === user.uid;
+                    if (!isBorrower && !isLender) {
+                        throw new Error("Only transaction participants can cancel a request.");
+                    }
+
+                    if (!['pending', 'approved'].includes(requestData.status)) {
+                        throw new Error(`Cannot cancel a transaction after handoff (status: '${requestData.status}').`);
+                    }
+
+                    const eventRef = db.collection('transaction_events').doc();
+                    const now = new Date();
+                    const existingTimeline = Array.isArray(requestData.timeline) ? requestData.timeline : [];
+                    const newTimeline = [...existingTimeline, {
+                        status: 'cancelled',
+                        actor_id: user.uid,
+                        event_type: 'cancelled',
+                        event_id: eventRef.id,
+                        created_at: now
+                    }];
+
+                    // Release target item if it was reserved (must execute before request status becomes terminal)
+                    if (requestData.item_id) {
+                        const itemRef = db.collection('items').doc(requestData.item_id);
+                        const itemDoc = await transaction.get(itemRef);
+                        if (itemDoc.exists && itemDoc.data().active_request_id === requestId) {
+                            transaction.update(itemRef, {
+                                status: 'available',
+                                is_available: true,
+                                active_request_id: null
+                            });
+                        }
+                    }
+
+                    // Release offered item if swap
+                    if (requestData.offered_item_id) {
+                        const offeredRef = db.collection('items').doc(requestData.offered_item_id);
+                        const offeredDoc = await transaction.get(offeredRef);
+                        if (offeredDoc.exists && (offeredDoc.data().active_request_id === requestId || !offeredDoc.data().active_request_id)) {
+                            transaction.update(offeredRef, {
+                                status: 'available',
+                                is_available: true,
+                                active_request_id: null
+                            });
+                        }
+                    }
+
+                    // Update request status to cancelled
+                    transaction.update(requestRef, {
+                        status: 'cancelled',
+                        cancelled_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        timeline: newTimeline,
+                        last_event_id: eventRef.id,
+                        last_event_type: 'cancelled',
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    const participantIds = requestData.participant_ids || [requestData.borrower_id, requestData.lender_id];
+                    transaction.set(eventRef, {
+                        request_id: requestId,
+                        transaction_type: requestData.type || 'borrow',
+                        item_id: requestData.item_id,
+                        book_id: requestData.book_id || null,
+                        offered_item_id: requestData.offered_item_id || null,
+                        offered_book_id: requestData.offered_book_id || null,
+                        circle_id: requestData.circle_id || null,
+                        circle_ids: requestData.circle_ids || [],
+                        actor_id: user.uid,
+                        borrower_id: requestData.borrower_id,
+                        lender_id: requestData.lender_id,
+                        participant_ids: participantIds,
+                        event_type: 'cancelled',
+                        from_status: requestData.status,
+                        to_status: 'cancelled',
+                        fulfillment_method: requestData.fulfillment_method || 'pickup',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                });
+            } catch (err) {
+                console.error("Error cancelling request:", err);
+                throw err;
+            }
+        },
+
+        confirmSwapExchange: async function(requestId) {
+            try {
+                const db = firebase.firestore();
+                const user = firebase.auth().currentUser;
+                if (!user) throw new Error("Authentication required.");
+                const requestRef = db.collection('requests').doc(requestId);
+
+                await db.runTransaction(async (transaction) => {
+                    const requestDoc = await transaction.get(requestRef);
+                    if (!requestDoc.exists) throw new Error("Request not found");
+                    const requestData = requestDoc.data();
+
+                    if ((requestData.type || 'borrow') !== 'swap') {
+                        throw new Error("confirmSwapExchange can only be used on swap transactions.");
+                    }
+
+                    const isBorrower = requestData.borrower_id === user.uid;
+                    const isLender = requestData.lender_id === user.uid;
+                    if (!isBorrower && !isLender) {
+                        throw new Error("Only swap participants can confirm exchange.");
+                    }
+
+                    if (requestData.status !== 'approved') {
+                        throw new Error(`Swap must be approved before exchange confirmation (current: '${requestData.status}').`);
+                    }
+
+                    const now = new Date();
+                    const existingTimeline = Array.isArray(requestData.timeline) ? requestData.timeline : [];
+                    const eventRef = db.collection('transaction_events').doc();
+
+                    const isBorrowerConfirming = isBorrower;
+                    const otherAlreadyConfirmed = isBorrowerConfirming
+                        ? Boolean(requestData.lender_confirmed_at || requestData.owner_confirmed_at)
+                        : Boolean(requestData.borrower_confirmed_at || requestData.requester_confirmed_at);
+
+                    if (otherAlreadyConfirmed) {
+                        const newTimeline = [...existingTimeline, {
+                            status: 'completed',
+                            actor_id: user.uid,
+                            event_type: 'swap_completed',
+                            event_id: eventRef.id,
+                            created_at: now
+                        }];
+
+                        const reqUpdates = {
+                            status: 'completed',
+                            completed_at: firebase.firestore.FieldValue.serverTimestamp(),
+                            timeline: newTimeline,
+                            last_event_id: eventRef.id,
+                            last_event_type: 'swap_completed',
+                            updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+                        if (isBorrowerConfirming) {
+                            reqUpdates.borrower_confirmed_at = firebase.firestore.FieldValue.serverTimestamp();
+                            reqUpdates.requester_confirmed_at = firebase.firestore.FieldValue.serverTimestamp();
+                        } else {
+                            reqUpdates.lender_confirmed_at = firebase.firestore.FieldValue.serverTimestamp();
+                            reqUpdates.owner_confirmed_at = firebase.firestore.FieldValue.serverTimestamp();
+                        }
+                        if (requestData.item_id) {
+                            const itemRef = db.collection('items').doc(requestData.item_id);
+                            transaction.update(itemRef, {
+                                status: 'completed',
+                                is_available: false,
+                                active_request_id: null
+                            });
+                        }
+
+                        if (requestData.offered_item_id) {
+                            const offeredRef = db.collection('items').doc(requestData.offered_item_id);
+                            transaction.update(offeredRef, {
+                                status: 'completed',
+                                is_available: false,
+                                active_request_id: null
+                            });
+                        }
+
+                        transaction.update(requestRef, reqUpdates);
+
+                        delete this.profilesCache[requestData.lender_id];
+                        delete this.profilesCache[requestData.borrower_id];
+
+                        const participants = [
+                            { id: requestData.borrower_id, role: 'requester' },
+                            { id: requestData.lender_id, role: 'owner' }
+                        ];
+                        for (const p of participants) {
+                            const impactRef = db.collection('impact_events').doc();
+                            transaction.set(impactRef, {
+                                actor_id: user.uid,
+                                beneficiary_id: p.id,
+                                user_id: p.id,
+                                role: p.role,
+                                credit_kg: 2,
+                                weight_kg: 2,
+                                request_id: requestId,
+                                item_id: requestData.item_id,
+                                kind: 'swap',
+                                created_at: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                        }
+
+                        const participantIds = requestData.participant_ids || [requestData.borrower_id, requestData.lender_id];
+                        transaction.set(eventRef, {
+                            request_id: requestId,
+                            transaction_type: 'swap',
+                            item_id: requestData.item_id,
+                            book_id: requestData.book_id || null,
+                            offered_item_id: requestData.offered_item_id || null,
+                            offered_book_id: requestData.offered_book_id || null,
+                            circle_id: requestData.circle_id || null,
+                            circle_ids: requestData.circle_ids || [],
+                            actor_id: user.uid,
+                            borrower_id: requestData.borrower_id,
+                            lender_id: requestData.lender_id,
+                            participant_ids: participantIds,
+                            event_type: 'swap_completed',
+                            from_status: 'approved',
+                            to_status: 'completed',
+                            fulfillment_method: requestData.fulfillment_method || 'pickup',
+                            created_at: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    } else {
+                        const partialEventType = isBorrowerConfirming ? 'swap_confirmed_by_requester' : 'swap_confirmed_by_owner';
+                        const newTimeline = [...existingTimeline, {
+                            status: 'approved',
+                            actor_id: user.uid,
+                            event_type: partialEventType,
+                            event_id: eventRef.id,
+                            created_at: now
+                        }];
+
+                        const reqUpdates = {
+                            timeline: newTimeline,
+                            last_event_id: eventRef.id,
+                            last_event_type: partialEventType,
+                            updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+                        if (isBorrowerConfirming) {
+                            reqUpdates.borrower_confirmed_at = firebase.firestore.FieldValue.serverTimestamp();
+                            reqUpdates.requester_confirmed_at = firebase.firestore.FieldValue.serverTimestamp();
+                        } else {
+                            reqUpdates.lender_confirmed_at = firebase.firestore.FieldValue.serverTimestamp();
+                            reqUpdates.owner_confirmed_at = firebase.firestore.FieldValue.serverTimestamp();
+                        }
+
+                        transaction.update(requestRef, reqUpdates);
+
+                        const participantIds = requestData.participant_ids || [requestData.borrower_id, requestData.lender_id];
+                        transaction.set(eventRef, {
+                            request_id: requestId,
+                            transaction_type: 'swap',
+                            item_id: requestData.item_id,
+                            book_id: requestData.book_id || null,
+                            offered_item_id: requestData.offered_item_id || null,
+                            offered_book_id: requestData.offered_book_id || null,
+                            circle_id: requestData.circle_id || null,
+                            circle_ids: requestData.circle_ids || [],
+                            actor_id: user.uid,
+                            borrower_id: requestData.borrower_id,
+                            lender_id: requestData.lender_id,
+                            participant_ids: participantIds,
+                            event_type: partialEventType,
+                            from_status: 'approved',
+                            to_status: 'approved',
+                            fulfillment_method: requestData.fulfillment_method || 'pickup',
+                            created_at: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                });
+            } catch (err) {
+                console.error("Error confirming swap exchange:", err);
+                throw err;
+            }
+        },
+
+        getUserAvailableItemsForSwap: async function(userId) {
+            if (!userId) return [];
+            try {
+                const snap = await firebase.firestore().collection('items')
+                    .where('owner_id', '==', userId)
+                    .where('is_available', '==', true)
+                    .get();
+
+                return snap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter(item => !item.active_request_id && item.status !== 'transferred' && item.status !== 'completed');
+            } catch (err) {
+                console.error("Error getting user items for swap:", err);
+                return [];
             }
         },
 

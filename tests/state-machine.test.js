@@ -188,4 +188,109 @@ const STRANGER = 'charlie-stranger';
     assert.strictEqual(eventPayload.circle_id, 'circle_books');
 }
 
+// 5. Swap Lifecycle & Two-Sided Dual Confirmation (Issue #14)
+{
+    const reqSwap = {
+        id: 'req_swap_1',
+        lender_id: ALICE,
+        borrower_id: BOB,
+        status: REQUEST_STATUSES.PENDING,
+        type: TRANSACTION_TYPES.SWAP,
+        item_id: 'item_alice',
+        offered_item_id: 'item_bob'
+    };
+    const targetItem = { id: 'item_alice', owner_id: ALICE, is_available: true, status: 'available' };
+    const offeredItem = { id: 'item_bob', owner_id: BOB, is_available: true, status: 'available', active_request_id: 'req_swap_1' };
+
+    // Approve swap validates both items
+    const approveSwap = validateTransition({
+        action: ACTIONS.APPROVE,
+        requestData: reqSwap,
+        itemData: targetItem,
+        offeredItemData: offeredItem,
+        actorId: ALICE
+    });
+    assert.strictEqual(approveSwap.nextStatus, REQUEST_STATUSES.APPROVED);
+    assert.strictEqual(approveSwap.itemUpdates.status, 'approved');
+    assert.strictEqual(approveSwap.itemUpdates.is_available, false);
+    assert.strictEqual(approveSwap.offeredItemUpdates.status, 'approved');
+    assert.strictEqual(approveSwap.offeredItemUpdates.is_available, false);
+
+    // Fail approve if offered item is unavailable for another request
+    const busyOfferedItem = { id: 'item_bob', owner_id: BOB, is_available: false, active_request_id: 'other_req' };
+    assert.throws(() => validateTransition({
+        action: ACTIONS.APPROVE,
+        requestData: reqSwap,
+        itemData: targetItem,
+        offeredItemData: busyOfferedItem,
+        actorId: ALICE
+    }), /offered swap item is currently unavailable/);
+
+    // Decline swap releases offered item
+    const declineSwap = validateTransition({
+        action: ACTIONS.DECLINE,
+        requestData: reqSwap,
+        itemData: targetItem,
+        offeredItemData: offeredItem,
+        actorId: ALICE
+    });
+    assert.strictEqual(declineSwap.nextStatus, REQUEST_STATUSES.DECLINED);
+    assert.strictEqual(declineSwap.offeredItemUpdates.is_available, true);
+    assert.strictEqual(declineSwap.offeredItemUpdates.active_request_id, null);
+
+    // Cancel swap releases both items
+    const cancelSwap = validateTransition({
+        action: ACTIONS.CANCEL,
+        requestData: reqSwap,
+        itemData: { ...targetItem, active_request_id: reqSwap.id },
+        offeredItemData: offeredItem,
+        actorId: BOB
+    });
+    assert.strictEqual(cancelSwap.nextStatus, REQUEST_STATUSES.CANCELLED);
+    assert.strictEqual(cancelSwap.itemUpdates.is_available, true);
+    assert.strictEqual(cancelSwap.itemUpdates.active_request_id, null);
+    assert.strictEqual(cancelSwap.offeredItemUpdates.is_available, true);
+    assert.strictEqual(cancelSwap.offeredItemUpdates.active_request_id, null);
+
+    // Two-sided confirmation
+    reqSwap.status = REQUEST_STATUSES.APPROVED;
+    // Stranger cannot confirm swap
+    assert.throws(() => validateTransition({
+        action: ACTIONS.CONFIRM_SWAP,
+        requestData: reqSwap,
+        actorId: STRANGER
+    }), /Only swap participants can confirm/);
+
+    // Borrower confirms first (partial confirmation)
+    const partialConfirm = validateTransition({
+        action: ACTIONS.CONFIRM_SWAP,
+        requestData: reqSwap,
+        actorId: BOB
+    });
+    assert.strictEqual(partialConfirm.nextStatus, REQUEST_STATUSES.APPROVED);
+    assert.strictEqual(partialConfirm.eventType, 'swap_confirmed_by_requester');
+    assert.strictEqual(partialConfirm.impactCredit, false);
+    assert.ok(partialConfirm.requestUpdates.borrower_confirmed_at);
+
+    // Now lender confirms (final completion)
+    const confirmedReq = {
+        ...reqSwap,
+        borrower_confirmed_at: new Date()
+    };
+    const finalConfirm = validateTransition({
+        action: ACTIONS.CONFIRM_SWAP,
+        requestData: confirmedReq,
+        actorId: ALICE
+    });
+    assert.strictEqual(finalConfirm.nextStatus, REQUEST_STATUSES.COMPLETED);
+    assert.strictEqual(finalConfirm.eventType, 'swap_completed');
+    assert.strictEqual(finalConfirm.impactCredit, true);
+    assert.strictEqual(finalConfirm.isDualCredit, true);
+    assert.strictEqual(finalConfirm.itemUpdates.status, 'completed');
+    assert.strictEqual(finalConfirm.itemUpdates.active_request_id, null);
+    assert.strictEqual(finalConfirm.offeredItemUpdates.status, 'completed');
+    assert.strictEqual(finalConfirm.offeredItemUpdates.active_request_id, null);
+}
+
 console.log('[PASS] State machine validation passed all tests.');
+

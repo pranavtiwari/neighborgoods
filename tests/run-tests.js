@@ -1921,6 +1921,210 @@ await test('Flow 11: Extended Transaction Model, Swaps, Fulfillment Terms, Event
     assert.deepStrictEqual(swapDoc.participant_ids, [bobUid, aliceUid]);
 });
 
+await test('Flow 12: Two-Sided Swap Workflow, Dual Confirmations, Item Locking, and Bilateral Impact (Issue #14)', async () => {
+    resetSandbox();
+    const aliceUid = 'alice-swap-uid';
+    const bobUid = 'bob-swap-uid';
+    const circleId = 'circle_swap_14';
+
+    // Seed profiles
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('profiles').doc(aliceUid).set({
+        id: aliceUid,
+        full_name: 'Alice Swapper',
+        location: 'Sunset, SF'
+    });
+    firebase.auth().currentUser = { uid: bobUid };
+    await firebase.firestore().collection('profiles').doc(bobUid).set({
+        id: bobUid,
+        full_name: 'Bob Swapper',
+        location: 'Richmond, SF'
+    });
+
+    // Seed canonical books
+    const bookSciFi = await window.db.createBook({
+        title: 'Dune',
+        authors: ['Frank Herbert'],
+        isbn: '9780441172719'
+    });
+    const bookFantasy = await window.db.createBook({
+        title: 'The Name of the Wind',
+        authors: ['Patrick Rothfuss'],
+        isbn: '9780756404741'
+    });
+    const bookHistory = await window.db.createBook({
+        title: 'Sapiens',
+        authors: ['Yuval Noah Harari'],
+        isbn: '9780062316097'
+    });
+
+    // Alice owns Dune (Swap) and The Hobbit (Swap)
+    const bookHobbit = await window.db.createBook({
+        title: 'The Hobbit',
+        authors: ['J.R.R. Tolkien'],
+        isbn: '9780547928227'
+    });
+    firebase.auth().currentUser = { uid: aliceUid };
+    const aliceDune = await window.db.addItem({
+        name: 'Dune (Hardcover)',
+        kind: 'book',
+        book_id: bookSciFi.id,
+        owner_id: aliceUid,
+        listing_type: 'swap',
+        circle_id: circleId
+    });
+    const aliceHobbit = await window.db.addItem({
+        name: 'The Hobbit (Collector)',
+        kind: 'book',
+        book_id: bookHobbit.id,
+        owner_id: aliceUid,
+        listing_type: 'swap',
+        circle_id: circleId
+    });
+
+    // Bob owns The Name of the Wind (Swap) and Sapiens (Swap)
+    firebase.auth().currentUser = { uid: bobUid };
+    const bobNameOfWind = await window.db.addItem({
+        name: 'The Name of the Wind (Paperback)',
+        kind: 'book',
+        book_id: bookFantasy.id,
+        owner_id: bobUid,
+        listing_type: 'swap',
+        circle_id: circleId
+    });
+    const bobSapiens = await window.db.addItem({
+        name: 'Sapiens (Paperback)',
+        kind: 'book',
+        book_id: bookHistory.id,
+        owner_id: bobUid,
+        listing_type: 'swap',
+        circle_id: circleId
+    });
+
+    // 1. Bob queries his available items for swap
+    const bobSwapItems = await window.db.getUserAvailableItemsForSwap(bobUid);
+    assert.strictEqual(bobSwapItems.length, 2, 'Bob initially has 2 items available to swap');
+    const bobItemIds = bobSwapItems.map(i => i.id);
+    assert.ok(bobItemIds.includes(bobNameOfWind.id));
+    assert.ok(bobItemIds.includes(bobSapiens.id));
+
+    // 2. Bob proposes swap: wants Dune from Alice, offers The Name of the Wind
+    const swapReq = await window.db.createBorrowRequest({
+        type: 'swap',
+        item_id: aliceDune.id,
+        offered_item_id: bobNameOfWind.id,
+        borrower_id: bobUid,
+        fulfillment_method: 'pickup'
+    });
+    assert.ok(swapReq.id);
+
+    // Verify Bob's offered item is locked to this request
+    const bobItemAfterOffer = (await firebase.firestore().collection('items').doc(bobNameOfWind.id).get()).data();
+    assert.strictEqual(bobItemAfterOffer.active_request_id, swapReq.id, 'Offered item active_request_id must be set');
+
+    // Bob's available items for swap now excludes The Name of the Wind
+    const bobSwapItemsAfterOffer = await window.db.getUserAvailableItemsForSwap(bobUid);
+    assert.strictEqual(bobSwapItemsAfterOffer.length, 1);
+    assert.strictEqual(bobSwapItemsAfterOffer[0].id, bobSapiens.id);
+
+    // 3. Test Decline & Cancel releasing the offered item
+    // Propose second swap for The Hobbit with Sapiens, then decline
+    const swapReq2 = await window.db.createBorrowRequest({
+        type: 'swap',
+        item_id: aliceHobbit.id,
+        offered_item_id: bobSapiens.id,
+        borrower_id: bobUid
+    });
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.declineBorrowRequest(swapReq2.id);
+    const sapiAfterDecline = (await firebase.firestore().collection('items').doc(bobSapiens.id).get()).data();
+    assert.strictEqual(sapiAfterDecline.active_request_id, null, 'Declined swap must release offered item');
+    assert.strictEqual(sapiAfterDecline.is_available, true);
+
+    // Propose again with Sapiens for The Hobbit, then cancel
+    firebase.auth().currentUser = { uid: bobUid };
+    const swapReq3 = await window.db.createBorrowRequest({
+        type: 'swap',
+        item_id: aliceHobbit.id,
+        offered_item_id: bobSapiens.id,
+        borrower_id: bobUid
+    });
+    await window.db.cancelBorrowRequest(swapReq3.id);
+    const sapiAfterCancel = (await firebase.firestore().collection('items').doc(bobSapiens.id).get()).data();
+    assert.strictEqual(sapiAfterCancel.active_request_id, null, 'Cancelled swap must release offered item');
+    assert.strictEqual(sapiAfterCancel.is_available, true);
+
+    // 4. Alice approves the primary swap (Dune <-> The Name of the Wind)
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmBorrowRequest(swapReq.id, aliceDune.id);
+
+    const approvedTarget = (await firebase.firestore().collection('items').doc(aliceDune.id).get()).data();
+    const approvedOffered = (await firebase.firestore().collection('items').doc(bobNameOfWind.id).get()).data();
+    assert.strictEqual(approvedTarget.status, 'approved');
+    assert.strictEqual(approvedTarget.is_available, false);
+    assert.strictEqual(approvedTarget.active_request_id, swapReq.id);
+    assert.strictEqual(approvedOffered.status, 'approved');
+    assert.strictEqual(approvedOffered.is_available, false);
+    assert.strictEqual(approvedOffered.active_request_id, swapReq.id);
+
+    const swapDocApproved = (await firebase.firestore().collection('requests').doc(swapReq.id).get()).data();
+    assert.strictEqual(swapDocApproved.status, 'approved');
+
+    // 5. Dual confirmation: Bob confirms first
+    firebase.auth().currentUser = { uid: bobUid };
+    await window.db.confirmSwapExchange(swapReq.id);
+
+    const swapDocPartial = (await firebase.firestore().collection('requests').doc(swapReq.id).get()).data();
+    assert.strictEqual(swapDocPartial.status, 'approved', 'Status should remain approved until both confirm');
+    assert.ok(swapDocPartial.borrower_confirmed_at, 'Borrower confirmed timestamp must be recorded');
+    assert.strictEqual(swapDocPartial.lender_confirmed_at, undefined);
+
+    // Check impact events: none yet
+    const impactSnapPre = await firebase.firestore().collection('impact_events').get();
+    assert.strictEqual(impactSnapPre.size, 0, 'No impact events before both parties confirm');
+
+    // 6. Alice confirms second (Dual confirmation complete!)
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmSwapExchange(swapReq.id);
+
+    const swapDocCompleted = (await firebase.firestore().collection('requests').doc(swapReq.id).get()).data();
+    assert.strictEqual(swapDocCompleted.status, 'completed', 'Status transitions to completed after both confirm');
+    assert.ok(swapDocCompleted.lender_confirmed_at, 'Lender confirmed timestamp must be recorded');
+    assert.ok(swapDocCompleted.completed_at, 'completed_at must be recorded');
+
+    // Both items should now be completed and released
+    const completedTarget = (await firebase.firestore().collection('items').doc(aliceDune.id).get()).data();
+    const completedOffered = (await firebase.firestore().collection('items').doc(bobNameOfWind.id).get()).data();
+    assert.strictEqual(completedTarget.status, 'completed');
+    assert.strictEqual(completedTarget.is_available, false);
+    assert.strictEqual(completedTarget.active_request_id, null);
+    assert.strictEqual(completedOffered.status, 'completed');
+    assert.strictEqual(completedOffered.is_available, false);
+    assert.strictEqual(completedOffered.active_request_id, null);
+
+    // Bilateral impact events: 2 kg each for Alice and Bob with kind 'swap'
+    const impactSnapPost = await firebase.firestore().collection('impact_events').get();
+    assert.strictEqual(impactSnapPost.size, 2, 'Exactly 2 impact events generated (one per swapper)');
+    const impactDocs = impactSnapPost.docs.map(d => d.data());
+    const aliceImpact = impactDocs.find(d => (d.beneficiary_id === aliceUid || d.user_id === aliceUid));
+    const bobImpact = impactDocs.find(d => (d.beneficiary_id === bobUid || d.user_id === bobUid));
+    assert.ok(aliceImpact, 'Alice should have impact event');
+    assert.strictEqual(aliceImpact.kind, 'swap');
+    assert.strictEqual(aliceImpact.credit_kg, 2);
+    assert.ok(bobImpact, 'Bob should have impact event');
+    assert.strictEqual(bobImpact.kind, 'swap');
+    assert.strictEqual(bobImpact.credit_kg, 2);
+
+    // Transaction event ledger has recorded swap_completed
+    const swapEvents = await window.db.getTransactionEventsForRequest(swapReq.id);
+    const eventTypes = swapEvents.map(e => e.event_type);
+    assert.ok(eventTypes.includes('requested'));
+    assert.ok(eventTypes.includes('approved'));
+    assert.ok(eventTypes.includes('swap_confirmed_by_requester'));
+    assert.ok(eventTypes.includes('swap_completed'));
+});
+
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================

@@ -100,6 +100,23 @@
     </p>
 </div>
 </section>
+
+<!-- Swap Item Section (Swaps) -->
+<section id="swap-selection-section" class="space-y-4 hidden">
+<h3 class="text-headline-md text-lg font-bold text-on-surface">Offer an Item to Swap</h3>
+<div class="bg-surface-container-low rounded-xl p-6 flex flex-col gap-4">
+    <div class="flex items-center gap-3 text-primary">
+        <span class="material-symbols-outlined text-[24px]">swap_horiz</span>
+        <span class="font-bold">Two-Sided Book / Item Exchange</span>
+    </div>
+    <p class="text-sm text-on-surface-variant leading-relaxed">
+        Choose one of your available books or items to offer in exchange for this item. Both items will be reserved once the owner accepts your offer.
+    </p>
+    <div id="swap-items-container" class="space-y-2">
+        <p class="text-xs text-stone-500 italic">Loading your available items...</p>
+    </div>
+</div>
+</section>
 <!-- Message Field -->
 <section class="space-y-4">
 <div class="flex flex-col gap-2">
@@ -265,6 +282,7 @@
     let itemOwnerId = null;
     let suggestedMessageStr = '';
     let itemListingType = null;
+    let selectedOfferedItemId = null;
 
     // Back button setup
     document.getElementById('back-btn').onclick = () => {
@@ -292,22 +310,78 @@
             
             const isRental = item.listing_type === 'rental';
             const isGiveaway = item.listing_type === 'giveaway';
+            const isSwap = item.listing_type === 'swap';
             const priceNoticeText = document.getElementById('price-notice-text');
             const priceNoticeIcon = document.getElementById('price-notice-icon');
             
             const dateSelection = document.getElementById('date-selection-section');
             const claimSelection = document.getElementById('claim-confirmation-section');
+            const swapSelection = document.getElementById('swap-selection-section');
             
             if (isGiveaway) {
                 dateSelection.classList.add('hidden');
                 claimSelection.classList.remove('hidden');
+                swapSelection.classList.add('hidden');
                 priceNoticeText.innerHTML = `Giveaway Listing: <span class="text-secondary font-bold">This is a free gift! You can keep it forever.</span>`;
                 priceNoticeIcon.textContent = 'redeem';
                 suggestedMessageStr = `Hi ${firstName}, I'd love to claim your giveaway item ${item.name}. When would be a good time to pick it up?`;
                 document.getElementById('message-text').placeholder = suggestedMessageStr;
+            } else if (isSwap) {
+                dateSelection.classList.add('hidden');
+                claimSelection.classList.add('hidden');
+                swapSelection.classList.remove('hidden');
+                priceNoticeText.innerHTML = `Swap Listing: <span class="text-secondary font-bold">Trade items with your neighbor permanently!</span>`;
+                priceNoticeIcon.textContent = 'swap_horiz';
+                document.getElementById('send-request-btn').innerText = "Propose Swap";
+
+                const swapContainer = document.getElementById('swap-items-container');
+                const userItems = await window.db.getUserAvailableItemsForSwap(user.uid);
+                if (!userItems || userItems.length === 0) {
+                    swapContainer.innerHTML = `
+                        <div class="p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 rounded-lg text-xs font-medium">
+                            You don't have any available items to offer for a swap. Please <a href="add-item.html" class="underline font-bold">list an item</a> first.
+                        </div>
+                    `;
+                    document.getElementById('send-request-btn').disabled = true;
+                    document.getElementById('send-request-btn').classList.add('opacity-50', 'cursor-not-allowed');
+                } else {
+                    swapContainer.innerHTML = `
+                        <label class="text-xs font-bold text-on-surface-variant block mb-1">Select an item to offer:</label>
+                        <select id="offered-item-select" class="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-3 text-sm font-medium focus:ring-primary focus:border-primary">
+                            <option value="">-- Choose an item to swap --</option>
+                            ${userItems.map(it => `<option value="${window.db.escapeAttr(it.id)}">${window.db.escapeHtml(it.name)} (${it.listing_type || 'item'})</option>`).join('')}
+                        </select>
+                        <div id="selected-swap-preview" class="hidden mt-3 p-3 bg-surface-container-lowest rounded-xl flex items-center gap-3">
+                            <img id="selected-swap-img" class="w-12 h-12 object-contain rounded-lg bg-stone-100 dark:bg-stone-800" src="" />
+                            <div class="min-w-0 flex-1">
+                                <h4 id="selected-swap-title" class="text-sm font-bold truncate"></h4>
+                                <p class="text-[11px] text-stone-500">Your offered item</p>
+                            </div>
+                        </div>
+                    `;
+                    const selectEl = document.getElementById('offered-item-select');
+                    selectEl.addEventListener('change', () => {
+                        selectedOfferedItemId = selectEl.value;
+                        const chosen = userItems.find(it => it.id === selectedOfferedItemId);
+                        const preview = document.getElementById('selected-swap-preview');
+                        if (chosen) {
+                            preview.classList.remove('hidden');
+                            document.getElementById('selected-swap-title').textContent = chosen.name;
+                            document.getElementById('selected-swap-img').src = chosen.image_url || 'https://placehold.co/100x100';
+                            suggestedMessageStr = `Hi ${firstName}, I'd love to swap my "${chosen.name}" for your "${item.name}". Does that work for you?`;
+                            document.getElementById('message-text').placeholder = suggestedMessageStr;
+                            document.getElementById('suggested-text-preview').textContent = suggestedMessageStr;
+                        } else {
+                            preview.classList.add('hidden');
+                        }
+                    });
+                }
+                suggestedMessageStr = `Hi ${firstName}, I'd love to propose a swap for your ${item.name}!`;
+                document.getElementById('message-text').placeholder = suggestedMessageStr;
             } else if (isRental) {
                 dateSelection.classList.remove('hidden');
                 claimSelection.classList.add('hidden');
+                swapSelection.classList.add('hidden');
                 priceNoticeText.innerHTML = `Rental Listing: <span class="text-secondary font-bold">Price and terms will be negotiated over chat.</span>`;
                 priceNoticeIcon.textContent = 'payments';
                 suggestedMessageStr = `Hi ${firstName}, I'd like to rent your ${item.name}. What are your rates and availability?`;
@@ -315,6 +389,7 @@
             } else {
                 dateSelection.classList.remove('hidden');
                 claimSelection.classList.add('hidden');
+                swapSelection.classList.add('hidden');
                 priceNoticeText.innerHTML = `You won't be charged. <span class="text-secondary font-bold">This is a free neighborhood share!</span>`;
                 priceNoticeIcon.textContent = 'volunteer_activism';
                 suggestedMessageStr = `Hi ${firstName}, I'd love to borrow your ${item.name} this week. Is it available?`;
@@ -396,8 +471,14 @@
         if (!session) return;
 
         const isGiveaway = (itemListingType === 'giveaway');
-        if (!isGiveaway && (!startDate || !endDate)) {
+        const isSwap = (itemListingType === 'swap');
+        if (!isGiveaway && !isSwap && (!startDate || !endDate)) {
             alert("Please select both start and end dates.");
+            return;
+        }
+
+        if (isSwap && !selectedOfferedItemId) {
+            alert("Please select an item you'd like to offer for swap.");
             return;
         }
 
@@ -406,10 +487,12 @@
         try {
             // 1. Create the request
             await window.db.createBorrowRequest({
+                type: isSwap ? 'swap' : (isGiveaway ? 'giveaway' : 'borrow'),
                 item_id: itemId,
+                offered_item_id: isSwap ? selectedOfferedItemId : null,
                 borrower_id: session.user.uid,
-                start_date: isGiveaway ? null : startDate.toISOString(),
-                end_date: isGiveaway ? null : endDate.toISOString(),
+                start_date: (isGiveaway || isSwap) ? null : startDate.toISOString(),
+                end_date: (isGiveaway || isSwap) ? null : endDate.toISOString(),
                 status: 'pending'
             });
 

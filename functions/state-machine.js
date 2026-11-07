@@ -46,6 +46,7 @@ export const ACTIONS = {
     RETURN: 'return',
     COMPLETE: 'complete',
     COMPLETE_GIVEAWAY: 'complete_giveaway',
+    CONFIRM_SWAP: 'confirm_swap',
     UNDO: 'undo'
 };
 
@@ -178,6 +179,7 @@ export function validateTransition({
     action,
     requestData,
     itemData,
+    offeredItemData,
     actorId,
     targetUndoStatus
 }) {
@@ -188,7 +190,7 @@ export function validateTransition({
     const type = requestData.type || (
         (itemData && (itemData.listing_type === 'giveaway' || itemData.intent === 'donate'))
             ? TRANSACTION_TYPES.GIVEAWAY
-            : TRANSACTION_TYPES.BORROW
+            : (itemData && itemData.listing_type === 'swap' ? TRANSACTION_TYPES.SWAP : TRANSACTION_TYPES.BORROW)
     );
 
     const currentStatus = requestData.status;
@@ -204,10 +206,20 @@ export function validateTransition({
             if (itemData && itemData.is_available === false && itemData.active_request_id && itemData.active_request_id !== requestData.id) {
                 throw new Error('This item is currently unavailable or assigned to another active request.');
             }
+            if (type === TRANSACTION_TYPES.SWAP && offeredItemData) {
+                if (offeredItemData.is_available === false && offeredItemData.active_request_id && offeredItemData.active_request_id !== requestData.id) {
+                    throw new Error('The offered swap item is currently unavailable or assigned to another active request.');
+                }
+            }
             return {
                 nextStatus: REQUEST_STATUSES.APPROVED,
                 eventType: 'approved',
                 itemUpdates: { is_available: false, active_request_id: requestData.id, status: 'approved' },
+                offeredItemUpdates: (type === TRANSACTION_TYPES.SWAP && offeredItemData) ? {
+                    is_available: false,
+                    active_request_id: requestData.id,
+                    status: 'approved'
+                } : null,
                 requestUpdates: { status: REQUEST_STATUSES.APPROVED, confirmed_at: new Date() }
             };
 
@@ -220,6 +232,11 @@ export function validateTransition({
                 nextStatus: REQUEST_STATUSES.DECLINED,
                 eventType: 'declined',
                 itemUpdates: {},
+                offeredItemUpdates: (type === TRANSACTION_TYPES.SWAP && offeredItemData && offeredItemData.active_request_id === requestData.id) ? {
+                    active_request_id: null,
+                    is_available: true,
+                    status: 'available'
+                } : null,
                 requestUpdates: { status: REQUEST_STATUSES.DECLINED, declined_at: new Date() }
             };
 
@@ -236,8 +253,57 @@ export function validateTransition({
                     is_available: true,
                     status: 'available'
                 } : {},
+                offeredItemUpdates: (type === TRANSACTION_TYPES.SWAP && offeredItemData && offeredItemData.active_request_id === requestData.id) ? {
+                    active_request_id: null,
+                    is_available: true,
+                    status: 'available'
+                } : null,
                 requestUpdates: { status: REQUEST_STATUSES.CANCELLED, cancelled_at: new Date() }
             };
+
+        case ACTIONS.CONFIRM_SWAP: {
+            if (!isBorrower && !isLender) throw new Error('Only swap participants can confirm exchange.');
+            if (type !== TRANSACTION_TYPES.SWAP) {
+                throw new Error('confirm_swap is only valid for swap transactions.');
+            }
+            if (currentStatus !== REQUEST_STATUSES.APPROVED) {
+                throw new Error(`Swap must be approved before exchange confirmation (current: '${currentStatus}').`);
+            }
+            const swapNow = new Date();
+            const isBorrowerConfirming = isBorrower;
+            const otherAlreadyConfirmed = isBorrowerConfirming
+                ? Boolean(requestData.lender_confirmed_at || requestData.owner_confirmed_at)
+                : Boolean(requestData.borrower_confirmed_at || requestData.requester_confirmed_at);
+
+            if (otherAlreadyConfirmed) {
+                return {
+                    nextStatus: REQUEST_STATUSES.COMPLETED,
+                    eventType: 'swap_completed',
+                    itemUpdates: { status: 'completed', is_available: false, active_request_id: null },
+                    offeredItemUpdates: { status: 'completed', is_available: false, active_request_id: null },
+                    requestUpdates: {
+                        status: REQUEST_STATUSES.COMPLETED,
+                        completed_at: swapNow,
+                        [isBorrowerConfirming ? 'borrower_confirmed_at' : 'lender_confirmed_at']: swapNow,
+                        [isBorrowerConfirming ? 'requester_confirmed_at' : 'owner_confirmed_at']: swapNow
+                    },
+                    impactCredit: true,
+                    isDualCredit: true
+                };
+            } else {
+                return {
+                    nextStatus: REQUEST_STATUSES.APPROVED,
+                    eventType: isBorrowerConfirming ? 'swap_confirmed_by_requester' : 'swap_confirmed_by_owner',
+                    itemUpdates: {},
+                    offeredItemUpdates: {},
+                    requestUpdates: {
+                        [isBorrowerConfirming ? 'borrower_confirmed_at' : 'lender_confirmed_at']: swapNow,
+                        [isBorrowerConfirming ? 'requester_confirmed_at' : 'owner_confirmed_at']: swapNow
+                    },
+                    impactCredit: false
+                };
+            }
+        }
 
         case ACTIONS.PICKUP:
             if (!isBorrower && !isLender) throw new Error('Only borrower or lender can mark item as picked up.');

@@ -28,9 +28,13 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
     function canParticipantUpdateItem(itemId, activeRequestId) {
       return exists(/databases/$(database)/documents/requests/$(activeRequestId))
-        && get(/databases/$(database)/documents/requests/$(activeRequestId)).data.item_id == itemId
+        && (get(/databases/$(database)/documents/requests/$(activeRequestId)).data.item_id == itemId
+            || ('offered_item_id' in get(/databases/$(database)/documents/requests/$(activeRequestId)).data
+                && get(/databases/$(database)/documents/requests/$(activeRequestId)).data.offered_item_id == itemId))
         && (get(/databases/$(database)/documents/requests/$(activeRequestId)).data.borrower_id == request.auth.uid
-            || get(/databases/$(database)/documents/requests/$(activeRequestId)).data.lender_id == request.auth.uid)
+            || get(/databases/$(database)/documents/requests/$(activeRequestId)).data.lender_id == request.auth.uid
+            || ('participant_ids' in get(/databases/$(database)/documents/requests/$(activeRequestId)).data
+                && request.auth.uid in get(/databases/$(database)/documents/requests/$(activeRequestId)).data.participant_ids))
         && get(/databases/$(database)/documents/requests/$(activeRequestId)).data.status
              in ['pending', 'approved', 'borrowed', 'returned'];
     }
@@ -111,7 +115,7 @@ service cloud.firestore {
         // be a large magnitude, and a reversal must point at what it undoes.
         && (
              (request.resource.data.credit_kg > 0
-               && request.resource.data.kind in ['loan', 'donation'])
+               && request.resource.data.kind in ['loan', 'donation', 'swap'])
           || (request.resource.data.credit_kg < 0
                && request.resource.data.kind == 'reversal'
                && request.resource.data.reverses_event_id is string)
@@ -259,7 +263,10 @@ service cloud.firestore {
             && resource.data.active_request_id is string
             && canParticipantUpdateItem(itemId, resource.data.active_request_id)
             && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['status', 'is_available', 'updated_at'])
+                 .hasOnly(['status', 'is_available', 'active_request_id', 'updated_at'])
+            && (!('active_request_id' in request.resource.data)
+                || request.resource.data.active_request_id == null
+                || request.resource.data.active_request_id == resource.data.active_request_id)
           )
         );
 
@@ -329,13 +336,15 @@ service cloud.firestore {
              .hasOnly(['status', 'confirmed_at', 'declined_at', 'picked_up_at',
                        'returned_at', 'completed_at', 'donated_at', 'cancelled_at',
                        'shipped_at', 'delivered_at', 'timeline', 'last_event_id',
-                       'last_event_type', 'updated_at', 'tracking_number', 'carrier'])) ||
+                       'last_event_type', 'updated_at', 'tracking_number', 'carrier',
+                       'lender_confirmed_at', 'owner_confirmed_at'])) ||
           // Borrower may acknowledge pickup/shipping/return or cancel
           (resource.data.borrower_id == request.auth.uid &&
            request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['status', 'picked_up_at', 'returned_at', 'cancelled_at',
                        'shipped_at', 'delivered_at', 'timeline', 'last_event_id',
-                       'last_event_type', 'updated_at', 'tracking_number', 'carrier']))
+                       'last_event_type', 'updated_at', 'tracking_number', 'carrier',
+                       'borrower_confirmed_at', 'requester_confirmed_at']))
         );
 
       // Disable deletion to maintain audit trail
