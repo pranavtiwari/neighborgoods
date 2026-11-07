@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import assert from 'assert';
 import FirebaseCompat from './mock-firebase.js';
 import { buildRulesEngine } from './security-rules.js';
+import { runBookCatalogMigration, parseBookMetadata, isCandidateBookItem, extractIsbnFromText } from '../scripts/migrate-book-catalog.js';
 
 // Setup Globals
 const __filename = fileURLToPath(import.meta.url);
@@ -1496,6 +1497,223 @@ await test('Flow 9: Paginated catalog reads, cursor stability, query safeguards,
     assert.strictEqual(circleItemsPage.items.length, 1);
     assert.strictEqual(circleItemsPage.hasMore, true);
     assert.strictEqual(circleItemsPage.items[0].exact_address, undefined, 'Circle items page must sanitize exact_address');
+});
+
+await test('Flow 10: Book Catalog Migration, Metadata Extraction, Deduplication, Review List, and Idempotency (Issue #11)', async () => {
+    // 1. Unit tests for metadata parser
+    const meta1 = parseBookMetadata({ name: 'The Great Gatsby by F. Scott Fitzgerald' });
+    assert.strictEqual(meta1.title, 'The Great Gatsby');
+    assert.strictEqual(meta1.title_normalized, 'great gatsby');
+    assert.deepStrictEqual(meta1.authors, ['F. Scott Fitzgerald']);
+    assert.strictEqual(meta1.ambiguous, false);
+
+    const meta2 = parseBookMetadata({ name: '1984 - George Orwell' });
+    assert.strictEqual(meta2.title, '1984');
+    assert.deepStrictEqual(meta2.authors, ['George Orwell']);
+
+    const meta3 = parseBookMetadata({ name: 'Dune (Frank Herbert)' });
+    assert.strictEqual(meta3.title, 'Dune');
+    assert.deepStrictEqual(meta3.authors, ['Frank Herbert']);
+
+    const meta4 = parseBookMetadata({ name: 'Dune (Hardcover)' });
+    assert.strictEqual(meta4.title, 'Dune');
+    assert.strictEqual(meta4.editionNotes, 'Hardcover');
+
+    const meta5 = parseBookMetadata({ name: 'Clean Code | Robert C. Martin' });
+    assert.strictEqual(meta5.title, 'Clean Code');
+    assert.deepStrictEqual(meta5.authors, ['Robert C. Martin']);
+
+    const metaGeneric = parseBookMetadata({ name: 'Textbook' });
+    assert.strictEqual(metaGeneric.ambiguous, true);
+    assert.strictEqual(metaGeneric.reason, 'generic_title_no_author_or_isbn');
+
+    const metaEmpty = parseBookMetadata({ name: '   ' });
+    assert.strictEqual(metaEmpty.ambiguous, true);
+    assert.strictEqual(metaEmpty.reason, 'missing_or_invalid_title');
+
+    const metaIsbnDesc = parseBookMetadata({
+        name: 'Pride and Prejudice',
+        description: 'Vintage copy. ISBN: 9780141439518 in great condition'
+    });
+    assert.strictEqual(metaIsbnDesc.isbnData.valid, true);
+    assert.strictEqual(metaIsbnDesc.isbnData.isbn13, '9780141439518');
+
+    // 2. Candidate book item identification
+    const circlesMap = new Map();
+    circlesMap.set('circle-bks', { id: 'circle-bks', name: 'SF Bookworms', category: 'books' });
+    circlesMap.set('circle-tools', { id: 'circle-tools', name: 'Neighborhood Tools', category: 'tools' });
+
+    assert.strictEqual(isCandidateBookItem({ category: 'books' }, circlesMap), true);
+    assert.strictEqual(isCandidateBookItem({ kind: 'book' }, circlesMap), true);
+    assert.strictEqual(isCandidateBookItem({ circle_id: 'circle-bks' }, circlesMap), true);
+    assert.strictEqual(isCandidateBookItem({ circle_id: 'a-world-of-books' }, circlesMap), true);
+    assert.strictEqual(isCandidateBookItem({ category: 'tools', circle_id: 'circle-tools' }, circlesMap), false);
+
+    // 3. Database Migration Integration Test
+    // Create an isolated MockFirestore instance for admin migration test
+    const migrationCompat = new FirebaseCompat();
+    const testDb = migrationCompat.firestore();
+
+    const ALICE = 'alice-mig-uid';
+    const BOB = 'bob-mig-uid';
+
+    // Seed circles
+    await testDb.collection('circles').doc('circle-bks').set({
+        name: 'SF Bookworms',
+        category: 'books'
+    });
+    await testDb.collection('circles').doc('circle-tools').set({
+        name: 'Neighborhood Tools',
+        category: 'tools'
+    });
+
+    // Seed items
+    // Tool item (must be ignored)
+    await testDb.collection('items').doc('item-saw').set({
+        name: 'Circular Saw',
+        category: 'power',
+        listing_type: 'borrow',
+        owner_id: ALICE,
+        circle_id: 'circle-tools',
+        is_available: true
+    });
+
+    // Book Copy 1: Gatsby listed with "by Author", legacy listing_type: 'free'
+    await testDb.collection('items').doc('item-gatsby1').set({
+        name: 'The Great Gatsby by F. Scott Fitzgerald',
+        category: 'books',
+        listing_type: 'free',
+        owner_id: ALICE,
+        circle_id: 'circle-bks',
+        circle_ids: ['circle-bks'],
+        photos: ['https://example.com/gatsby1.jpg'],
+        is_available: true,
+        status: 'available'
+    });
+
+    // Book Copy 2: Duplicate Gatsby listed by Bob with legacy listing_type: 'rental'
+    await testDb.collection('items').doc('item-gatsby2').set({
+        name: 'The Great Gatsby',
+        author: 'F. Scott Fitzgerald',
+        category: 'books',
+        listing_type: 'rental',
+        owner_id: BOB,
+        circle_id: 'circle-bks',
+        circle_ids: ['circle-bks'],
+        is_available: false,
+        status: 'borrowed'
+    });
+
+    // Book Copy 3: Dune with ISBN-13 in description
+    await testDb.collection('items').doc('item-dune').set({
+        name: 'Dune (Hardcover)',
+        description: 'Mint condition. ISBN-13: 978-0441172719',
+        category: 'books',
+        listing_type: 'swap',
+        owner_id: ALICE,
+        circle_id: 'circle-bks',
+        is_available: true
+    });
+
+    // Book Copy 4: Generic unresolvable book -> must be flagged for review
+    await testDb.collection('items').doc('item-generic').set({
+        name: 'Novel',
+        category: 'books',
+        listing_type: 'giveaway',
+        owner_id: BOB,
+        circle_id: 'circle-bks',
+        is_available: true
+    });
+
+    // Book Copy 5: Book in "a-world-of-books" circle
+    await testDb.collection('items').doc('item-hobbit').set({
+        name: 'The Hobbit',
+        author: 'J.R.R. Tolkien',
+        listing_type: 'borrow',
+        owner_id: ALICE,
+        circle_id: 'a-world-of-books',
+        is_available: true
+    });
+
+    // Seed existing request on gatsby1 to verify migration NEVER alters requests
+    await testDb.collection('requests').doc('req-gatsby').set({
+        item_id: 'item-gatsby1',
+        borrower_id: BOB,
+        lender_id: ALICE,
+        status: 'approved',
+        type: 'borrow'
+    });
+
+    // 4. Test Dry-Run Execution
+    const dryRunReport = await runBookCatalogMigration(testDb, true);
+    assert.strictEqual(dryRunReport.totalScanned, 6);
+    assert.strictEqual(dryRunReport.candidateBookCount, 5);
+    assert.strictEqual(dryRunReport.migratedCount, 4);
+    assert.strictEqual(dryRunReport.booksCreatedCount, 3);
+    assert.strictEqual(dryRunReport.booksMergedCount, 1);
+    assert.strictEqual(dryRunReport.reviewCount, 1);
+    assert.strictEqual(dryRunReport.reviewList[0].itemId, 'item-generic');
+
+    // Verify 0 writes during dry run
+    const dryBooksSnap = await testDb.collection('books').get();
+    assert.strictEqual(dryBooksSnap.size, 0, 'Dry run must not create books in DB');
+    const dryItemGatsby = (await testDb.collection('items').doc('item-gatsby1').get()).data();
+    assert.strictEqual(dryItemGatsby.book_id, undefined, 'Dry run must not set book_id');
+    assert.strictEqual(dryItemGatsby.listing_type, 'free', 'Dry run must not alter listing_type');
+
+    // 5. Test Apply Execution
+    const applyReport = await runBookCatalogMigration(testDb, false);
+    assert.strictEqual(applyReport.migratedCount, 4);
+    assert.strictEqual(applyReport.booksCreatedCount, 3);
+    assert.strictEqual(applyReport.booksMergedCount, 1);
+    assert.strictEqual(applyReport.reviewCount, 1);
+
+    // Verify canonical books created
+    const appliedBooksSnap = await testDb.collection('books').get();
+    assert.strictEqual(appliedBooksSnap.size, 3, 'Exactly 3 canonical books must exist in DB');
+
+    // Verify Gatsby duplicate merging
+    const gatsbyCopy1 = (await testDb.collection('items').doc('item-gatsby1').get()).data();
+    const gatsbyCopy2 = (await testDb.collection('items').doc('item-gatsby2').get()).data();
+    assert.ok(gatsbyCopy1.book_id, 'item-gatsby1 must have book_id');
+    assert.ok(gatsbyCopy2.book_id, 'item-gatsby2 must have book_id');
+    assert.strictEqual(gatsbyCopy1.book_id, gatsbyCopy2.book_id, 'Duplicate Gatsby listings must link to identical canonical book_id');
+    assert.strictEqual(gatsbyCopy1.kind, 'book');
+    assert.strictEqual(gatsbyCopy2.kind, 'book');
+    assert.strictEqual(gatsbyCopy1.listing_type, 'borrow', 'Legacy "free" must normalize to "borrow"');
+    assert.strictEqual(gatsbyCopy2.listing_type, 'borrow', 'Legacy "rental" must normalize to "borrow"');
+    assert.strictEqual(gatsbyCopy1.circle_id, 'circle-bks', 'Circle ID must be preserved');
+    assert.deepStrictEqual(gatsbyCopy1.photos, ['https://example.com/gatsby1.jpg'], 'Photos must be preserved');
+
+    const gatsbyBook = (await testDb.collection('books').doc(gatsbyCopy1.book_id).get()).data();
+    assert.strictEqual(gatsbyBook.title, 'The Great Gatsby');
+    assert.strictEqual(gatsbyBook.copies_count, 2, 'Gatsby canonical book must report 2 total copies');
+    assert.strictEqual(gatsbyBook.available_copies_count, 1, 'Gatsby canonical book must report 1 available copy');
+
+    // Verify Dune with ISBN ID and edition notes
+    const duneCopy = (await testDb.collection('items').doc('item-dune').get()).data();
+    assert.strictEqual(duneCopy.book_id, 'isbn_9780441172719');
+    assert.strictEqual(duneCopy.edition_notes, 'Hardcover');
+    const duneBook = (await testDb.collection('books').doc('isbn_9780441172719').get()).data();
+    assert.strictEqual(duneBook.isbn_13, '9780441172719');
+
+    // Verify generic book review tagging
+    const genericItem = (await testDb.collection('items').doc('item-generic').get()).data();
+    assert.strictEqual(genericItem.book_id, undefined, 'Flagged review item must not receive book_id');
+    assert.strictEqual(genericItem.migration_review_needed, true);
+
+    // Verify requests collection is completely untouched
+    const checkReq = (await testDb.collection('requests').doc('req-gatsby').get()).data();
+    assert.strictEqual(checkReq.status, 'approved');
+    assert.strictEqual(checkReq.item_id, 'item-gatsby1');
+
+    // 6. Test Idempotency
+    const secondReport = await runBookCatalogMigration(testDb, false);
+    assert.strictEqual(secondReport.migratedCount, 0, 'Second run must migrate 0 items');
+    assert.strictEqual(secondReport.alreadyMigratedCount, 4, 'Second run must identify all 4 already migrated items');
+    assert.strictEqual(secondReport.booksCreatedCount, 0, 'Second run must create 0 new books');
+    const finalBooksSnap = await testDb.collection('books').get();
+    assert.strictEqual(finalBooksSnap.size, 3, 'Total canonical books count must remain 3');
 });
 
 // ==========================================

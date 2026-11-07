@@ -299,3 +299,23 @@ export function getBookCopiesStatus(book) {
         ctaUrl: bookId ? `/book-detail.html?id=${encodeURIComponent(bookId)}` : '#'
     };
 }
+
+/**
+ * Normalizes legacy and modern listing types to canonical v1 listing types ('borrow', 'giveaway', 'swap').
+ * @param {string} type 
+ * @param {string} [intent] 
+ * @returns {'borrow'|'giveaway'|'swap'}
+ */
+export function normalizeListingType(type, intent) {
+    const raw = String(type || '').toLowerCase();
+    const rawIntent = String(intent || '').toLowerCase();
+    if ((raw === 'free' || raw === '') && (rawIntent === 'donate' || rawIntent === 'giveaway')) {
+        return 'giveaway';
+    }
+    if (raw === 'rental' || raw === 'free' || raw === 'lend' || raw === 'loan') return 'borrow';
+    if (raw === 'donate' || raw === 'donation') return 'giveaway';
+    if (raw === 'swap' || raw === 'trade') return 'swap';
+    if (raw === 'giveaway') return 'giveaway';
+    return 'borrow';
+}
+
