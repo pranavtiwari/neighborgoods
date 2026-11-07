@@ -766,6 +766,10 @@
                     statusText.textContent = 'Cancelled / Declined';
                     helperText.textContent = 'This request has been cancelled or declined.';
                 }
+
+                if (activeRequest.is_legacy === true || !Array.isArray(activeRequest.timeline) || activeRequest.timeline.length === 0) {
+                    statusText.innerHTML += ` <span class="text-[9px] bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-bold px-1.5 py-0.5 rounded ml-1.5">Legacy Record</span>`;
+                }
             } catch (err) {
                 console.error("Error loading transaction status:", err);
             }

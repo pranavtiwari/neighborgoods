@@ -714,6 +714,38 @@
                                 ${dateInfoHtml}
                             </div>
                         </div>
+                        ${(() => {
+                            const isLegacy = req.is_legacy === true || !Array.isArray(req.timeline) || req.timeline.length === 0;
+                            const timelineEvents = Array.isArray(req.timeline) ? req.timeline : [];
+                            if (isLegacy) {
+                                return `
+                                    <div class="mt-2 pt-2 border-t border-surface-container-low flex items-center justify-between text-xs">
+                                        <span class="text-stone-400 flex items-center gap-1 text-[11px]">
+                                            <span class="material-symbols-outlined text-[13px]">history</span>
+                                            Transaction Ledger
+                                        </span>
+                                        <span class="text-[9px] bg-stone-100 dark:bg-stone-800 text-stone-500 px-2 py-0.5 rounded-full font-bold">Legacy Record</span>
+                                    </div>`;
+                            }
+                            const stepsHtml = timelineEvents.map((t) => {
+                                const timeStr = t.created_at ? new Date(t.created_at?.toDate ? t.created_at.toDate() : t.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+                                return `<span class="inline-flex items-center gap-1 bg-surface-container px-2 py-0.5 rounded text-[10px] font-medium shrink-0">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                                    <span class="capitalize">${escapeHtml(t.event_type || t.status)}</span>
+                                    ${timeStr ? `<span class="text-stone-400 text-[9px]">(${timeStr})</span>` : ''}
+                                </span>`;
+                            }).join('<span class="text-stone-300">→</span>');
+                            return `
+                                <div class="mt-2 pt-2 border-t border-surface-container-low">
+                                    <div class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mb-1 flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[13px] text-primary">timeline</span>
+                                        <span>Audit Timeline (${timelineEvents.length} events)</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 overflow-x-auto py-1 hide-scrollbar">
+                                        ${stepsHtml}
+                                    </div>
+                                </div>`;
+                        })()}
                         <div class="flex justify-between items-center pt-4 border-t border-surface-container-low gap-3 flex-wrap">
                             <button onclick="window.location.href='chat.html?userId=' + encodeURIComponent(this.dataset.userId) + '&itemId=' + encodeURIComponent(this.dataset.itemId)"
                                 data-user-id="${db.escapeAttr(currentView === 'borrowing' ? item.owner_id : req.borrower_id)}"
@@ -855,7 +887,10 @@
                                 </div>
                                 <div class="min-w-0">
                                     <p class="font-semibold text-sm text-on-surface truncate">${escapeHtml(item?.name || 'Unknown Item')}</p>
-                                    <p class="text-[11px] text-on-surface-variant mt-0.5 truncate">${relationText}</p>
+                                    <p class="text-[11px] text-on-surface-variant mt-0.5 truncate flex items-center gap-1.5">
+                                        <span>${relationText}</span>
+                                        ${(req.is_legacy === true || !Array.isArray(req.timeline) || req.timeline.length === 0) ? '<span class="text-[9px] bg-stone-100 dark:bg-stone-800 text-stone-500 font-bold px-1.5 py-0.5 rounded">Legacy</span>' : ''}
+                                    </p>
                                     ${starsHtml}
                                 </div>
                             </div>

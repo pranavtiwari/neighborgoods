@@ -139,6 +139,21 @@
     <div class="text-center py-4 text-stone-500 animate-pulse">Loading borrowed items...</div>
 </div>
 </section>
+<!-- Transaction History Ledger -->
+<section id="transaction-ledger-section" class="space-y-4 pt-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-2">
+        <h3 class="text-xl font-bold tracking-tight">Transaction History</h3>
+        <div class="flex gap-1 overflow-x-auto py-1 hide-scrollbar" id="ledger-filter-buttons">
+            <button onclick="setLedgerFilter('all')" class="ledger-filter-btn px-3 py-1 rounded-full text-xs font-bold bg-primary text-on-primary transition-all" data-filter="all">All</button>
+            <button onclick="setLedgerFilter('borrowing')" class="ledger-filter-btn px-3 py-1 rounded-full text-xs font-bold bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-all" data-filter="borrowing">Borrowing</button>
+            <button onclick="setLedgerFilter('lending')" class="ledger-filter-btn px-3 py-1 rounded-full text-xs font-bold bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-all" data-filter="lending">Lending</button>
+            <button onclick="setLedgerFilter('swaps')" class="ledger-filter-btn px-3 py-1 rounded-full text-xs font-bold bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-all" data-filter="swaps">Swaps</button>
+        </div>
+    </div>
+    <div class="space-y-3" id="profile-transactions-list">
+        <div class="text-center py-4 text-stone-500 animate-pulse">Loading transaction history...</div>
+    </div>
+</section>
 <!-- Reviews Section -->
 <section id="profile-reviews-section" class="space-y-4 pt-4">
     <h3 class="text-xl font-bold tracking-tight px-2">Reviews from Neighbors</h3>
@@ -476,7 +491,105 @@
                 borrowedList.innerHTML = `<div class="text-center py-6 text-error font-medium">Failed to load borrowed items.</div>`;
             }
         }
+
+        // Fetch and display transaction ledger history
+        try {
+            userTransactions = await window.db.getTransactionHistoryForUser(targetUserId);
+            renderUserTransactions(targetUserId);
+        } catch (err) {
+            console.error("Error fetching transaction history:", err);
+            const listEl = document.getElementById('profile-transactions-list');
+            if (listEl) listEl.innerHTML = `<div class="text-center py-6 text-stone-500 font-medium">Failed to load transaction history.</div>`;
+        }
     }
+
+    let userTransactions = [];
+    let currentLedgerFilter = 'all';
+
+    function renderUserTransactions(targetUserId) {
+        const listEl = document.getElementById('profile-transactions-list');
+        if (!listEl) return;
+
+        let filtered = userTransactions || [];
+        const isSwapFn = (t) => t.type === 'swap' || t.listing_type === 'swap' || Boolean(t.offered_item_id) || Boolean(t.swap_item_id);
+        const isGiveawayFn = (t) => t.type === 'giveaway' || t.listing_type === 'giveaway';
+
+        if (currentLedgerFilter === 'borrowing') {
+            filtered = userTransactions.filter(t => t.borrower_id === targetUserId && !isSwapFn(t));
+        } else if (currentLedgerFilter === 'lending') {
+            filtered = userTransactions.filter(t => t.lender_id === targetUserId && !isSwapFn(t));
+        } else if (currentLedgerFilter === 'swaps') {
+            filtered = userTransactions.filter(isSwapFn);
+        }
+
+        if (filtered.length === 0) {
+            listEl.innerHTML = `<div class="text-center py-6 text-stone-500 font-medium">No transactions recorded in this category.</div>`;
+            return;
+        }
+
+        listEl.innerHTML = filtered.map(t => {
+            const isLegacy = t.is_legacy === true || !Array.isArray(t.timeline) || t.timeline.length === 0;
+            const itemName = escapeHtml(t.items?.name || t.item_name || 'Community Item');
+            const isSwap = isSwapFn(t);
+            const isGiveaway = isGiveawayFn(t);
+            const typeLabel = isSwap ? 'Swap' : (isGiveaway ? 'Giveaway' : (t.borrower_id === targetUserId ? 'Borrowing' : 'Lending'));
+            const fulfillment = t.fulfillment_method || 'pickup';
+            const status = t.status || 'pending';
+            const timelineEvents = Array.isArray(t.timeline) ? t.timeline : [];
+            const lastEvent = timelineEvents.length > 0 ? timelineEvents[timelineEvents.length - 1] : null;
+
+            const timeStr = t.created_at ? new Date(t.created_at?.toDate ? t.created_at.toDate() : t.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+            const lastEventStr = lastEvent?.created_at ? new Date(lastEvent.created_at?.toDate ? lastEvent.created_at.toDate() : lastEvent.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+
+            let typeBadgeClass = 'bg-primary/10 text-primary';
+            if (isSwap) typeBadgeClass = 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300';
+            else if (isGiveaway) typeBadgeClass = 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300';
+
+            return `
+                <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/10 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
+                    <div class="space-y-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="font-bold text-on-surface text-sm truncate max-w-[200px]">${itemName}</span>
+                            <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${typeBadgeClass}">${escapeHtml(typeLabel)}</span>
+                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-surface-container text-on-surface-variant flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[12px]">${fulfillment === 'shipping' ? 'local_shipping' : 'front_hand'}</span>
+                                ${escapeHtml(fulfillment)}
+                            </span>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded capitalize ${status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}">${escapeHtml(status)}</span>
+                            ${isLegacy ? '<span class="text-[9px] bg-stone-100 dark:bg-stone-800 text-stone-500 font-bold px-1.5 py-0.5 rounded">Legacy Record</span>' : ''}
+                        </div>
+                        <p class="text-xs text-on-surface-variant flex items-center gap-2 flex-wrap">
+                            <span>Created: ${timeStr || 'N/A'}</span>
+                            ${lastEvent ? `<span>•</span><span>Last: <strong>${escapeHtml(lastEvent.event_type || lastEvent.status)}</strong> (${lastEventStr})</span>` : ''}
+                            ${t.tracking_number ? `<span>•</span><span class="font-mono text-[11px]">Tracking: ${escapeHtml(t.tracking_number)}</span>` : ''}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                        <button onclick="window.location.href='chat.html?userId=' + encodeURIComponent(this.dataset.counterpart) + '&itemId=' + encodeURIComponent(this.dataset.item)"
+                            data-counterpart="${db.escapeAttr(t.borrower_id === targetUserId ? (t.lender_id || '') : (t.borrower_id || ''))}"
+                            data-item="${db.escapeAttr(t.item_id || '')}"
+                            class="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-bold transition-all">
+                            Chat
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    window.setLedgerFilter = function(filter) {
+        currentLedgerFilter = filter;
+        document.querySelectorAll('.ledger-filter-btn').forEach(btn => {
+            if (btn.dataset.filter === filter) {
+                btn.className = 'ledger-filter-btn px-3 py-1 rounded-full text-xs font-bold bg-primary text-on-primary transition-all';
+            } else {
+                btn.className = 'ledger-filter-btn px-3 py-1 rounded-full text-xs font-bold bg-surface-container text-on-surface-variant hover:bg-surface-container-high transition-all';
+            }
+        });
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetUserId = urlParams.get('userId') || (firebase.auth().currentUser && firebase.auth().currentUser.uid);
+        renderUserTransactions(targetUserId);
+    };
     
     // Update header avatar
     async function updateHeaderAvatar(user) {

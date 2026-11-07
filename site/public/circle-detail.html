@@ -151,13 +151,28 @@
         </div>
 
         <!-- Admin: Pending Join Requests (Near Top, Responsive Grid) -->
-        <div id="join-requests-panel" class="hidden bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-6 shadow-sm mb-12">
+        <div id="join-requests-panel" class="hidden bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-6 shadow-sm mb-8">
             <h3 class="label-md text-amber-700 dark:text-amber-400 mb-4 flex items-center gap-2 font-bold">
                 <span class="material-symbols-outlined text-base text-amber-600 dark:text-amber-500">pending</span>
                 Pending Join Requests
                 <span id="request-count-badge" class="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full"></span>
             </h3>
             <div id="join-requests-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+
+        <!-- Admin: Circle Transaction Ledger -->
+        <div id="circle-admin-ledger-panel" class="hidden bg-surface-container-low border border-outline-variant/30 rounded-2xl p-6 shadow-sm mb-12">
+            <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <h3 class="label-md text-primary flex items-center gap-2 font-bold">
+                    <span class="material-symbols-outlined text-base">receipt_long</span>
+                    Circle Transaction Ledger
+                    <span id="circle-ledger-count-badge" class="bg-primary/20 text-primary text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+                </h3>
+                <span class="text-xs text-on-surface-variant">Admin view of circle transactions</span>
+            </div>
+            <div id="circle-admin-ledger-list" class="space-y-3">
+                <div class="text-center py-4 text-stone-500 animate-pulse">Loading circle ledger...</div>
+            </div>
         </div>
 
         <!-- Asymmetric Content Grid -->
@@ -885,9 +900,13 @@
                     loadFeed(currentCircleId);
                 }
 
-                // 7. Admin: always load join requests (panel only shows if there are any)
+                // 7. Admin: load join requests and circle transaction ledger
                 if (currentUserRole === 'admin') {
                     loadJoinRequests();
+                    loadCircleAdminLedger();
+                } else {
+                    const ledgerPanel = document.getElementById('circle-admin-ledger-panel');
+                    if (ledgerPanel) ledgerPanel.classList.add('hidden');
                 }
 
             } catch (err) {
@@ -1049,6 +1068,84 @@
             }
         }
         window.handleDeny = handleDeny;
+
+        async function loadCircleAdminLedger() {
+            const panel = document.getElementById('circle-admin-ledger-panel');
+            const list = document.getElementById('circle-admin-ledger-list');
+            const badge = document.getElementById('circle-ledger-count-badge');
+            if (!panel || !list) return;
+
+            if (currentUserRole !== 'admin') {
+                panel.classList.add('hidden');
+                return;
+            }
+            panel.classList.remove('hidden');
+
+            try {
+                const transactions = await window.db.getTransactionHistoryForCircle(currentCircleId);
+                if (badge) badge.textContent = transactions.length;
+
+                if (transactions.length === 0) {
+                    list.innerHTML = `<p class="text-stone-400 italic text-sm text-center py-4">No transactions recorded for this circle yet.</p>`;
+                    return;
+                }
+
+                list.innerHTML = transactions.map(t => {
+                    const isLegacy = t.is_legacy === true || !Array.isArray(t.timeline) || t.timeline.length === 0;
+                    const itemName = escapeHtml(t.items?.name || t.item_name || 'Community Item');
+                    const isSwap = t.type === 'swap' || t.listing_type === 'swap' || Boolean(t.offered_item_id) || Boolean(t.swap_item_id);
+                    const isGiveaway = t.type === 'giveaway' || t.listing_type === 'giveaway';
+                    const type = isSwap ? 'swap' : (isGiveaway ? 'giveaway' : 'borrow');
+                    const fulfillment = t.fulfillment_method || 'pickup';
+                    const status = t.status || 'pending';
+                    const timelineEvents = Array.isArray(t.timeline) ? t.timeline : [];
+                    const lastEvent = timelineEvents.length > 0 ? timelineEvents[timelineEvents.length - 1] : null;
+
+                    const timeStr = t.created_at ? new Date(t.created_at?.toDate ? t.created_at.toDate() : t.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                    const lastEventStr = lastEvent?.created_at ? new Date(lastEvent.created_at?.toDate ? lastEvent.created_at.toDate() : lastEvent.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+
+                    let typeBadgeClass = 'bg-primary/10 text-primary';
+                    if (isSwap) typeBadgeClass = 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300';
+                    else if (isGiveaway) typeBadgeClass = 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300';
+
+                    return `
+                        <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/10 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3 text-left">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-bold text-on-surface text-sm">${itemName}</span>
+                                    <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${typeBadgeClass}">${escapeHtml(type)}</span>
+                                    <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-surface-container text-on-surface-variant flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[12px]">${fulfillment === 'shipping' ? 'local_shipping' : 'front_hand'}</span>
+                                        ${escapeHtml(fulfillment)}
+                                    </span>
+                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded capitalize ${status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}">${escapeHtml(status)}</span>
+                                    ${isLegacy ? '<span class="text-[9px] bg-stone-100 dark:bg-stone-800 text-stone-500 font-bold px-1.5 py-0.5 rounded">Legacy Record</span>' : ''}
+                                </div>
+                                <p class="text-xs text-on-surface-variant flex items-center gap-2 flex-wrap">
+                                    <span>Req ID: <code class="text-[10px] font-mono">${escapeHtml(t.id)}</code></span>
+                                    <span>•</span>
+                                    <span>Created: ${timeStr || 'N/A'}</span>
+                                    ${lastEvent ? `<span>•</span><span>Last Action: <strong>${escapeHtml(lastEvent.event_type || lastEvent.status)}</strong> (${lastEventStr})</span>` : ''}
+                                    ${t.tracking_number ? `<span>•</span><span class="font-mono text-[11px]">Tracking: ${escapeHtml(t.tracking_number)}</span>` : ''}
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2 self-end md:self-auto shrink-0">
+                                <button onclick="window.location.href='chat.html?userId=' + encodeURIComponent(this.dataset.borrower) + '&itemId=' + encodeURIComponent(this.dataset.item)"
+                                    data-borrower="${db.escapeAttr(t.borrower_id || '')}"
+                                    data-item="${db.escapeAttr(t.item_id || '')}"
+                                    class="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-bold transition-all">
+                                    View Thread
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error("Error loading circle admin ledger:", err);
+                list.innerHTML = `<p class="text-error text-xs text-center py-2">Failed to load circle transaction ledger.</p>`;
+            }
+        }
+        window.loadCircleAdminLedger = loadCircleAdminLedger;
         window.submitJoinRequest = submitJoinRequest;
         window.closeJoinRequestModal = closeJoinRequestModal;
         window.openJoinRequestModal = openJoinRequestModal;

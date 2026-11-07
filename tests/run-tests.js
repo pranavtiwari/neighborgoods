@@ -2287,7 +2287,186 @@ await test('Flow 13: Shipping Fulfillment Lifecycle, Tracking, and Transactional
     assert.strictEqual(shipEvent.metadata.tracking_number, '9400111899223192019');
 });
 
+await test('Flow 14: Wire transaction ledger across user history, circle admin, and legacy records', async () => {
+    resetSandbox();
+    const aliceUid = 'alice-flow14';
+    const bobUid = 'bob-flow14';
+    const charlieUid = 'charlie-flow14';
+    const circleId = 'circle-flow14';
 
+    // Seed profiles
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('profiles').doc(aliceUid).set({
+        id: aliceUid,
+        full_name: 'Alice Flow14',
+        location: 'Oakland'
+    });
+    firebase.auth().currentUser = { uid: bobUid };
+    await firebase.firestore().collection('profiles').doc(bobUid).set({
+        id: bobUid,
+        full_name: 'Bob Flow14',
+        location: 'Berkeley'
+    });
+    firebase.auth().currentUser = { uid: charlieUid };
+    await firebase.firestore().collection('profiles').doc(charlieUid).set({
+        id: charlieUid,
+        full_name: 'Charlie Flow14',
+        location: 'San Francisco'
+    });
+
+    // Seed circle
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('circles').doc(circleId).set({
+        id: circleId,
+        name: 'Bay Area Sharing Circle',
+        is_private: false,
+        member_count: 3,
+        created_by: aliceUid
+    });
+
+    // 1. Transaction 1: Alice lends tool to Bob with pickup fulfillment
+    firebase.auth().currentUser = { uid: aliceUid };
+    const aliceTool = await window.db.addItem({
+        name: 'DeWalt Cordless Drill',
+        kind: 'thing',
+        owner_id: aliceUid,
+        listing_type: 'borrow',
+        circle_id: circleId,
+        fulfillment_options: ['pickup']
+    });
+
+    firebase.auth().currentUser = { uid: bobUid };
+    const borrowReq = await window.db.createBorrowRequest({
+        item_id: aliceTool.id,
+        borrower_id: bobUid,
+        circle_id: circleId,
+        start_date: '2026-11-10',
+        end_date: '2026-11-15',
+        fulfillment_method: 'pickup'
+    });
+
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmBorrowRequest(borrowReq.id, aliceTool.id);
+    firebase.auth().currentUser = { uid: bobUid };
+    await window.db.markPickedUp(borrowReq.id, aliceTool.id);
+    await window.db.markReturned(borrowReq.id);
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmReturn(borrowReq.id);
+
+    // 2. Transaction 2: Swap between Alice and Bob
+    firebase.auth().currentUser = { uid: aliceUid };
+    const aliceTent = await window.db.addItem({
+        name: 'Camping Tent',
+        kind: 'thing',
+        owner_id: aliceUid,
+        listing_type: 'swap',
+        circle_id: circleId,
+        fulfillment_options: ['pickup', 'shipping']
+    });
+
+    firebase.auth().currentUser = { uid: bobUid };
+    const bobPlant = await window.db.addItem({
+        name: 'Monstera Deliciosa',
+        kind: 'thing',
+        owner_id: bobUid,
+        listing_type: 'swap',
+        circle_id: circleId,
+        fulfillment_options: ['pickup']
+    });
+
+    const swapReq = await window.db.createBorrowRequest({
+        type: 'swap',
+        item_id: aliceTent.id,
+        offered_item_id: bobPlant.id,
+        borrower_id: bobUid,
+        circle_id: circleId,
+        fulfillment_method: 'shipping'
+    });
+
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmBorrowRequest(swapReq.id, aliceTent.id, 'swap');
+    // Confirm swap completions (borrower Bob first, lender Alice second)
+    firebase.auth().currentUser = { uid: bobUid };
+    await window.db.confirmSwapExchange(swapReq.id);
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmSwapExchange(swapReq.id);
+
+    // 3. Transaction 3 & 4: Seed legacy transactions
+    // Legacy record 1: Explicit is_legacy: true and empty timeline
+    const legacyId1 = 'legacy-req-001';
+    if (!firebase.firestore().db['requests']) firebase.firestore().db['requests'] = {};
+    firebase.firestore().db['requests'][legacyId1] = {
+        id: legacyId1,
+        item_id: 'legacy-item-1',
+        item_name: 'Vintage Typewriter',
+        circle_id: circleId,
+        borrower_id: bobUid,
+        lender_id: aliceUid,
+        participant_ids: [bobUid, aliceUid],
+        status: 'completed',
+        listing_type: 'borrow',
+        fulfillment_method: 'pickup',
+        is_legacy: true,
+        timeline: [],
+        created_at: new Date('2024-01-15T12:00:00Z')
+    };
+
+    // Legacy record 2: Pre-Phase-2 record with missing timeline and missing is_legacy flag
+    const legacyId2 = 'legacy-req-002';
+    firebase.firestore().db['requests'][legacyId2] = {
+        id: legacyId2,
+        item_id: 'legacy-item-2',
+        item_name: 'Camp Stove',
+        circle_id: circleId,
+        borrower_id: aliceUid,
+        lender_id: charlieUid,
+        participant_ids: [aliceUid, charlieUid],
+        status: 'completed',
+        listing_type: 'borrow',
+        created_at: new Date('2024-02-20T10:00:00Z')
+    };
+
+    // 4. Test User Transaction History Queries & Grouping
+    const aliceTransactions = await window.db.getTransactionHistoryForUser(aliceUid);
+    assert.ok(aliceTransactions.length >= 4, 'Alice should have at least 4 transactions');
+
+    // Grouping / filtering logic tests:
+    const isSwapFn = (t) => t.type === 'swap' || t.listing_type === 'swap' || Boolean(t.offered_item_id) || Boolean(t.swap_item_id);
+    const aliceBorrowing = aliceTransactions.filter(t => t.borrower_id === aliceUid && !isSwapFn(t));
+    const aliceLending = aliceTransactions.filter(t => t.lender_id === aliceUid && !isSwapFn(t));
+    const aliceSwaps = aliceTransactions.filter(isSwapFn);
+
+    assert.ok(aliceBorrowing.some(t => t.id === legacyId2), 'Alice borrowing should contain legacy Camp Stove');
+    assert.ok(aliceLending.some(t => t.id === borrowReq.id), 'Alice lending should contain DeWalt Drill');
+    assert.ok(aliceLending.some(t => t.id === legacyId1), 'Alice lending should contain legacy Typewriter');
+    assert.ok(aliceSwaps.some(t => t.id === swapReq.id), 'Alice swaps should contain Camping Tent swap');
+
+    // Verify legacy flags are recognized
+    const rec1 = aliceTransactions.find(t => t.id === legacyId1);
+    const rec2 = aliceTransactions.find(t => t.id === legacyId2);
+    const isLegacy1 = rec1.is_legacy === true || !Array.isArray(rec1.timeline) || rec1.timeline.length === 0;
+    const isLegacy2 = rec2.is_legacy === true || !Array.isArray(rec2.timeline) || rec2.timeline.length === 0;
+    assert.strictEqual(isLegacy1, true, 'Record 1 must be recognized as legacy');
+    assert.strictEqual(isLegacy2, true, 'Record 2 must be recognized as legacy');
+
+    // 5. Test Circle Admin Transaction Ledger Query
+    const circleTransactions = await window.db.getTransactionHistoryForCircle(circleId);
+    assert.strictEqual(circleTransactions.length, 4, 'Circle should have all 4 transactions in its ledger');
+    assert.ok(circleTransactions.some(t => t.id === borrowReq.id));
+    assert.ok(circleTransactions.some(t => t.id === swapReq.id));
+    assert.ok(circleTransactions.some(t => t.id === legacyId1));
+    assert.ok(circleTransactions.some(t => t.id === legacyId2));
+
+    // 6. Test Transaction Events Query for Standard vs Legacy
+    const borrowEvents = await window.db.getTransactionEventsForRequest(borrowReq.id);
+    assert.ok(borrowEvents.length >= 4, 'Borrow request must have audit events');
+
+    const legacyEvents = await window.db.getTransactionEventsForRequest(legacyId1);
+    assert.deepStrictEqual(legacyEvents, [], 'Legacy request must return empty events array without throwing');
+
+    const legacy2Events = await window.db.getTransactionEventsForRequest(legacyId2);
+    assert.deepStrictEqual(legacy2Events, [], 'Legacy request without timeline field must return empty events array');
+});
 
 // ==========================================
 // RESULTS REPORT
