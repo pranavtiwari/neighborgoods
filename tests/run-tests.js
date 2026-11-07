@@ -1716,6 +1716,211 @@ await test('Flow 10: Book Catalog Migration, Metadata Extraction, Deduplication,
     assert.strictEqual(finalBooksSnap.size, 3, 'Total canonical books count must remain 3');
 });
 
+await test('Flow 11: Extended Transaction Model, Swaps, Fulfillment Terms, Event Log, and History Queries (Issue #13)', async () => {
+    resetSandbox();
+    const aliceUid = 'alice-txn-uid';
+    const bobUid = 'bob-txn-uid';
+
+    // Seed profiles
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('profiles').doc(aliceUid).set({
+        id: aliceUid,
+        full_name: 'Alice Lender',
+        location: 'Mission, SF'
+    });
+    firebase.auth().currentUser = { uid: bobUid };
+    await firebase.firestore().collection('profiles').doc(bobUid).set({
+        id: bobUid,
+        full_name: 'Bob Borrower',
+        location: 'SoMa, SF'
+    });
+
+    // Seed Circle
+    const circleId = 'book-circle-txn';
+    await firebase.firestore().collection('circles').doc(circleId).set({
+        name: 'Bay Area Book Exchange',
+        category: 'books',
+        created_by: aliceUid
+    });
+
+    // Seed Canonical Book
+    firebase.auth().currentUser = { uid: aliceUid };
+    const canonicalBook = await window.db.createBook({
+        title: 'Brave New World',
+        authors: ['Aldous Huxley'],
+        isbn: '9780060850524'
+    });
+
+    // Alice lists a physical copy of Brave New World
+    const aliceItem = await window.db.addItem({
+        name: 'Brave New World',
+        kind: 'book',
+        book_id: canonicalBook.id,
+        owner_id: aliceUid,
+        listing_type: 'borrow',
+        circle_id: circleId,
+        fulfillment_method: 'both'
+    });
+
+    // 1. Bob creates a Borrow Request with shipping fulfillment terms
+    firebase.auth().currentUser = { uid: bobUid };
+    const borrowRes = await window.db.createBorrowRequest({
+        item_id: aliceItem.id,
+        borrower_id: bobUid,
+        fulfillment_method: 'shipping',
+        shipping_payer: 'requester',
+        shipping_notes: 'Please ship to my office address',
+        duration: '1 month'
+    });
+
+    assert.ok(borrowRes.id);
+
+    // Verify created request document has all extended fields
+    const reqDoc = await firebase.firestore().collection('requests').doc(borrowRes.id).get();
+    const reqData = reqDoc.data();
+    assert.strictEqual(reqData.type, 'borrow');
+    assert.strictEqual(reqData.book_id, canonicalBook.id);
+    assert.strictEqual(reqData.item_id, aliceItem.id);
+    assert.strictEqual(reqData.borrower_id, bobUid);
+    assert.strictEqual(reqData.lender_id, aliceUid);
+    assert.deepStrictEqual(reqData.participant_ids, [bobUid, aliceUid]);
+    assert.strictEqual(reqData.fulfillment_method, 'shipping');
+    assert.strictEqual(reqData.shipping_payer, 'requester');
+    assert.strictEqual(reqData.shipping_notes, 'Please ship to my office address');
+    assert.strictEqual(reqData.status, 'pending');
+    assert.ok(reqData.timeline && reqData.timeline.length === 1);
+    assert.strictEqual(reqData.timeline[0].status, 'pending');
+    assert.strictEqual(reqData.timeline[0].event_type, 'requested');
+    assert.ok(reqData.last_event_id);
+    assert.strictEqual(reqData.last_event_type, 'requested');
+
+    // Verify initial transaction_events entry
+    const eventsSnap = await firebase.firestore().collection('transaction_events')
+        .where('request_id', '==', borrowRes.id).get();
+    assert.strictEqual(eventsSnap.size, 1);
+    const ev1 = eventsSnap.docs[0].data();
+    assert.strictEqual(ev1.request_id, borrowRes.id);
+    assert.strictEqual(ev1.transaction_type, 'borrow');
+    assert.strictEqual(ev1.book_id, canonicalBook.id);
+    assert.strictEqual(ev1.item_id, aliceItem.id);
+    assert.strictEqual(ev1.actor_id, bobUid);
+    assert.strictEqual(ev1.borrower_id, bobUid);
+    assert.strictEqual(ev1.lender_id, aliceUid);
+    assert.deepStrictEqual(ev1.participant_ids, [bobUid, aliceUid]);
+    assert.strictEqual(ev1.circle_id, circleId);
+    assert.strictEqual(ev1.fulfillment_method, 'shipping');
+
+    // 2. Alice approves the request
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmBorrowRequest(borrowRes.id, aliceItem.id);
+
+    const approvedReqDoc = await firebase.firestore().collection('requests').doc(borrowRes.id).get();
+    const approvedData = approvedReqDoc.data();
+    assert.strictEqual(approvedData.status, 'approved');
+    assert.strictEqual(approvedData.timeline.length, 2);
+    assert.strictEqual(approvedData.timeline[1].status, 'approved');
+    assert.strictEqual(approvedData.last_event_type, 'approved');
+
+    // 3. Bob marks as picked up
+    firebase.auth().currentUser = { uid: bobUid };
+    await window.db.markPickedUp(borrowRes.id, aliceItem.id);
+
+    const pickedUpReq = (await firebase.firestore().collection('requests').doc(borrowRes.id).get()).data();
+    assert.strictEqual(pickedUpReq.status, 'borrowed');
+    assert.strictEqual(pickedUpReq.timeline.length, 3);
+    assert.strictEqual(pickedUpReq.last_event_type, 'picked_up');
+
+    // 4. Bob marks as returned
+    await window.db.markReturned(borrowRes.id);
+    const returnedReq = (await firebase.firestore().collection('requests').doc(borrowRes.id).get()).data();
+    assert.strictEqual(returnedReq.status, 'returned');
+    assert.strictEqual(returnedReq.timeline.length, 4);
+    assert.strictEqual(returnedReq.last_event_type, 'returned');
+
+    // 5. Alice confirms return
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmReturn(borrowRes.id);
+    const completedReq = (await firebase.firestore().collection('requests').doc(borrowRes.id).get()).data();
+    assert.strictEqual(completedReq.status, 'completed');
+    assert.strictEqual(completedReq.timeline.length, 5);
+    assert.strictEqual(completedReq.last_event_type, 'borrow_completed');
+
+    // 6. Test Query Methods for Transaction History & Audit
+    const userHistoryAlice = await window.db.getTransactionHistoryForUser(aliceUid);
+    assert.strictEqual(userHistoryAlice.length, 1);
+    assert.strictEqual(userHistoryAlice[0].id, borrowRes.id);
+
+    const userHistoryBob = await window.db.getTransactionHistoryForUser(bobUid);
+    assert.strictEqual(userHistoryBob.length, 1);
+    assert.strictEqual(userHistoryBob[0].id, borrowRes.id);
+
+    const allEvents = await window.db.getTransactionEventsForRequest(borrowRes.id);
+    assert.strictEqual(allEvents.length, 5);
+    assert.strictEqual(allEvents[0].event_type, 'requested');
+    assert.strictEqual(allEvents[1].event_type, 'approved');
+    assert.strictEqual(allEvents[2].event_type, 'picked_up');
+    assert.strictEqual(allEvents[3].event_type, 'returned');
+    assert.strictEqual(allEvents[4].event_type, 'borrow_completed');
+
+    const bookHistory = await window.db.getTransactionHistoryForBook(canonicalBook.id);
+    assert.strictEqual(bookHistory.length, 1);
+    assert.strictEqual(bookHistory[0].id, borrowRes.id);
+
+    const circleHistory = await window.db.getTransactionHistoryForCircle(circleId);
+    assert.strictEqual(circleHistory.length, 1);
+    assert.strictEqual(circleHistory[0].id, borrowRes.id);
+
+    // 7. Test Swap Request Creation with Offered Item
+    const book1984 = await window.db.createBook({
+        title: '1984',
+        authors: ['George Orwell'],
+        isbn: '9780451524935'
+    });
+    const bookFahrenheit = await window.db.createBook({
+        title: 'Fahrenheit 451',
+        authors: ['Ray Bradbury'],
+        isbn: '9781451673319'
+    });
+
+    firebase.auth().currentUser = { uid: bobUid };
+    const bobOfferedItem = await window.db.addItem({
+        name: '1984',
+        kind: 'book',
+        book_id: book1984.id,
+        owner_id: bobUid,
+        listing_type: 'swap',
+        circle_id: circleId
+    });
+
+    firebase.auth().currentUser = { uid: aliceUid };
+    const aliceSwapTargetItem = await window.db.addItem({
+        name: 'Fahrenheit 451',
+        kind: 'book',
+        book_id: bookFahrenheit.id,
+        owner_id: aliceUid,
+        listing_type: 'swap',
+        circle_id: circleId
+    });
+
+    firebase.auth().currentUser = { uid: bobUid };
+    const swapReq = await window.db.createBorrowRequest({
+        type: 'swap',
+        item_id: aliceSwapTargetItem.id,
+        offered_item_id: bobOfferedItem.id,
+        borrower_id: bobUid,
+        fulfillment_method: 'both',
+        shipping_payer: 'split'
+    });
+
+    const swapDoc = (await firebase.firestore().collection('requests').doc(swapReq.id).get()).data();
+    assert.strictEqual(swapDoc.type, 'swap');
+    assert.strictEqual(swapDoc.item_id, aliceSwapTargetItem.id);
+    assert.strictEqual(swapDoc.offered_item_id, bobOfferedItem.id);
+    assert.strictEqual(swapDoc.fulfillment_method, 'both');
+    assert.strictEqual(swapDoc.shipping_payer, 'split');
+    assert.deepStrictEqual(swapDoc.participant_ids, [bobUid, aliceUid]);
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================

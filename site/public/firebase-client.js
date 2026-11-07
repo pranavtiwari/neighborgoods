@@ -1448,40 +1448,94 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     const circleId = itemData.circle_id || null;
                     const circleIds = itemData.circle_ids || [];
                     
-                    // lender_id is DERIVED from the item doc, never taken from the
-                    // client. firestore.rules requires it to be present and to
-                    // differ from the borrower, and getBorrowRequestsForUser /
-                    // getRatingsSummary both query on it — so omitting it here
-                    // denied every borrow write and starved lenders of
-                    // reputation. Strip any client-supplied value first so a
-                    // caller cannot spoof a different lender.
                     const { lender_id: _ignoredLenderId, ...safeRequestData } = requestData;
 
                     const requestType = requestData.type || (
-                        (itemData.listing_type === 'giveaway' || itemData.intent === 'donate') ? 'giveaway' : 'borrow'
+                        (itemData.listing_type === 'giveaway' || itemData.intent === 'donate')
+                            ? 'giveaway'
+                            : (itemData.listing_type === 'swap' ? 'swap' : 'borrow')
                     );
 
+                    let offeredBookId = null;
+                    if (requestType === 'swap') {
+                        if (!requestData.offered_item_id) {
+                            throw new Error("A swap request requires an offered item.");
+                        }
+                        const offeredRef = db.collection('items').doc(requestData.offered_item_id);
+                        const offeredDoc = await transaction.get(offeredRef);
+                        if (!offeredDoc.exists) {
+                            throw new Error("Offered swap item does not exist.");
+                        }
+                        const offeredData = offeredDoc.data();
+                        if (offeredData.owner_id !== requestData.borrower_id) {
+                            throw new Error("You can only offer items you own in a swap.");
+                        }
+                        if (offeredData.is_available === false || ['approved', 'borrowed', 'returned'].includes(offeredData.status)) {
+                            throw new Error("Your offered item is currently not available for a swap.");
+                        }
+                        offeredBookId = offeredData.book_id || null;
+                    }
+
+                    const participantIds = [requestData.borrower_id, itemData.owner_id];
+                    const fulfillmentMethod = requestData.fulfillment_method || 'pickup';
                     const newRequestRef = db.collection('requests').doc();
+                    const eventRef = db.collection('transaction_events').doc();
+
+                    const initialTimeline = [{
+                        status: 'pending',
+                        actor_id: requestData.borrower_id,
+                        event_type: 'requested',
+                        event_id: eventRef.id,
+                        created_at: new Date()
+                    }];
+
                     transaction.set(newRequestRef, {
                         ...safeRequestData,
                         lender_id: itemData.owner_id,
+                        participant_ids: participantIds,
                         type: requestType,
+                        book_id: itemData.book_id || null,
+                        offered_item_id: requestData.offered_item_id || null,
+                        offered_book_id: offeredBookId,
+                        fulfillment_method: fulfillmentMethod,
+                        shipping_payer: requestData.shipping_payer || null,
+                        shipping_notes: requestData.shipping_notes ? String(requestData.shipping_notes).trim() : '',
+                        carrier: requestData.carrier || null,
+                        tracking_number: requestData.tracking_number || null,
+                        return_due_date: requestData.return_due_date || null,
                         circle_id: circleId,
                         circle_ids: circleIds,
                         status: 'pending',
-                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                        timeline: initialTimeline,
+                        last_event_id: eventRef.id,
+                        last_event_type: 'requested',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
-                    // Append immutable transaction event (Issue #2 & #3)
-                    const eventRef = db.collection('transaction_events').doc();
+                    // Append immutable transaction event (Issue #2, #3, #13)
                     transaction.set(eventRef, {
                         request_id: newRequestRef.id,
+                        transaction_type: requestType,
                         item_id: requestData.item_id,
+                        book_id: itemData.book_id || null,
+                        offered_item_id: requestData.offered_item_id || null,
+                        offered_book_id: offeredBookId,
+                        circle_id: circleId,
+                        circle_ids: circleIds,
                         actor_id: requestData.borrower_id,
+                        borrower_id: requestData.borrower_id,
+                        lender_id: itemData.owner_id,
+                        participant_ids: participantIds,
                         event_type: 'requested',
                         from_status: null,
                         to_status: 'pending',
-                        metadata: { type: requestType, duration: requestData.duration || 'flexible' },
+                        fulfillment_method: fulfillmentMethod,
+                        metadata: {
+                            type: requestType,
+                            duration: requestData.duration || 'flexible',
+                            shipping_payer: requestData.shipping_payer || null
+                        },
                         created_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
                     
@@ -1547,6 +1601,130 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
+        // --- Transaction History & Ledger Audit Queries (Issue #13) ---
+        getTransactionHistoryForUser: async function(userId, opts = {}) {
+            if (!userId) return [];
+            const limit = opts.limit || 50;
+            try {
+                let snap;
+                try {
+                    snap = await firebase.firestore().collection('requests')
+                        .where('participant_ids', 'array-contains', userId)
+                        .orderBy('created_at', 'desc')
+                        .limit(limit)
+                        .get();
+                } catch (e) {
+                    // Fallback without ordering or separate queries if index unprovisioned
+                    const [borrowerSnap, lenderSnap] = await Promise.all([
+                        firebase.firestore().collection('requests').where('borrower_id', '==', userId).limit(limit).get(),
+                        firebase.firestore().collection('requests').where('lender_id', '==', userId).limit(limit).get()
+                    ]);
+                    const map = {};
+                    borrowerSnap.docs.forEach(d => map[d.id] = { id: d.id, ...d.data() });
+                    lenderSnap.docs.forEach(d => map[d.id] = { id: d.id, ...d.data() });
+                    const list = Object.values(map);
+                    list.sort((a, b) => {
+                        const tA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
+                        const tB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
+                        return tB - tA;
+                    });
+                    return list.slice(0, limit);
+                }
+
+                return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (err) {
+                console.error("Error getting transaction history for user:", err);
+                return [];
+            }
+        },
+
+        getTransactionEventsForRequest: async function(requestId) {
+            if (!requestId) return [];
+            try {
+                let snap;
+                try {
+                    snap = await firebase.firestore().collection('transaction_events')
+                        .where('request_id', '==', requestId)
+                        .orderBy('created_at', 'asc')
+                        .get();
+                } catch (e) {
+                    snap = await firebase.firestore().collection('transaction_events')
+                        .where('request_id', '==', requestId)
+                        .get();
+                }
+                const events = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                events.sort((a, b) => {
+                    const tA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
+                    const tB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
+                    return tA - tB;
+                });
+                return events;
+            } catch (err) {
+                console.error("Error getting transaction events for request:", err);
+                return [];
+            }
+        },
+
+        getTransactionHistoryForBook: async function(bookId, opts = {}) {
+            if (!bookId) return [];
+            const limit = opts.limit || 50;
+            try {
+                let snap;
+                try {
+                    snap = await firebase.firestore().collection('requests')
+                        .where('book_id', '==', bookId)
+                        .orderBy('created_at', 'desc')
+                        .limit(limit)
+                        .get();
+                } catch (e) {
+                    snap = await firebase.firestore().collection('requests')
+                        .where('book_id', '==', bookId)
+                        .limit(limit)
+                        .get();
+                }
+                const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                list.sort((a, b) => {
+                    const tA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
+                    const tB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
+                    return tB - tA;
+                });
+                return list;
+            } catch (err) {
+                console.error("Error getting transaction history for book:", err);
+                return [];
+            }
+        },
+
+        getTransactionHistoryForCircle: async function(circleId, opts = {}) {
+            if (!circleId) return [];
+            const limit = opts.limit || 50;
+            try {
+                let snap;
+                try {
+                    snap = await firebase.firestore().collection('requests')
+                        .where('circle_id', '==', circleId)
+                        .orderBy('created_at', 'desc')
+                        .limit(limit)
+                        .get();
+                } catch (e) {
+                    snap = await firebase.firestore().collection('requests')
+                        .where('circle_id', '==', circleId)
+                        .limit(limit)
+                        .get();
+                }
+                const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                list.sort((a, b) => {
+                    const tA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
+                    const tB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
+                    return tB - tA;
+                });
+                return list;
+            } catch (err) {
+                console.error("Error getting transaction history for circle:", err);
+                return [];
+            }
+        },
+
         // Confirm (approve) a borrow request.
         // For giveaway listings, the item is automatically deleted after approval.
         confirmBorrowRequest: async function(requestId, itemId, listingType) {
@@ -1576,34 +1754,52 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         throw new Error("This request is no longer pending.");
                     }
 
+                    const eventRef = db.collection('transaction_events').doc();
+                    const now = new Date();
+                    const existingTimeline = Array.isArray(requestData.timeline) ? requestData.timeline : [];
+                    const newTimeline = [...existingTimeline, {
+                        status: 'approved',
+                        actor_id: itemData.owner_id,
+                        event_type: 'approved',
+                        event_id: eventRef.id,
+                        created_at: now
+                    }];
+
                     // Update request status to approved
                     transaction.update(requestRef, {
                         status: 'approved',
-                        confirmed_at: firebase.firestore.FieldValue.serverTimestamp()
+                        confirmed_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        timeline: newTimeline,
+                        last_event_id: eventRef.id,
+                        last_event_type: 'approved',
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
                     // Update item status to approved (reserved) and is_available to false
-                    //
-                    // FIX: firestore.rules can only authorise a borrower's
-                    // later item writes (markPickedUp / markReturned) by
-                    // reading a single document — rules have no query
-                    // primitive. The owner writes the active request id here,
-                    // at the moment the approval is legitimately theirs to
-                    // grant, and it is cleared again when the request ends.
                     transaction.update(itemRef, {
                         status: 'approved',
                         is_available: false,
                         active_request_id: requestId
                     });
 
-                    const eventRef = db.collection('transaction_events').doc();
+                    const participantIds = requestData.participant_ids || [requestData.borrower_id, itemData.owner_id];
                     transaction.set(eventRef, {
                         request_id: requestId,
+                        transaction_type: requestData.type || 'borrow',
                         item_id: itemId,
+                        book_id: itemData.book_id || requestData.book_id || null,
+                        offered_item_id: requestData.offered_item_id || null,
+                        offered_book_id: requestData.offered_book_id || null,
+                        circle_id: requestData.circle_id || itemData.circle_id || null,
+                        circle_ids: requestData.circle_ids || itemData.circle_ids || [],
                         actor_id: itemData.owner_id,
+                        borrower_id: requestData.borrower_id,
+                        lender_id: itemData.owner_id,
+                        participant_ids: participantIds,
                         event_type: 'approved',
                         from_status: 'pending',
                         to_status: 'approved',
+                        fulfillment_method: requestData.fulfillment_method || 'pickup',
                         created_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 });
@@ -1625,20 +1821,45 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     if (requestData.status !== 'pending') {
                         throw new Error("Only pending requests can be declined.");
                     }
+
+                    const eventRef = db.collection('transaction_events').doc();
+                    const now = new Date();
+                    const existingTimeline = Array.isArray(requestData.timeline) ? requestData.timeline : [];
+                    const newTimeline = [...existingTimeline, {
+                        status: 'declined',
+                        actor_id: requestData.lender_id,
+                        event_type: 'declined',
+                        event_id: eventRef.id,
+                        created_at: now
+                    }];
                     
                     transaction.update(requestRef, {
                         status: 'declined',
-                        declined_at: firebase.firestore.FieldValue.serverTimestamp()
+                        declined_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        timeline: newTimeline,
+                        last_event_id: eventRef.id,
+                        last_event_type: 'declined',
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
-                    const eventRef = db.collection('transaction_events').doc();
+                    const participantIds = requestData.participant_ids || [requestData.borrower_id, requestData.lender_id];
                     transaction.set(eventRef, {
                         request_id: requestId,
+                        transaction_type: requestData.type || 'borrow',
                         item_id: requestData.item_id,
+                        book_id: requestData.book_id || null,
+                        offered_item_id: requestData.offered_item_id || null,
+                        offered_book_id: requestData.offered_book_id || null,
+                        circle_id: requestData.circle_id || null,
+                        circle_ids: requestData.circle_ids || [],
                         actor_id: requestData.lender_id,
+                        borrower_id: requestData.borrower_id,
+                        lender_id: requestData.lender_id,
+                        participant_ids: participantIds,
                         event_type: 'declined',
                         from_status: 'pending',
                         to_status: 'declined',
+                        fulfillment_method: requestData.fulfillment_method || 'pickup',
                         created_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 });
@@ -1825,11 +2046,27 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
                     const itemDoc = await transaction.get(itemRef);
                     if (!itemDoc.exists) throw new Error("Item not found");
+                    const itemData = itemDoc.data();
+
+                    const eventRef = db.collection('transaction_events').doc();
+                    const now = new Date();
+                    const existingTimeline = Array.isArray(requestData.timeline) ? requestData.timeline : [];
+                    const newTimeline = [...existingTimeline, {
+                        status: 'borrowed',
+                        actor_id: requestData.borrower_id,
+                        event_type: 'picked_up',
+                        event_id: eventRef.id,
+                        created_at: now
+                    }];
 
                     // Update request status to borrowed
                     transaction.update(requestRef, {
                         status: 'borrowed',
-                        picked_up_at: firebase.firestore.FieldValue.serverTimestamp()
+                        picked_up_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        timeline: newTimeline,
+                        last_event_id: eventRef.id,
+                        last_event_type: 'picked_up',
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
                     // Update item status to borrowed and is_available to false
@@ -1838,14 +2075,24 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         is_available: false
                     });
 
-                    const eventRef = db.collection('transaction_events').doc();
+                    const participantIds = requestData.participant_ids || [requestData.borrower_id, requestData.lender_id || itemData.owner_id];
                     transaction.set(eventRef, {
                         request_id: requestId,
+                        transaction_type: requestData.type || 'borrow',
                         item_id: itemId,
+                        book_id: itemData.book_id || requestData.book_id || null,
+                        offered_item_id: requestData.offered_item_id || null,
+                        offered_book_id: requestData.offered_book_id || null,
+                        circle_id: requestData.circle_id || itemData.circle_id || null,
+                        circle_ids: requestData.circle_ids || itemData.circle_ids || [],
                         actor_id: requestData.borrower_id,
+                        borrower_id: requestData.borrower_id,
+                        lender_id: requestData.lender_id || itemData.owner_id,
+                        participant_ids: participantIds,
                         event_type: 'picked_up',
                         from_status: 'approved',
                         to_status: 'borrowed',
+                        fulfillment_method: requestData.fulfillment_method || 'pickup',
                         created_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 });
@@ -1870,11 +2117,27 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
                     const itemRef = db.collection('items').doc(requestData.item_id);
                     const itemDoc = await transaction.get(itemRef);
+                    const itemData = itemDoc.exists ? itemDoc.data() : {};
+
+                    const eventRef = db.collection('transaction_events').doc();
+                    const now = new Date();
+                    const existingTimeline = Array.isArray(requestData.timeline) ? requestData.timeline : [];
+                    const newTimeline = [...existingTimeline, {
+                        status: 'returned',
+                        actor_id: requestData.borrower_id,
+                        event_type: 'returned',
+                        event_id: eventRef.id,
+                        created_at: now
+                    }];
 
                     // Update request status to returned
                     transaction.update(requestRef, {
                         status: 'returned',
-                        returned_at: firebase.firestore.FieldValue.serverTimestamp()
+                        returned_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        timeline: newTimeline,
+                        last_event_id: eventRef.id,
+                        last_event_type: 'returned',
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
                     // Update item status to returned (if it exists)
@@ -1884,14 +2147,24 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         });
                     }
 
-                    const eventRef = db.collection('transaction_events').doc();
+                    const participantIds = requestData.participant_ids || [requestData.borrower_id, requestData.lender_id || itemData.owner_id];
                     transaction.set(eventRef, {
                         request_id: requestId,
+                        transaction_type: requestData.type || 'borrow',
                         item_id: requestData.item_id,
+                        book_id: itemData.book_id || requestData.book_id || null,
+                        offered_item_id: requestData.offered_item_id || null,
+                        offered_book_id: requestData.offered_book_id || null,
+                        circle_id: requestData.circle_id || itemData.circle_id || null,
+                        circle_ids: requestData.circle_ids || itemData.circle_ids || [],
                         actor_id: requestData.borrower_id,
+                        borrower_id: requestData.borrower_id,
+                        lender_id: requestData.lender_id || itemData.owner_id,
+                        participant_ids: participantIds,
                         event_type: 'returned',
                         from_status: 'borrowed',
                         to_status: 'returned',
+                        fulfillment_method: requestData.fulfillment_method || 'pickup',
                         created_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 });
@@ -1919,10 +2192,25 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         throw new Error("Return must be marked by borrower before confirmation.");
                     }
 
+                    const eventRef = db.collection('transaction_events').doc();
+                    const now = new Date();
+                    const existingTimeline = Array.isArray(requestData.timeline) ? requestData.timeline : [];
+                    const newTimeline = [...existingTimeline, {
+                        status: 'completed',
+                        actor_id: requestData.lender_id,
+                        event_type: 'borrow_completed',
+                        event_id: eventRef.id,
+                        created_at: now
+                    }];
+
                     // Set request completed
                     transaction.update(requestRef, {
                         status: 'completed',
-                        completed_at: firebase.firestore.FieldValue.serverTimestamp()
+                        completed_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        timeline: newTimeline,
+                        last_event_id: eventRef.id,
+                        last_event_type: 'borrow_completed',
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
                     // Fetch item to know the owner (lender)
@@ -1979,6 +2267,27 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                             }
                         }));
                     }
+
+                    const participantIds = requestData.participant_ids || [requestData.borrower_id, requestData.lender_id];
+                    transaction.set(eventRef, {
+                        request_id: requestId,
+                        transaction_type: requestData.type || 'borrow',
+                        item_id: requestData.item_id,
+                        book_id: requestData.book_id || null,
+                        offered_item_id: requestData.offered_item_id || null,
+                        offered_book_id: requestData.offered_book_id || null,
+                        circle_id: requestData.circle_id || null,
+                        circle_ids: requestData.circle_ids || [],
+                        actor_id: user.uid,
+                        borrower_id: requestData.borrower_id,
+                        lender_id: requestData.lender_id,
+                        participant_ids: participantIds,
+                        event_type: 'borrow_completed',
+                        from_status: 'returned',
+                        to_status: 'completed',
+                        fulfillment_method: requestData.fulfillment_method || 'pickup',
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
                 });
 
                 // Ledger writes are outside the transaction so a credit-write
@@ -1992,7 +2301,6 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
-        
         completeGiveaway: async function(requestId) {
             try {
                 const db = firebase.firestore();
@@ -2011,9 +2319,24 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         throw new Error("Giveaway must be approved before completion.");
                     }
 
+                    const eventRef = db.collection('transaction_events').doc();
+                    const now = new Date();
+                    const existingTimeline = Array.isArray(requestData.timeline) ? requestData.timeline : [];
+                    const newTimeline = [...existingTimeline, {
+                        status: 'completed',
+                        actor_id: user.uid,
+                        event_type: 'giveaway_completed',
+                        event_id: eventRef.id,
+                        created_at: now
+                    }];
+
                     transaction.update(requestRef, {
                         status: 'completed',
-                        completed_at: firebase.firestore.FieldValue.serverTimestamp()
+                        completed_at: firebase.firestore.FieldValue.serverTimestamp(),
+                        timeline: newTimeline,
+                        last_event_id: eventRef.id,
+                        last_event_type: 'giveaway_completed',
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
                     const itemRef = db.collection('items').doc(requestData.item_id);
@@ -2050,14 +2373,24 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         }));
                     }
 
-                    const eventRef = db.collection('transaction_events').doc();
+                    const participantIds = requestData.participant_ids || [requestData.borrower_id, requestData.lender_id];
                     transaction.set(eventRef, {
                         request_id: requestId,
+                        transaction_type: 'giveaway',
                         item_id: requestData.item_id,
+                        book_id: requestData.book_id || null,
+                        offered_item_id: null,
+                        offered_book_id: null,
+                        circle_id: requestData.circle_id || null,
+                        circle_ids: requestData.circle_ids || [],
                         actor_id: user.uid,
+                        borrower_id: requestData.borrower_id,
+                        lender_id: requestData.lender_id,
+                        participant_ids: participantIds,
                         event_type: 'giveaway_completed',
                         from_status: requestData.status,
                         to_status: 'completed',
+                        fulfillment_method: requestData.fulfillment_method || 'pickup',
                         metadata: { type: 'giveaway' },
                         created_at: firebase.firestore.FieldValue.serverTimestamp()
                     });

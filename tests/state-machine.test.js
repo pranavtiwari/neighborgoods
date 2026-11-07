@@ -108,4 +108,84 @@ const STRANGER = 'charlie-stranger';
     assert.strictEqual(undoApp.itemUpdates.is_available, true);
 }
 
+// 4. Extended Transaction Model & Payload Builders (Issue #13)
+{
+    const { buildTransactionPayload, buildTransactionEventPayload, FULFILLMENT_METHODS, SHIPPING_PAYERS } = await import('../functions/state-machine.js');
+
+    // Borrow transaction payload
+    const borrowItem = { id: 'item_gatsby', book_id: 'book_gatsby', owner_id: ALICE, circle_id: 'circle_books' };
+    const borrowPayload = buildTransactionPayload({
+        fulfillment_method: FULFILLMENT_METHODS.PICKUP,
+        duration: '2 weeks'
+    }, { itemData: borrowItem, actorId: BOB });
+
+    assert.strictEqual(borrowPayload.type, 'borrow');
+    assert.strictEqual(borrowPayload.item_id, 'item_gatsby');
+    assert.strictEqual(borrowPayload.book_id, 'book_gatsby');
+    assert.strictEqual(borrowPayload.borrower_id, BOB);
+    assert.strictEqual(borrowPayload.lender_id, ALICE);
+    assert.deepStrictEqual(borrowPayload.participant_ids, [BOB, ALICE]);
+    assert.strictEqual(borrowPayload.status, REQUEST_STATUSES.PENDING);
+    assert.strictEqual(borrowPayload.fulfillment_method, 'pickup');
+    assert.strictEqual(borrowPayload.timeline.length, 1);
+    assert.strictEqual(borrowPayload.last_event_type, 'requested');
+
+    // Swap transaction payload
+    const swapTargetItem = { id: 'item_hobbit', book_id: 'book_hobbit', owner_id: ALICE, listing_type: 'swap' };
+    const offeredSwapItem = { id: 'item_1984', book_id: 'book_1984', owner_id: BOB, listing_type: 'swap' };
+
+    const swapPayload = buildTransactionPayload({
+        type: 'swap',
+        offered_item_id: offeredSwapItem.id,
+        fulfillment_method: FULFILLMENT_METHODS.SHIPPING,
+        shipping_payer: SHIPPING_PAYERS.SPLIT,
+        shipping_notes: 'USPS Media Mail with tracking'
+    }, { itemData: swapTargetItem, offeredItemData: offeredSwapItem, actorId: BOB });
+
+    assert.strictEqual(swapPayload.type, 'swap');
+    assert.strictEqual(swapPayload.item_id, 'item_hobbit');
+    assert.strictEqual(swapPayload.book_id, 'book_hobbit');
+    assert.strictEqual(swapPayload.offered_item_id, 'item_1984');
+    assert.strictEqual(swapPayload.offered_book_id, 'book_1984');
+    assert.strictEqual(swapPayload.fulfillment_method, 'shipping');
+    assert.strictEqual(swapPayload.shipping_payer, 'split');
+    assert.strictEqual(swapPayload.shipping_notes, 'USPS Media Mail with tracking');
+
+    // Reject swap without offered item
+    assert.throws(() => {
+        buildTransactionPayload({ type: 'swap' }, { itemData: swapTargetItem, actorId: BOB });
+    }, /A swap request requires an offered item/);
+
+    // Reject swap offering someone else's item
+    const strangerItem = { id: 'item_stranger', owner_id: STRANGER };
+    assert.throws(() => {
+        buildTransactionPayload({ type: 'swap', offered_item_id: 'item_stranger' }, {
+            itemData: swapTargetItem,
+            offeredItemData: strangerItem,
+            actorId: BOB
+        });
+    }, /You can only offer items you own/);
+
+    // Transaction event payload builder
+    const eventPayload = buildTransactionEventPayload({
+        request_id: 'req_123',
+        actor_id: BOB,
+        borrower_id: BOB,
+        lender_id: ALICE,
+        item_id: 'item_gatsby',
+        book_id: 'book_gatsby',
+        circle_id: 'circle_books',
+        event_type: 'requested',
+        to_status: 'pending',
+        transaction_type: 'borrow',
+        fulfillment_method: 'pickup'
+    });
+
+    assert.strictEqual(eventPayload.request_id, 'req_123');
+    assert.strictEqual(eventPayload.actor_id, BOB);
+    assert.deepStrictEqual(eventPayload.participant_ids, [BOB, ALICE]);
+    assert.strictEqual(eventPayload.book_id, 'book_gatsby');
+    assert.strictEqual(eventPayload.circle_id, 'circle_books');
+}
+
 console.log('[PASS] State machine validation passed all tests.');

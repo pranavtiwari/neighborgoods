@@ -10,10 +10,25 @@ export const TRANSACTION_TYPES = {
     SWAP: 'swap'
 };
 
+export const FULFILLMENT_METHODS = {
+    PICKUP: 'pickup',
+    SHIPPING: 'shipping',
+    BOTH: 'both'
+};
+
+export const SHIPPING_PAYERS = {
+    REQUESTER: 'requester',
+    OWNER: 'owner',
+    SPLIT: 'split',
+    FREE: 'free'
+};
+
 export const REQUEST_STATUSES = {
     PENDING: 'pending',
     APPROVED: 'approved',
     BORROWED: 'borrowed',
+    SHIPPED: 'shipped',
+    DELIVERED: 'delivered',
     RETURNED: 'returned',
     COMPLETED: 'completed',
     DECLINED: 'declined',
@@ -26,11 +41,135 @@ export const ACTIONS = {
     DECLINE: 'decline',
     CANCEL: 'cancel',
     PICKUP: 'pickup',
+    SHIP: 'ship',
+    DELIVER: 'deliver',
     RETURN: 'return',
     COMPLETE: 'complete',
     COMPLETE_GIVEAWAY: 'complete_giveaway',
     UNDO: 'undo'
 };
+
+/**
+ * Builds a validated, normalized transaction (request) payload.
+ * @param {Object} input 
+ * @param {Object} context { itemData, offeredItemData, actorId }
+ * @returns {Object}
+ */
+export function buildTransactionPayload(input = {}, { itemData, offeredItemData, actorId } = {}) {
+    if (!actorId) throw new Error('Authentication required.');
+    if (!itemData || !itemData.id) throw new Error('Target item is required.');
+    if (itemData.owner_id === actorId) throw new Error('You cannot transact with your own item.');
+
+    const rawType = input.type || (
+        (itemData.listing_type === 'giveaway' || itemData.intent === 'donate')
+            ? TRANSACTION_TYPES.GIVEAWAY
+            : (itemData.listing_type === 'swap' ? TRANSACTION_TYPES.SWAP : TRANSACTION_TYPES.BORROW)
+    );
+
+    const type = Object.values(TRANSACTION_TYPES).includes(rawType) ? rawType : TRANSACTION_TYPES.BORROW;
+
+    let offeredItemId = null;
+    let offeredBookId = null;
+
+    if (type === TRANSACTION_TYPES.SWAP) {
+        offeredItemId = offeredItemData?.id || input.offered_item_id || null;
+        if (!offeredItemId) {
+            throw new Error('A swap request requires an offered item.');
+        }
+        if (offeredItemData && offeredItemData.owner_id && offeredItemData.owner_id !== actorId) {
+            throw new Error('You can only offer items you own in a swap.');
+        }
+        offeredBookId = offeredItemData?.book_id || input.offered_book_id || null;
+    }
+
+    const fulfillment = Object.values(FULFILLMENT_METHODS).includes(input.fulfillment_method)
+        ? input.fulfillment_method
+        : FULFILLMENT_METHODS.PICKUP;
+
+    const shippingPayer = Object.values(SHIPPING_PAYERS).includes(input.shipping_payer)
+        ? input.shipping_payer
+        : null;
+
+    const circleId = itemData.circle_id || null;
+    const circleIds = Array.isArray(itemData.circle_ids) ? itemData.circle_ids : (circleId ? [circleId] : []);
+
+    const now = input.created_at || new Date();
+
+    return {
+        item_id: itemData.id,
+        book_id: itemData.book_id || null,
+        offered_item_id: offeredItemId,
+        offered_book_id: offeredBookId,
+        borrower_id: actorId,
+        lender_id: itemData.owner_id,
+        participant_ids: [actorId, itemData.owner_id],
+        type,
+        status: REQUEST_STATUSES.PENDING,
+        circle_id: circleId,
+        circle_ids: circleIds,
+        fulfillment_method: fulfillment,
+        shipping_payer: shippingPayer,
+        shipping_notes: input.shipping_notes ? String(input.shipping_notes).trim() : '',
+        carrier: input.carrier ? String(input.carrier).trim() : null,
+        tracking_number: input.tracking_number ? String(input.tracking_number).trim() : null,
+        return_due_date: input.return_due_date || null,
+        duration: input.duration || 'flexible',
+        notes: input.notes ? String(input.notes).trim() : '',
+        timeline: [
+            {
+                status: REQUEST_STATUSES.PENDING,
+                actor_id: actorId,
+                event_type: 'requested',
+                created_at: now
+            }
+        ],
+        last_event_id: null,
+        last_event_type: 'requested',
+        created_at: now,
+        updated_at: now
+    };
+}
+
+/**
+ * Builds a validated, normalized transaction event payload.
+ * @param {Object} input 
+ * @returns {Object}
+ */
+export function buildTransactionEventPayload(input = {}) {
+    if (!input.request_id) throw new Error('request_id is required.');
+    if (!input.actor_id) throw new Error('actor_id is required.');
+    if (!input.event_type) throw new Error('event_type is required.');
+    if (!input.to_status) throw new Error('to_status is required.');
+
+    const participantIds = Array.isArray(input.participant_ids) && input.participant_ids.length > 0
+        ? input.participant_ids
+        : [input.borrower_id, input.lender_id].filter(Boolean);
+
+    const circleIds = Array.isArray(input.circle_ids)
+        ? input.circle_ids
+        : (input.circle_id ? [input.circle_id] : []);
+
+    return {
+        request_id: input.request_id,
+        transaction_type: input.transaction_type || input.type || TRANSACTION_TYPES.BORROW,
+        item_id: input.item_id || null,
+        book_id: input.book_id || null,
+        offered_item_id: input.offered_item_id || null,
+        offered_book_id: input.offered_book_id || null,
+        circle_id: input.circle_id || null,
+        circle_ids: circleIds,
+        actor_id: input.actor_id,
+        borrower_id: input.borrower_id || null,
+        lender_id: input.lender_id || null,
+        participant_ids: participantIds,
+        event_type: input.event_type,
+        from_status: input.from_status !== undefined ? input.from_status : null,
+        to_status: input.to_status,
+        fulfillment_method: input.fulfillment_method || FULFILLMENT_METHODS.PICKUP,
+        metadata: input.metadata && typeof input.metadata === 'object' ? input.metadata : {},
+        created_at: input.created_at || new Date()
+    };
+}
 
 /**
  * Validates whether an action is permitted given current transaction state and actor.

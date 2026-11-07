@@ -147,8 +147,9 @@ function buildRulesEngine(firestore) {
                     if (!isLender && !isBorrower) DENY('only the borrower or lender may update');
 
                     const changed = Object.keys(data).filter(k => data[k] !== prior[k]);
-                    const LENDER_FIELDS = ['status', 'confirmed_at', 'declined_at', 'picked_up_at', 'returned_at', 'completed_at', 'donated_at'];
-                    const BORROWER_FIELDS = ['status', 'picked_up_at', 'returned_at'];
+                    const SHARED_FIELDS = ['status', 'timeline', 'last_event_id', 'last_event_type', 'updated_at', 'cancelled_at', 'shipped_at', 'delivered_at', 'tracking_number', 'carrier'];
+                    const LENDER_FIELDS = [...SHARED_FIELDS, 'confirmed_at', 'declined_at', 'picked_up_at', 'returned_at', 'completed_at', 'donated_at'];
+                    const BORROWER_FIELDS = [...SHARED_FIELDS, 'picked_up_at', 'returned_at'];
                     if (isLender && !isBorrower) {
                         if (changed.some(k => !LENDER_FIELDS.includes(k))) DENY(`lender may only change: ${LENDER_FIELDS.join(', ')}`);
                     } else if (isBorrower && !isLender) {

@@ -128,7 +128,16 @@ service cloud.firestore {
     // Transaction Events (immutable audit log)
     // ─────────────────────────────────────────────────────────────────────────
     match /transaction_events/{eventId} {
-      allow read: if request.auth != null;
+      // Participants or circle admins may read transaction events
+      allow read: if request.auth != null && (
+        resource.data.actor_id == request.auth.uid ||
+        resource.data.borrower_id == request.auth.uid ||
+        resource.data.lender_id == request.auth.uid ||
+        ('participant_ids' in resource.data && request.auth.uid in resource.data.participant_ids) ||
+        ('circle_id' in resource.data && resource.data.circle_id != null &&
+         exists(/databases/$(database)/documents/circles/$(resource.data.circle_id)) &&
+         get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid)
+      );
 
       allow create: if request.auth != null
         && request.resource.data.actor_id == request.auth.uid
@@ -291,13 +300,17 @@ service cloud.firestore {
     //              - delete: disabled to preserve audit trail
     // ─────────────────────────────────────────────────────────────────────────
     match /requests/{requestId} {
-      // Only borrower or lender may read their own requests
+      // Only borrower, lender, participants or circle admin may read requests
       allow read: if request.auth != null && (
         resource.data.borrower_id == request.auth.uid ||
-        resource.data.lender_id == request.auth.uid
+        resource.data.lender_id == request.auth.uid ||
+        ('participant_ids' in resource.data && request.auth.uid in resource.data.participant_ids) ||
+        ('circle_id' in resource.data && resource.data.circle_id != null &&
+         exists(/databases/$(database)/documents/circles/$(resource.data.circle_id)) &&
+         get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid)
       );
 
-      // Only borrower may create; must be pending; cannot borrow from self
+      // Only borrower/requester may create; must be pending; cannot transact with self
       allow create: if request.auth != null
         && request.resource.data.borrower_id == request.auth.uid
         && request.resource.data.status == 'pending'
@@ -314,11 +327,15 @@ service cloud.firestore {
           (resource.data.lender_id == request.auth.uid &&
            request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['status', 'confirmed_at', 'declined_at', 'picked_up_at',
-                       'returned_at', 'completed_at'])) ||
-          // Borrower may acknowledge pickup/return
+                       'returned_at', 'completed_at', 'donated_at', 'cancelled_at',
+                       'shipped_at', 'delivered_at', 'timeline', 'last_event_id',
+                       'last_event_type', 'updated_at', 'tracking_number', 'carrier'])) ||
+          // Borrower may acknowledge pickup/shipping/return or cancel
           (resource.data.borrower_id == request.auth.uid &&
            request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['status', 'picked_up_at', 'returned_at']))
+             .hasOnly(['status', 'picked_up_at', 'returned_at', 'cancelled_at',
+                       'shipped_at', 'delivered_at', 'timeline', 'last_event_id',
+                       'last_event_type', 'updated_at', 'tracking_number', 'carrier']))
         );
 
       // Disable deletion to maintain audit trail

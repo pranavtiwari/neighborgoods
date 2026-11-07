@@ -71,6 +71,78 @@
         { "fieldPath": "language", "order": "ASCENDING" },
         { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participant_ids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "book_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "circle_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transaction_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "request_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transaction_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participant_ids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transaction_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "circle_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transaction_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "book_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "transaction_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "item_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -328,8 +328,13 @@ class MockFirestore {
         return Promise.resolve();
     }
 
+    _lastTimestamp = 0;
     FieldValue = {
-        serverTimestamp: () => new Date().toISOString()
+        serverTimestamp: () => {
+            const now = Date.now();
+            this._lastTimestamp = Math.max(now, (this._lastTimestamp || 0) + 1);
+            return new Date(this._lastTimestamp).toISOString();
+        }
     };
 
     _getData(collectionName, id) {
