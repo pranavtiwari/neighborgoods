@@ -49,6 +49,13 @@ It loads and runs the actual `site/public/firebase-client.js` script inside a mo
    - **Flow 14 (Issue #16)**: Transaction ledger integration across activity timeline, chat transaction bar, user profile transaction history, circle admin ledger, and defensive legacy record handling.
    - **Flow 15 (Issue #17)**: Comprehensive transaction transitions, permission rules, stranger rejections, and location privacy enforcement.
 
+7. **Phase 3: Trust, Chat, and Moderation (Flows 16-20)**
+   - **Flow 16 (Issue #18)**: Per-copy visibility (`public`, `circle_only`, `trusted_only`) and request policy (`anyone`, `circle_members`, `trusted_only`) enforcement.
+   - **Flow 17 (Issue #19)**: Per-transaction chat threads, message scoping (`transaction_id`), non-colliding action steppers, and inbox grouping.
+   - **Flow 18 (Issue #20)**: Librarian roles, community moderation, duplicate book merging, copy withdrawal, and report queue.
+   - **Flow 19 (Issue #21)**: Keyset pagination for circles, members, posts, and impact leaderboards ($O(1)$ membership checks and aggregate counts).
+   - **Flow 20 (Issue #22)**: Feature flag cohort scoping, lifecycle instrumentation, seed feedback path, soft launch metrics, and Go/No-Go decision framework.
+
 ## How to Run
 
 Run the tests directly via NPM:
