@@ -175,11 +175,16 @@ function buildRulesEngine(firestore) {
                     if (data.borrower_id !== prior.borrower_id || data.lender_id !== prior.lender_id) {
                         DENY('borrower_id / lender_id are immutable');
                     }
+                    const changed = Object.keys(data).filter(k => data[k] !== prior[k]);
+                    const librarianDoc = firestore._getData('librarians', uid);
+                    const isLibrarian = librarianDoc && librarianDoc.is_active !== false;
+                    if (isLibrarian && changed.every(k => ['book_id', 'updated_at'].includes(k))) {
+                        return;
+                    }
+
                     const isLender = prior.lender_id === uid;
                     const isBorrower = prior.borrower_id === uid;
                     if (!isLender && !isBorrower) DENY('only the borrower or lender may update');
-
-                    const changed = Object.keys(data).filter(k => data[k] !== prior[k]);
                     const SHARED_FIELDS = ['status', 'timeline', 'last_event_id', 'last_event_type', 'updated_at', 'cancelled_at', 'shipped_at', 'delivered_at', 'tracking_number', 'carrier'];
                     const LENDER_FIELDS = [...SHARED_FIELDS, 'confirmed_at', 'declined_at', 'picked_up_at', 'returned_at', 'completed_at', 'donated_at', 'lender_confirmed_at', 'owner_confirmed_at'];
                     const BORROWER_FIELDS = [...SHARED_FIELDS, 'picked_up_at', 'returned_at', 'borrower_confirmed_at', 'requester_confirmed_at'];
@@ -239,20 +244,23 @@ function buildRulesEngine(firestore) {
                         DENY('trusted_user_ids must be an array');
                     }
                     if (prior.owner_id !== uid) {
-                        // Non-owner: only if the denormalised active request
-                        // points at this item and they are a participant in it,
-                        // and only lifecycle fields.
-                        if (!canParticipantUpdateItem(
-                                firestore, uid, prior.id || docId, prior.active_request_id)) {
-                            DENY('only the owner or a participant in an active request may update an item');
-                        }
                         const changed = Object.keys(data).filter(k => data[k] !== prior[k]);
-                        const LIFECYCLE = ['status', 'is_available', 'active_request_id', 'updated_at'];
-                        if (changed.some(k => !LIFECYCLE.includes(k))) {
-                            DENY(`a non-owner may only change: ${LIFECYCLE.join(', ')}`);
-                        }
-                        if ('active_request_id' in data && data.active_request_id !== null && data.active_request_id !== prior.active_request_id) {
-                            DENY('a non-owner may not repoint active_request_id to another request');
+                        const librarianDoc = firestore._getData('librarians', uid);
+                        const isLibrarian = librarianDoc && librarianDoc.is_active !== false;
+                        const MOD_ALLOWED = ['book_id', 'is_withdrawn', 'is_available', 'status', 'withdrawal_reason', 'withdrawn_by', 'withdrawn_at', 'updated_at'];
+                        const isModUpdate = isLibrarian && changed.every(k => MOD_ALLOWED.includes(k));
+                        if (!isModUpdate) {
+                            if (!canParticipantUpdateItem(
+                                    firestore, uid, prior.id || docId, prior.active_request_id)) {
+                                DENY('only the owner or a participant in an active request may update an item');
+                            }
+                            const LIFECYCLE = ['status', 'is_available', 'active_request_id', 'updated_at'];
+                            if (changed.some(k => !LIFECYCLE.includes(k))) {
+                                DENY(`a non-owner may only change: ${LIFECYCLE.join(', ')}`);
+                            }
+                            if ('active_request_id' in data && data.active_request_id !== null && data.active_request_id !== prior.active_request_id) {
+                                DENY('a non-owner may not repoint active_request_id to another request');
+                            }
                         }
                     }
                 }
@@ -278,6 +286,9 @@ function buildRulesEngine(firestore) {
                     if (!isCreator) DENY('only the circle creator may update memberships');
                     if (data.circle_id !== prior.circle_id || data.profile_id !== prior.profile_id) {
                         DENY('circle_id / profile_id are immutable');
+                    }
+                    if (data.role && !['member', 'librarian', 'admin'].includes(data.role)) {
+                        DENY('invalid role; must be member, librarian, or admin');
                     }
                 }
                 return;
@@ -336,8 +347,30 @@ function buildRulesEngine(firestore) {
                     if (data.reporter_id !== uid) DENY('reporter_id must be the authenticated user');
                     if (typeof data.reason !== 'string' || !data.reason) DENY('reason is required');
                 } else {
-                    DENY('reports are immutable once filed');
+                    const ALLOWED = ['status', 'resolution', 'resolved_by', 'action_taken', 'resolved_at', 'updated_at'];
+                    const changed = Object.keys(data).filter(k => data[k] !== prior[k]);
+                    if (changed.some(k => !ALLOWED.includes(k))) {
+                        DENY('reports can only update resolution fields');
+                    }
                 }
+                return;
+            }
+
+            // ── moderation_events (immutable audit log) ──────────────────────
+            case 'moderation_events': {
+                if (!uid) DENY('not signed in');
+                if (isCreate) {
+                    if (data.actor_id !== uid) DENY('actor_id must be the authenticated user');
+                    if (typeof data.action !== 'string' || !data.action) DENY('action must be a string');
+                } else {
+                    DENY('moderation_events are immutable (append-only ledger)');
+                }
+                return;
+            }
+
+            // ── librarians ──────────────────────────────────────────────────
+            case 'librarians': {
+                if (!uid) DENY('not signed in');
                 return;
             }
 

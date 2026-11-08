@@ -3029,6 +3029,258 @@ await test('Flow 17: Per-transaction chat threads, message scoping, non-collidin
     assert.strictEqual(finalThreadB.status, 'pending', 'Req B strictly remains pending');
 });
 
+await test('Flow 18: Librarian roles, moderation, duplicate book merging, copy withdrawal, and report queue (Issue #20)', async () => {
+    resetSandbox();
+    // 1. Setup Users & Circle
+    const adminUid = 'admin_flow18_' + Date.now();
+    const libUid = 'lib_flow18_' + Date.now();
+    const userUid = 'user_flow18_' + Date.now();
+
+    firebase.auth().currentUser = { uid: adminUid };
+    await firebase.firestore().collection('profiles').doc(adminUid).set({ id: adminUid, full_name: 'Admin User', email: 'admin18@example.com' });
+    firebase.auth().currentUser = { uid: libUid };
+    await firebase.firestore().collection('profiles').doc(libUid).set({ id: libUid, full_name: 'Librarian User', email: 'lib18@example.com' });
+    firebase.auth().currentUser = { uid: userUid };
+    await firebase.firestore().collection('profiles').doc(userUid).set({ id: userUid, full_name: 'Regular User', email: 'user18@example.com' });
+
+    firebase.auth().currentUser = { uid: adminUid };
+    const circle = await window.db.createCircle({
+        name: 'Literary Commons 18',
+        description: 'Book Circle with Librarians',
+        is_private: false
+    }, adminUid);
+
+    // Join lib and user into circle
+    firebase.auth().currentUser = { uid: libUid };
+    await window.db.joinCircle(circle.id, libUid);
+    firebase.auth().currentUser = { uid: userUid };
+    await window.db.joinCircle(circle.id, userUid);
+
+    // Initially neither is a librarian
+    assert.strictEqual(await window.db.isLibrarian(libUid, circle.id), false, 'Initially not librarian');
+
+    // 2. Appointing & Removing Librarians
+    // Non-creator cannot appoint librarians
+    firebase.auth().currentUser = { uid: userUid };
+    await assert.rejects(async () => {
+        await window.db.appointLibrarian(libUid, circle.id, userUid);
+    }, /Only circle creator/);
+
+    // Circle creator appoints libUid as librarian
+    firebase.auth().currentUser = { uid: adminUid };
+    await window.db.appointLibrarian(libUid, circle.id, adminUid);
+    assert.strictEqual(await window.db.isLibrarian(libUid, circle.id), true, 'Librarian appointed successfully');
+
+    // Circle creator removes librarian
+    await window.db.removeLibrarian(libUid, circle.id, adminUid);
+    assert.strictEqual(await window.db.isLibrarian(libUid, circle.id), false, 'Librarian removed successfully');
+
+    // Re-appoint librarian for remaining workflow
+    await window.db.appointLibrarian(libUid, circle.id, adminUid);
+    assert.strictEqual(await window.db.isLibrarian(libUid, circle.id), true, 'Librarian re-appointed');
+
+    // 3. Canonical Book Metadata Editing
+    // Create canonical book record
+    firebase.auth().currentUser = { uid: adminUid };
+    const origBook = (await window.db.findOrCreateBook({
+        title: 'Brave New World',
+        authors: ['Aldous Huxley'],
+        published_year: 1932,
+        publisher: 'Chatto & Windus',
+        isbns: ['9780060850524']
+    })).book;
+
+    // Non-librarian editing metadata rejected
+    firebase.auth().currentUser = { uid: userUid };
+    await assert.rejects(async () => {
+        await window.db.updateBookMetadata(origBook.id, { publisher: 'Unauthorized Publisher' }, userUid);
+    }, /only librarians or creator may update canonical book metadata/);
+
+    // Librarian editing metadata succeeds
+    firebase.auth().currentUser = { uid: libUid };
+    await window.db.updateBookMetadata(origBook.id, {
+        publisher: 'Harper Perennial Modern Classics',
+        published_year: 2006,
+        description: 'A classic dystopian masterpiece.'
+    }, libUid);
+
+    const updatedBook = await window.db.getBook(origBook.id);
+    assert.strictEqual(updatedBook.publisher, 'Harper Perennial Modern Classics');
+    assert.strictEqual(updatedBook.published_year, 2006);
+    assert.strictEqual(updatedBook.description, 'A classic dystopian masterpiece.');
+
+    // 4. Duplicate Book Detection and Merging
+    // Create duplicate canonical book record (e.g. slight title variation or uncleaned ISBN)
+    firebase.auth().currentUser = { uid: userUid };
+    const dupBook = (await window.db.findOrCreateBook({
+        title: 'Brave New World (Dystopian Classic)',
+        authors: ['Aldous Huxley'],
+        isbns: ['9780060850524']
+    })).book;
+
+    // Detect duplicate
+    const detectedDups = await window.db.findDuplicateBooks(dupBook.id);
+    assert.ok(detectedDups.some(d => d.id === origBook.id), 'findDuplicateBooks identifies origBook as candidate');
+
+    // Add physical copies to both books
+    firebase.auth().currentUser = { uid: adminUid };
+    const copyOrig = await window.db.addItem({
+        name: 'Brave New World Copy 1',
+        kind: 'book',
+        book_id: origBook.id,
+        listing_type: 'borrow',
+        condition: 'good',
+        circle_ids: [circle.id]
+    });
+
+    firebase.auth().currentUser = { uid: userUid };
+    const copyDup = await window.db.addItem({
+        name: 'Brave New World Copy 2 (Duplicate)',
+        kind: 'book',
+        book_id: dupBook.id,
+        listing_type: 'borrow',
+        condition: 'like_new',
+        circle_ids: [circle.id]
+    });
+
+    // Create a borrow request on copyDup
+    firebase.auth().currentUser = { uid: libUid };
+    const reqOnDup = await window.db.createBorrowRequest({
+        item_id: copyDup.id,
+        borrower_id: libUid,
+        duration: '7 days'
+    });
+
+    // Send a message on this transaction
+    await window.db.sendMessage({
+        senderId: libUid,
+        recipientId: userUid,
+        content: 'Hi, requesting your duplicate copy!',
+        itemId: copyDup.id,
+        requestId: reqOnDup.id,
+        bookId: dupBook.id
+    });
+
+    // Verify initial copy count on origBook
+    const origCopiesBefore = await window.db.getBookCopies(origBook.id);
+    assert.strictEqual(origCopiesBefore.length, 1);
+
+    // Non-librarian merge rejected
+    firebase.auth().currentUser = { uid: userUid };
+    await assert.rejects(async () => {
+        await window.db.mergeDuplicateBooks(dupBook.id, origBook.id, userUid);
+    }, /only librarians or admins can merge books/);
+
+    // Librarian executes merge
+    firebase.auth().currentUser = { uid: libUid };
+    const mergeResult = await window.db.mergeDuplicateBooks(dupBook.id, origBook.id, libUid);
+    assert.strictEqual(mergeResult.success, true);
+    assert.strictEqual(mergeResult.copiesMoved, 1);
+
+    // Verify copyDup was repointed to origBook
+    const copyDupDoc = await firebase.firestore().collection('items').doc(copyDup.id).get();
+    assert.strictEqual(copyDupDoc.data().book_id, origBook.id, 'Physical copy repointed to origBook.id');
+
+    // Verify request on duplicate copy repointed to origBook
+    const reqDoc = await firebase.firestore().collection('requests').doc(reqOnDup.id).get();
+    assert.strictEqual(reqDoc.data().book_id, origBook.id, 'Request repointed to origBook.id');
+
+    // Verify chat messages repointed to origBook
+    const msgSnap = await firebase.firestore().collection('messages').where('request_id', '==', reqOnDup.id).get();
+    assert.ok(msgSnap.docs.every(d => d.data().book_id === origBook.id), 'Chat messages repointed to origBook.id');
+
+    // Verify source book marked merged with pointer
+    const dupBookDoc = await firebase.firestore().collection('books').doc(dupBook.id).get();
+    assert.strictEqual(dupBookDoc.data().is_merged, true);
+    assert.strictEqual(dupBookDoc.data().merged_into, origBook.id);
+
+    // Verify getBook follows pointer transparently
+    const fetchedMerged = await window.db.getBook(dupBook.id);
+    assert.strictEqual(fetchedMerged.id, origBook.id, 'getBook transparently follows merged_into pointer');
+
+    // Verify getBookCopies returns both copies under origBook
+    const origCopiesAfter = await window.db.getBookCopies(origBook.id);
+    assert.strictEqual(origCopiesAfter.length, 2, 'origBook now aggregates all copies');
+
+    // 5. Physical Copy Withdrawal
+    // Non-owner non-librarian withdrawal rejected
+    const randomUserUid = 'random_' + Date.now();
+    firebase.auth().currentUser = { uid: randomUserUid };
+    await assert.rejects(async () => {
+        await window.db.withdrawItemCopy(copyDup.id, 'Invalid withdrawal', randomUserUid);
+    }, /only copy owner or librarians may withdraw copy/);
+
+    // Librarian withdraws copyDup
+    firebase.auth().currentUser = { uid: libUid };
+    await window.db.withdrawItemCopy(copyDup.id, 'Damaged copy removed from circulation', libUid);
+
+    const withdrawnDoc = await firebase.firestore().collection('items').doc(copyDup.id).get();
+    assert.strictEqual(withdrawnDoc.data().is_withdrawn, true);
+    assert.strictEqual(withdrawnDoc.data().status, 'withdrawn');
+    assert.strictEqual(withdrawnDoc.data().is_available, false);
+    assert.strictEqual(withdrawnDoc.data().withdrawn_by, libUid);
+    assert.strictEqual(withdrawnDoc.data().withdrawal_reason, 'Damaged copy removed from circulation');
+
+    // getBookCopies filters out withdrawn copy by default
+    const activeCopies = await window.db.getBookCopies(origBook.id);
+    assert.strictEqual(activeCopies.length, 1, 'Withdrawn copy excluded from default getBookCopies');
+
+    // getBookCopies with include_withdrawn: true includes it
+    const allIncludingWithdrawn = await window.db.getBookCopies(origBook.id, { include_withdrawn: true });
+    assert.strictEqual(allIncludingWithdrawn.length, 2, 'Withdrawn copy present when include_withdrawn: true');
+
+    // 6. Moderation Reports & Queue
+    firebase.auth().currentUser = { uid: userUid };
+    const report1 = await window.db.submitReport({
+        targetType: 'item',
+        targetId: copyOrig.id,
+        reporterId: userUid,
+        reason: 'damaged_missing',
+        details: 'Cover torn and missing pages'
+    });
+    assert.ok(report1.id, 'Report submitted for item');
+
+    const report2 = await window.db.submitReport({
+        targetType: 'book',
+        targetId: origBook.id,
+        reporterId: userUid,
+        reason: 'inaccurate_metadata',
+        details: 'Title spelling'
+    });
+    assert.ok(report2.id, 'Report submitted for book');
+
+    // Check report queue
+    const queue = await window.db.getReportQueue('pending');
+    assert.ok(queue.some(r => r.id === report1.id), 'Report 1 in pending queue');
+    assert.ok(queue.some(r => r.id === report2.id), 'Report 2 in pending queue');
+
+    // Non-librarian cannot resolve reports
+    firebase.auth().currentUser = { uid: userUid };
+    await assert.rejects(async () => {
+        await window.db.resolveReport(report1.id, 'dismissed', userUid, 'none');
+    }, /only librarians or admins can resolve reports/);
+
+    // Librarian resolves report 1
+    firebase.auth().currentUser = { uid: libUid };
+    await window.db.resolveReport(report1.id, 'resolved', libUid, 'item_withdrawn');
+
+    const rep1Doc = await firebase.firestore().collection('reports').doc(report1.id).get();
+    assert.strictEqual(rep1Doc.data().status, 'resolved');
+    assert.strictEqual(rep1Doc.data().resolved_by, libUid);
+    assert.strictEqual(rep1Doc.data().action_taken, 'item_withdrawn');
+
+    // 7. Moderation Audit Trail
+    const events = await window.db.getModerationEvents({ limit: 50 });
+    assert.ok(events.length >= 5, 'Audit trail captured moderation events');
+    const actions = events.map(e => e.action);
+    assert.ok(actions.includes('appoint_librarian'), 'appoint_librarian recorded');
+    assert.ok(actions.includes('remove_librarian'), 'remove_librarian recorded');
+    assert.ok(actions.includes('edit_book_metadata'), 'edit_book_metadata recorded');
+    assert.ok(actions.includes('merge_books'), 'merge_books recorded');
+    assert.ok(actions.includes('withdraw_copy'), 'withdraw_copy recorded');
+    assert.ok(actions.includes('resolve_report'), 'resolve_report recorded');
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================

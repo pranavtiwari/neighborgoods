@@ -1533,15 +1533,23 @@
                                     <span>${escapeHtml(m.full_name || 'Unknown')}</span>
                                     ${isMe ? '<span class="text-[9px] bg-primary/10 text-primary font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider">You</span>' : ''}
                                     ${isAdmin ? '<span class="text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider">Admin</span>' : ''}
+                                    ${m.role === 'librarian' ? '<span class="text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider flex items-center gap-0.5"><span class="material-symbols-outlined text-[12px]">local_library</span>Librarian</span>' : ''}
                                 </div>
                                 <p class="text-xs text-stone-500">Joined ${new Date(m.joined_at).toLocaleDateString()}</p>
                             </div>
                         </div>
-                        ${showRemoveBtn ? `
-                            <button onclick="handleRemoveMember(this)" data-profile-id="${db.escapeAttr(m.id)}" data-profile-name="${db.escapeAttr(m.full_name || 'this member')}" class="p-2 text-stone-400 hover:text-error dark:hover:text-error-container hover:bg-error/10 rounded-full transition-colors flex items-center justify-center" title="Remove member">
-                                <span class="material-symbols-outlined text-[20px]">person_remove</span>
-                            </button>
-                        ` : ''}
+                        <div class="flex items-center gap-1">
+                            ${currentUserRole === 'admin' && !isMe && !isAdmin ? `
+                                <button onclick="handleToggleLibrarianRole(this)" data-profile-id="${db.escapeAttr(m.id)}" data-current-role="${db.escapeAttr(m.role || 'member')}" class="px-2.5 py-1 text-xs font-bold rounded-lg border border-outline-variant/30 hover:bg-surface-container transition-all" title="${m.role === 'librarian' ? 'Demote to Member' : 'Appoint as Librarian'}">
+                                    ${m.role === 'librarian' ? 'Remove Librarian' : 'Make Librarian'}
+                                </button>
+                            ` : ''}
+                            ${showRemoveBtn ? `
+                                <button onclick="handleRemoveMember(this)" data-profile-id="${db.escapeAttr(m.id)}" data-profile-name="${db.escapeAttr(m.full_name || 'this member')}" class="p-2 text-stone-400 hover:text-error dark:hover:text-error-container hover:bg-error/10 rounded-full transition-colors flex items-center justify-center" title="Remove member">
+                                    <span class="material-symbols-outlined text-[20px]">person_remove</span>
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
                 `;
             }).join('');
@@ -1567,9 +1575,28 @@
             }
         }
 
+        async function handleToggleLibrarianRole(btnEl) {
+            const profileId = btnEl.dataset.profileId;
+            const currentRole = btnEl.dataset.currentRole;
+            btnEl.disabled = true;
+            try {
+                if (currentRole === 'librarian') {
+                    await window.db.removeLibrarian(profileId, currentCircleId, currentUser.uid);
+                } else {
+                    await window.db.appointLibrarian(profileId, currentCircleId, currentUser.uid);
+                }
+                await loadCircleDetails();
+                renderMembersList();
+            } catch (err) {
+                alert('Failed to update librarian role: ' + err.message);
+                btnEl.disabled = false;
+            }
+        }
+
         window.openMembersModal = openMembersModal;
         window.closeMembersModal = closeMembersModal;
         window.handleRemoveMember = handleRemoveMember;
+        window.handleToggleLibrarianRole = handleToggleLibrarianRole;
 
         // Close dropdown on outside click
         document.addEventListener('pointerdown', (e) => {

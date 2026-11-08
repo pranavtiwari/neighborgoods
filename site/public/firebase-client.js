@@ -3962,12 +3962,19 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             };
         },
 
-        getBook: async function(bookId) {
+        getBook: async function(bookId, opts = {}) {
             if (!bookId) return null;
             try {
                 const doc = await firebase.firestore().collection('books').doc(bookId).get();
                 if (!doc.exists) return null;
-                return { id: doc.id, ...doc.data() };
+                const data = doc.data();
+                if (data.is_merged && data.merged_into && !opts?.skipFollowMerge) {
+                    const merged = await this.getBook(data.merged_into);
+                    if (merged) {
+                        return { ...merged, _redirected_from: bookId };
+                    }
+                }
+                return { id: doc.id, ...data };
             } catch (err) {
                 console.error('Error fetching canonical book:', err);
                 return null;
@@ -4210,11 +4217,25 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         getBookCopies: async function(bookId, filters = {}) {
             if (!bookId) return [];
             try {
+                // If the book was merged into another canonical record, resolve the target
+                let resolvedBookId = bookId;
+                try {
+                    const bDoc = await firebase.firestore().collection('books').doc(bookId).get();
+                    if (bDoc.exists && bDoc.data().is_merged && bDoc.data().merged_into) {
+                        resolvedBookId = bDoc.data().merged_into;
+                    }
+                } catch (e) {}
+
                 const snap = await firebase.firestore().collection('items')
-                    .where('book_id', '==', bookId)
+                    .where('book_id', '==', resolvedBookId)
                     .get();
 
                 let copies = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Filter out withdrawn copies unless explicitly requested
+                if (!filters.include_withdrawn) {
+                    copies = copies.filter(c => !c.is_withdrawn && c.status !== 'withdrawn');
+                }
 
                 // Filter out copies that the viewer is not authorized to view based on visibility (Issue #18)
                 const currentUser = firebase.auth().currentUser;
@@ -4474,6 +4495,541 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
 
             return { found: false, source: null, book: null, candidates: [] };
+        },
+
+        // ==========================================
+        // Issue #20: Librarian Roles, Moderation & Catalog Curation
+        // ==========================================
+
+        isLibrarian: async function(userId, circleId = null) {
+            if (!userId) return false;
+            try {
+                // 1. Check global librarians collection
+                const libDoc = await firebase.firestore().collection('librarians').doc(userId).get();
+                if (libDoc.exists) {
+                    const data = libDoc.data();
+                    if (data.is_active !== false) return true;
+                }
+
+                // 2. Check profile role
+                const profile = await this.getProfile(userId);
+                if (profile) {
+                    if (profile.role === 'librarian' || profile.role === 'admin' || profile.is_librarian === true) {
+                        return true;
+                    }
+                }
+
+                // 3. If circleId specified, check circle creator or circle_members role
+                if (circleId) {
+                    const circleDoc = await firebase.firestore().collection('circles').doc(circleId).get();
+                    if (circleDoc.exists && circleDoc.data().created_by === userId) return true;
+
+                    const membershipId = `${circleId}_${userId}`;
+                    const memDoc = await firebase.firestore().collection('circle_members').doc(membershipId).get();
+                    if (memDoc.exists) {
+                        const mData = memDoc.data();
+                        if (mData.role === 'librarian' || mData.role === 'admin') return true;
+                    }
+                } else {
+                    // Check if member is librarian or admin in any circle membership
+                    const memSnap = await firebase.firestore().collection('circle_members')
+                        .where('profile_id', '==', userId).get();
+                    const hasCircleLib = memSnap.docs.some(d => {
+                        const r = d.data().role;
+                        return r === 'librarian' || r === 'admin';
+                    });
+                    if (hasCircleLib) return true;
+                }
+
+                return false;
+            } catch (err) {
+                console.warn('Error checking librarian status:', err);
+                return false;
+            }
+        },
+
+        appointLibrarian: async function(targetUserId, circleId = null, appointedBy = null) {
+            const currentUid = appointedBy || firebase.auth().currentUser?.uid;
+            if (!currentUid) throw new Error('Authentication required to appoint librarians');
+            if (!targetUserId) throw new Error('Target user ID required');
+
+            try {
+                if (circleId) {
+                    const circleDoc = await firebase.firestore().collection('circles').doc(circleId).get();
+                    if (!circleDoc.exists) throw new Error('Circle not found');
+                    if (circleDoc.data().created_by !== currentUid) {
+                        throw new Error('Only circle creator can appoint librarians in this circle');
+                    }
+                    const memRef = firebase.firestore().collection('circle_members').doc(`${circleId}_${targetUserId}`);
+                    await memRef.set({
+                        circle_id: circleId,
+                        profile_id: targetUserId,
+                        role: 'librarian',
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
+
+                // Register in librarians collection
+                await firebase.firestore().collection('librarians').doc(targetUserId).set({
+                    profile_id: targetUserId,
+                    circle_id: circleId || null,
+                    appointed_by: currentUid,
+                    is_active: true,
+                    appointed_at: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                // Log to moderation_events
+                await firebase.firestore().collection('moderation_events').add({
+                    action: 'appoint_librarian',
+                    actor_id: currentUid,
+                    target_type: 'user',
+                    target_id: targetUserId,
+                    circle_id: circleId || null,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                return { success: true, targetUserId, role: 'librarian' };
+            } catch (err) {
+                console.error('Error appointing librarian:', err);
+                throw err;
+            }
+        },
+
+        removeLibrarian: async function(targetUserId, circleId = null, removedBy = null) {
+            const currentUid = removedBy || firebase.auth().currentUser?.uid;
+            if (!currentUid) throw new Error('Authentication required to remove librarians');
+            if (!targetUserId) throw new Error('Target user ID required');
+
+            try {
+                if (circleId) {
+                    const circleDoc = await firebase.firestore().collection('circles').doc(circleId).get();
+                    if (!circleDoc.exists) throw new Error('Circle not found');
+                    if (circleDoc.data().created_by !== currentUid) {
+                        throw new Error('Only circle creator can remove librarians in this circle');
+                    }
+                    const memRef = firebase.firestore().collection('circle_members').doc(`${circleId}_${targetUserId}`);
+                    await memRef.set({
+                        role: 'member',
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
+
+                // Deactivate in librarians collection
+                await firebase.firestore().collection('librarians').doc(targetUserId).set({
+                    is_active: false,
+                    removed_by: currentUid,
+                    removed_at: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                // Log to moderation_events
+                await firebase.firestore().collection('moderation_events').add({
+                    action: 'remove_librarian',
+                    actor_id: currentUid,
+                    target_type: 'user',
+                    target_id: targetUserId,
+                    circle_id: circleId || null,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                return { success: true, targetUserId, role: 'member' };
+            } catch (err) {
+                console.error('Error removing librarian:', err);
+                throw err;
+            }
+        },
+
+        updateBookMetadata: async function(bookId, updates, editorUserId = null) {
+            const currentUid = editorUserId || firebase.auth().currentUser?.uid;
+            if (!currentUid) throw new Error('Authentication required to update book metadata');
+            if (!bookId) throw new Error('Book ID required');
+
+            const bookDoc = await firebase.firestore().collection('books').doc(bookId).get();
+            if (!bookDoc.exists) throw new Error('Book not found');
+            const bookData = bookDoc.data();
+
+            const isLib = await this.isLibrarian(currentUid);
+            const isCreator = (bookData.created_by === currentUid);
+            if (!isLib && !isCreator) {
+                throw new Error('Permission denied: only librarians or creator may update canonical book metadata');
+            }
+
+            const payload = {};
+            if (updates.title) {
+                payload.title = String(updates.title).trim();
+                payload.title_normalized = this.normalizeTitle(payload.title);
+            }
+            if (updates.author) {
+                payload.author = String(updates.author).trim();
+                const authNorm = this.normalizeAuthors(payload.author);
+                payload.authors = authNorm.authors;
+            } else if (Array.isArray(updates.authors)) {
+                payload.authors = updates.authors;
+                payload.author = updates.authors.join(', ');
+            }
+            if (updates.description !== undefined) payload.description = String(updates.description || '').trim();
+            if (updates.publisher !== undefined) payload.publisher = String(updates.publisher || '').trim();
+            if (updates.published_year !== undefined) payload.published_year = parseInt(updates.published_year, 10) || null;
+            if (updates.cover_image_url !== undefined) payload.cover_image_url = updates.cover_image_url;
+            if (updates.cover_image !== undefined) payload.cover_image = updates.cover_image;
+            if (Array.isArray(updates.categories)) payload.categories = updates.categories;
+
+            if (updates.isbn) {
+                const n = this.normalizeIsbn(updates.isbn);
+                const isbns = new Set(bookData.isbns || []);
+                if (n.isbn13) isbns.add(n.isbn13);
+                if (n.isbn10) isbns.add(n.isbn10);
+                payload.isbns = Array.from(isbns);
+                payload.isbn = n.isbn13 || n.isbn10 || updates.isbn;
+            }
+
+            payload.updated_at = firebase.firestore.FieldValue.serverTimestamp();
+            payload.updated_by = currentUid;
+
+            await firebase.firestore().collection('books').doc(bookId).update(payload);
+
+            // Log to moderation_events
+            await firebase.firestore().collection('moderation_events').add({
+                action: 'edit_book_metadata',
+                actor_id: currentUid,
+                target_type: 'book',
+                target_id: bookId,
+                details: payload,
+                created_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            return { id: bookId, ...bookData, ...payload };
+        },
+
+        findDuplicateBooks: async function(bookId) {
+            if (!bookId) return [];
+            try {
+                const targetBook = await this.getBook(bookId, { skipFollowMerge: true });
+                if (!targetBook) return [];
+
+                const snap = await firebase.firestore().collection('books').get();
+                const candidates = [];
+
+                for (const doc of snap.docs) {
+                    if (doc.id === bookId) continue;
+                    const b = { id: doc.id, ...doc.data() };
+                    if (b.is_merged) continue;
+
+                    let isMatch = false;
+                    let matchReason = '';
+
+                    // 1. Normalized Title Match
+                    if (b.title_normalized && targetBook.title_normalized && b.title_normalized === targetBook.title_normalized) {
+                        isMatch = true;
+                        matchReason = 'Identical Title';
+                    }
+
+                    // 2. ISBN Overlap
+                    if (!isMatch && Array.isArray(b.isbns) && Array.isArray(targetBook.isbns)) {
+                        const hasCommonIsbn = b.isbns.some(isbn => targetBook.isbns.includes(isbn));
+                        if (hasCommonIsbn) {
+                            isMatch = true;
+                            matchReason = 'Matching ISBN';
+                        }
+                    }
+
+                    // 3. Substring Title Match
+                    if (!isMatch && b.title_normalized && targetBook.title_normalized) {
+                        if (b.title_normalized.length > 5 && targetBook.title_normalized.length > 5) {
+                            if (b.title_normalized.includes(targetBook.title_normalized) || targetBook.title_normalized.includes(b.title_normalized)) {
+                                isMatch = true;
+                                matchReason = 'Similar Title';
+                            }
+                        }
+                    }
+
+                    if (isMatch) {
+                        candidates.push({ ...b, matchReason });
+                    }
+                }
+
+                return candidates;
+            } catch (err) {
+                console.error('Error finding duplicate books:', err);
+                return [];
+            }
+        },
+
+        mergeDuplicateBooks: async function(sourceBookId, targetBookId, moderatorUserId = null) {
+            const currentUid = moderatorUserId || firebase.auth().currentUser?.uid;
+            if (!currentUid) throw new Error('Authentication required to merge duplicate books');
+            if (!sourceBookId || !targetBookId) throw new Error('Both source and target book IDs required');
+            if (sourceBookId === targetBookId) throw new Error('Cannot merge a book into itself');
+
+            const isLib = await this.isLibrarian(currentUid);
+            if (!isLib) {
+                throw new Error('Permission denied: only librarians or admins can merge books');
+            }
+
+            const db = firebase.firestore();
+            const sourceDoc = await db.collection('books').doc(sourceBookId).get();
+            const targetDoc = await db.collection('books').doc(targetBookId).get();
+
+            if (!sourceDoc.exists) throw new Error(`Source book ${sourceBookId} not found`);
+            if (!targetDoc.exists) throw new Error(`Target book ${targetBookId} not found`);
+
+            const sourceData = sourceDoc.data();
+            const targetData = targetDoc.data();
+
+            if (sourceData.is_merged) throw new Error(`Source book is already merged into ${sourceData.merged_into}`);
+
+            // 1. Repoint all physical book copies (items)
+            const itemSnap = await db.collection('items').where('book_id', '==', sourceBookId).get();
+            const batch = db.batch();
+
+            itemSnap.docs.forEach(doc => {
+                batch.update(doc.ref, {
+                    book_id: targetBookId,
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+
+            // 2. Repoint all transaction requests
+            const reqSnap = await db.collection('requests').where('book_id', '==', sourceBookId).get();
+            reqSnap.docs.forEach(doc => {
+                batch.update(doc.ref, {
+                    book_id: targetBookId,
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+
+            // 3. Repoint all messages
+            const msgSnap = await db.collection('messages').where('book_id', '==', sourceBookId).get();
+            msgSnap.docs.forEach(doc => {
+                batch.update(doc.ref, {
+                    book_id: targetBookId
+                });
+            });
+
+            // 4. Update Target Canonical Book (aggregating counts and metadata)
+            const mergedAuthors = [...new Set([...(targetData.authors || []), ...(sourceData.authors || [])])];
+            const mergedIsbns = [...new Set([...(targetData.isbns || []), ...(sourceData.isbns || [])])];
+            const newCopiesCount = (targetData.copies_count || 0) + (sourceData.copies_count || 0);
+            const newAvailableCount = (targetData.available_copies_count || 0) + (sourceData.available_copies_count || 0);
+
+            batch.update(targetDoc.ref, {
+                authors: mergedAuthors,
+                isbns: mergedIsbns,
+                copies_count: newCopiesCount,
+                available_copies_count: newAvailableCount,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_by: currentUid
+            });
+
+            // 5. Mark Source Canonical Book as merged
+            batch.update(sourceDoc.ref, {
+                is_merged: true,
+                merged_into: targetBookId,
+                copies_count: 0,
+                available_copies_count: 0,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_by: currentUid
+            });
+
+            await batch.commit();
+
+            // 6. Record in moderation_events audit trail
+            await db.collection('moderation_events').add({
+                action: 'merge_books',
+                actor_id: currentUid,
+                target_type: 'book',
+                source_id: sourceBookId,
+                target_id: targetBookId,
+                copies_moved: itemSnap.docs.length,
+                requests_moved: reqSnap.docs.length,
+                messages_moved: msgSnap.docs.length,
+                created_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            return {
+                success: true,
+                targetBookId,
+                sourceBookId,
+                copiesMoved: itemSnap.docs.length,
+                requestsMoved: reqSnap.docs.length
+            };
+        },
+
+        withdrawItemCopy: async function(copyId, reason = '', moderatorUserId = null) {
+            const currentUid = moderatorUserId || firebase.auth().currentUser?.uid;
+            if (!currentUid) throw new Error('Authentication required to withdraw item copy');
+            if (!copyId) throw new Error('Copy ID required');
+
+            const itemDoc = await firebase.firestore().collection('items').doc(copyId).get();
+            if (!itemDoc.exists) throw new Error('Item copy not found');
+            const itemData = itemDoc.data();
+
+            const isOwner = (itemData.owner_id === currentUid);
+            const isLib = await this.isLibrarian(currentUid);
+            if (!isOwner && !isLib) {
+                throw new Error('Permission denied: only copy owner or librarians may withdraw copy');
+            }
+
+            const wasAvailable = Boolean(itemData.is_available && itemData.status === 'available');
+
+            await firebase.firestore().collection('items').doc(copyId).update({
+                is_withdrawn: true,
+                is_available: false,
+                status: 'withdrawn',
+                withdrawal_reason: reason || 'Withdrawn by moderation',
+                withdrawn_by: currentUid,
+                withdrawn_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            // Adjust canonical book copies count if linked
+            if (itemData.book_id) {
+                try {
+                    const bookDoc = await firebase.firestore().collection('books').doc(itemData.book_id).get();
+                    if (bookDoc.exists) {
+                        const bData = bookDoc.data();
+                        const newCopies = Math.max(0, (bData.copies_count || 1) - 1);
+                        const newAvail = wasAvailable ? Math.max(0, (bData.available_copies_count || 1) - 1) : (bData.available_copies_count || 0);
+                        await bookDoc.ref.update({
+                            copies_count: newCopies,
+                            available_copies_count: newAvail,
+                            updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Could not update book counts on copy withdrawal:', e);
+                }
+            }
+
+            // Log to moderation_events
+            await firebase.firestore().collection('moderation_events').add({
+                action: 'withdraw_copy',
+                actor_id: currentUid,
+                target_type: 'item',
+                target_id: copyId,
+                book_id: itemData.book_id || null,
+                reason: reason || '',
+                created_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            return { success: true, copyId, is_withdrawn: true };
+        },
+
+        submitReport: async function({ targetType, targetId, reporterId = null, reason, details = '' }) {
+            const currentUid = reporterId || firebase.auth().currentUser?.uid;
+            if (!currentUid) throw new Error('Authentication required to submit report');
+            if (!reason) throw new Error('Reason is required');
+            if (!targetType || !targetId) throw new Error('Target type and target ID required');
+
+            const ref = await firebase.firestore().collection('reports').add({
+                target_type: targetType,
+                target_id: targetId,
+                reporter_id: currentUid,
+                reason: String(reason).trim(),
+                details: String(details || '').trim(),
+                status: 'pending',
+                created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            return { id: ref.id, status: 'pending' };
+        },
+
+        getReportQueue: async function(status = 'pending') {
+            try {
+                let query = firebase.firestore().collection('reports');
+                if (status) {
+                    query = query.where('status', '==', status);
+                }
+                const snap = await query.get();
+                const reports = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Sort descending by created_at
+                reports.sort((a, b) => {
+                    const tA = a.created_at?.toDate ? a.created_at.toDate().getTime() : new Date(a.created_at || 0).getTime();
+                    const tB = b.created_at?.toDate ? b.created_at.toDate().getTime() : new Date(b.created_at || 0).getTime();
+                    return tB - tA;
+                });
+
+                // Enrich reports with metadata
+                await Promise.all(reports.map(async (rep) => {
+                    if (rep.reporter_id) {
+                        rep.reporter = await this.getProfile(rep.reporter_id);
+                    }
+                    if (rep.target_type === 'book') {
+                        rep.targetBook = await this.getBook(rep.target_id);
+                    } else if (rep.target_type === 'item') {
+                        rep.targetItem = await this.getItem(rep.target_id);
+                    } else if (rep.target_type === 'user') {
+                        rep.targetUser = await this.getProfile(rep.target_id);
+                    }
+                }));
+
+                return reports;
+            } catch (err) {
+                console.error('Error fetching report queue:', err);
+                return [];
+            }
+        },
+
+        resolveReport: async function(reportId, resolution, moderatorUserId = null, actionTaken = 'none') {
+            const currentUid = moderatorUserId || firebase.auth().currentUser?.uid;
+            if (!currentUid) throw new Error('Authentication required to resolve report');
+            if (!reportId) throw new Error('Report ID required');
+
+            const isLib = await this.isLibrarian(currentUid);
+            if (!isLib) throw new Error('Permission denied: only librarians or admins can resolve reports');
+
+            const repDoc = await firebase.firestore().collection('reports').doc(reportId).get();
+            if (!repDoc.exists) throw new Error('Report not found');
+
+            await repDoc.ref.update({
+                status: 'resolved',
+                resolution: resolution || 'Reviewed and resolved',
+                action_taken: actionTaken,
+                resolved_by: currentUid,
+                resolved_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            // Log to moderation_events
+            await firebase.firestore().collection('moderation_events').add({
+                action: 'resolve_report',
+                actor_id: currentUid,
+                target_type: 'report',
+                target_id: reportId,
+                resolution: resolution || '',
+                action_taken: actionTaken,
+                created_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            return { success: true, reportId, status: 'resolved' };
+        },
+
+        getModerationEvents: async function(opts = {}) {
+            try {
+                let query = firebase.firestore().collection('moderation_events');
+                if (opts.targetType) query = query.where('target_type', '==', opts.targetType);
+                if (opts.targetId) query = query.where('target_id', '==', opts.targetId);
+                if (opts.actorId) query = query.where('actor_id', '==', opts.actorId);
+
+                const snap = await query.get();
+                const events = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                events.sort((a, b) => {
+                    const tA = a.created_at?.toDate ? a.created_at.toDate().getTime() : new Date(a.created_at || 0).getTime();
+                    const tB = b.created_at?.toDate ? b.created_at.toDate().getTime() : new Date(b.created_at || 0).getTime();
+                    return tB - tA;
+                });
+
+                if (opts.limit && events.length > opts.limit) {
+                    return events.slice(0, opts.limit);
+                }
+
+                return events;
+            } catch (err) {
+                console.error('Error getting moderation events:', err);
+                return [];
+            }
         }
     };
 

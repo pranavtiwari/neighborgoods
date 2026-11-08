@@ -58,6 +58,9 @@
                 <button id="bookmark-btn" title="Save to Want List" class="hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors active:scale-95 duration-200 p-2 rounded-full cursor-pointer">
                     <span id="bookmark-icon" class="material-symbols-outlined text-stone-600 dark:text-stone-300">bookmark_border</span>
                 </button>
+                <button id="report-book-btn" onclick="openReportModal('book', currentBook ? currentBook.id : '', currentBook ? currentBook.title : '')" title="Report this book" class="hover:bg-stone-200/50 dark:hover:bg-stone-800/50 transition-colors active:scale-95 duration-200 p-2 rounded-full cursor-pointer">
+                    <span class="material-symbols-outlined text-stone-600 dark:text-stone-300">flag</span>
+                </button>
                 <div class="relative">
                     <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-9 h-9 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
                         <img id="header-avatar" alt="User avatar" class="w-full h-full object-cover" src="https://i.pravatar.cc/150?u=me"/>
@@ -196,6 +199,33 @@
                 </div>
             </section>
 
+            <!-- Librarian Moderation Bar (visible to librarians) -->
+            <div id="librarian-toolbar" class="hidden bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                        <span class="material-symbols-outlined text-2xl">local_library</span>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h4 class="font-bold text-sm text-emerald-950 dark:text-emerald-100">Librarian Tools</h4>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-100">Active</span>
+                        </div>
+                        <p class="text-xs text-emerald-700 dark:text-emerald-300">You have catalog librarian permissions to edit metadata, merge duplicates, and moderate copies.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button onclick="openEditBookModal()" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl active:scale-95 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
+                        <span class="material-symbols-outlined text-sm">edit</span> Edit Metadata
+                    </button>
+                    <button onclick="openMergeModal()" class="px-3.5 py-2 bg-surface-container-high hover:bg-stone-200 dark:hover:bg-stone-800 text-stone-800 dark:text-stone-200 text-xs font-bold rounded-xl active:scale-95 transition-all flex items-center gap-1.5 border border-outline-variant/30 cursor-pointer">
+                        <span class="material-symbols-outlined text-sm">call_merge</span> Merge Duplicates
+                    </button>
+                    <button onclick="openReportModal('book', currentBook.id, currentBook.title)" class="px-3 py-2 bg-transparent hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 text-xs font-bold rounded-xl active:scale-95 transition-all flex items-center gap-1 cursor-pointer">
+                        <span class="material-symbols-outlined text-sm">flag</span> Report
+                    </button>
+                </div>
+            </div>
+
             <!-- Physical Copies Aggregation Section -->
             <section id="copies-section" class="space-y-6">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-outline-variant/15 pb-4">
@@ -298,6 +328,140 @@
         <span id="toast-message">Message</span>
     </div>
 
+    <!-- Edit Book Metadata Modal (Librarian only) -->
+    <div id="edit-book-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-md">
+        <div class="modal-content bg-surface w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-6 border-b border-surface-container flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary text-2xl">menu_book</span>
+                    <h3 class="text-xl font-bold">Edit Book Metadata</h3>
+                </div>
+                <button onclick="closeEditBookModal()" class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors cursor-pointer">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <form id="edit-book-form" onsubmit="submitEditBook(event)" class="flex flex-col overflow-hidden">
+                <div class="p-6 space-y-4 overflow-y-auto">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">Title</label>
+                        <input type="text" id="edit-book-title" required class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-2.5 px-3 text-sm font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">Authors (comma separated)</label>
+                        <input type="text" id="edit-book-authors" required class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-2.5 px-3 text-sm">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">Published Year</label>
+                            <input type="number" id="edit-book-year" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-2.5 px-3 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">Publisher</label>
+                            <input type="text" id="edit-book-publisher" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-2.5 px-3 text-sm">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">ISBN-13 / ISBN-10</label>
+                        <input type="text" id="edit-book-isbn" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-2.5 px-3 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">Cover Image URL</label>
+                        <input type="url" id="edit-book-cover" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-2.5 px-3 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">Synopsis / Description</label>
+                        <textarea id="edit-book-description" rows="3" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-2.5 px-3 text-sm resize-none"></textarea>
+                    </div>
+                    <div id="edit-book-error" class="hidden bg-error/10 text-error p-3 rounded-xl text-xs font-medium"></div>
+                </div>
+                <div class="p-6 pt-0 shrink-0 flex gap-3">
+                    <button type="button" onclick="closeEditBookModal()" class="flex-1 py-2.5 rounded-xl font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-container text-xs cursor-pointer">Cancel</button>
+                    <button type="submit" id="save-book-btn" class="flex-1 py-2.5 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-all text-xs shadow-md cursor-pointer">Save Metadata</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Merge Duplicate Books Modal (Librarian only) -->
+    <div id="merge-book-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-md">
+        <div class="modal-content bg-surface w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-6 border-b border-surface-container flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary text-2xl">call_merge</span>
+                    <h3 class="text-xl font-bold">Merge Duplicate Books</h3>
+                </div>
+                <button onclick="closeMergeModal()" class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors cursor-pointer">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+                <p class="text-xs text-stone-500 leading-relaxed">
+                    Merging repoints all physical copies, active requests, and conversation threads from the duplicate into the canonical book, preserving all transaction history.
+                </p>
+                <div class="bg-surface-container-low p-3 rounded-xl border border-outline-variant/15 text-xs">
+                    <strong class="text-stone-700 dark:text-stone-300">Current Book:</strong>
+                    <span id="merge-current-title" class="font-bold text-primary block mt-0.5">...</span>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-2">Detected Potential Duplicates</label>
+                    <div id="merge-candidates-list" class="space-y-2">
+                        <div class="text-stone-400 text-xs py-3 text-center animate-pulse">Scanning for duplicates...</div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">Or Enter Target Canonical Book ID</label>
+                    <input type="text" id="merge-manual-target-id" placeholder="book_... or target book ID" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-2.5 px-3 text-xs font-mono">
+                </div>
+                <div id="merge-book-error" class="hidden bg-error/10 text-error p-3 rounded-xl text-xs font-medium"></div>
+            </div>
+            <div class="p-6 pt-0 shrink-0 flex gap-3">
+                <button type="button" onclick="closeMergeModal()" class="flex-1 py-2.5 rounded-xl font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-container text-xs cursor-pointer">Cancel</button>
+                <button type="button" id="confirm-merge-btn" onclick="submitMergeBook()" class="flex-1 py-2.5 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-all text-xs shadow-md cursor-pointer">Merge into Canonical</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Modal -->
+    <div id="report-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-md">
+        <div class="modal-content bg-surface w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="p-6 border-b border-surface-container flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-error text-2xl">flag</span>
+                    <h3 class="text-xl font-bold">Report Content</h3>
+                </div>
+                <button onclick="closeReportModal()" class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container transition-colors cursor-pointer">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <form id="report-form" onsubmit="submitReportForm(event)" class="p-6 space-y-4">
+                <div>
+                    <span class="text-[10px] uppercase font-bold text-stone-400 block tracking-wider">Target</span>
+                    <p id="report-target-label" class="text-sm font-bold text-on-surface mt-0.5">...</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">Reason</label>
+                    <select id="report-reason" required class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-2.5 px-3 text-xs font-semibold">
+                        <option value="inappropriate_content">Inappropriate or offensive content</option>
+                        <option value="spam">Spam or misleading listing</option>
+                        <option value="inaccurate_metadata">Inaccurate book metadata</option>
+                        <option value="damaged_missing">Damaged, missing, or unavailable item</option>
+                        <option value="wrong_category">Wrong category or listing type</option>
+                        <option value="other">Other reason</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-stone-500 mb-1">Details (Optional)</label>
+                    <textarea id="report-details" rows="3" placeholder="Provide additional context for moderators and librarians..." class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-2.5 px-3 text-xs resize-none"></textarea>
+                </div>
+                <div id="report-error" class="hidden bg-error/10 text-error p-3 rounded-xl text-xs font-medium"></div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeReportModal()" class="flex-1 py-2.5 rounded-xl font-bold text-on-surface-variant border border-outline-variant hover:bg-surface-container text-xs cursor-pointer">Cancel</button>
+                    <button type="submit" id="submit-report-btn" class="flex-1 py-2.5 rounded-xl bg-error text-on-error font-bold active:scale-95 transition-all text-xs shadow-md cursor-pointer">Submit Report</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Script Logic -->
     <script>
         let currentBook = null;
@@ -305,6 +469,8 @@
         let currentListingTypeFilter = 'all';
         let availableOnlyFilter = false;
         let currentUser = null;
+        let isUserLibrarian = false;
+        let activeReportTarget = { type: null, id: null, title: '' };
 
         function showToast(msg) {
             const toast = document.getElementById('toast');
@@ -409,9 +575,14 @@
                     actionsHtml = `
                         <div class="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/15">
                             <span class="text-xs font-black uppercase tracking-wider text-stone-500 bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded-md">Your Copy</span>
-                            <a href="add-item.html?id=${encodeURIComponent(copy.id)}" class="ml-auto text-xs font-bold text-primary dark:text-emerald-400 hover:underline flex items-center gap-1">
-                                <span class="material-symbols-outlined text-sm">edit</span> Edit Listing
-                            </a>
+                            <div class="ml-auto flex items-center gap-2">
+                                <button onclick="handleWithdrawCopy('${db.escapeAttr(copy.id)}')" class="p-2 text-stone-400 hover:text-red-600 rounded-lg transition-colors flex items-center justify-center cursor-pointer" title="Withdraw Copy">
+                                    <span class="material-symbols-outlined text-[18px]">archive</span>
+                                </button>
+                                <a href="add-item.html?id=${encodeURIComponent(copy.id)}" class="text-xs font-bold text-primary dark:text-emerald-400 hover:underline flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-sm">edit</span> Edit Listing
+                                </a>
+                            </div>
                         </div>`;
                 } else {
                     let requestBtnText = 'Request to Borrow';
@@ -443,6 +614,14 @@
                             <a href="item-details.html?id=${encodeURIComponent(copy.id)}" title="Copy details" class="p-2.5 bg-surface-container hover:bg-surface-container-high rounded-xl text-stone-500 active:scale-95 transition-all flex items-center justify-center">
                                 <span class="material-symbols-outlined text-base">info</span>
                             </a>
+                            ${isUserLibrarian ? `
+                                <button onclick="handleWithdrawCopy('${db.escapeAttr(copy.id)}')" class="p-2.5 bg-surface-container hover:bg-red-50 dark:hover:bg-red-950/40 text-stone-400 hover:text-red-600 rounded-xl active:scale-95 transition-all flex items-center justify-center cursor-pointer" title="Librarian: Withdraw Copy">
+                                    <span class="material-symbols-outlined text-base">archive</span>
+                                </button>
+                            ` : ''}
+                            <button onclick="openReportModal('item', '${db.escapeAttr(copy.id)}', '${db.escapeAttr(copy.name || currentBook.title)}')" class="p-2.5 bg-surface-container hover:bg-red-50 dark:hover:bg-red-950/40 text-stone-400 hover:text-red-600 rounded-xl active:scale-95 transition-all flex items-center justify-center cursor-pointer" title="Report Copy">
+                                <span class="material-symbols-outlined text-base">flag</span>
+                            </button>
                         </div>`;
                 }
 
@@ -720,6 +899,8 @@
                 if (loadingEl) loadingEl.classList.add('hidden');
                 if (contentEl) contentEl.classList.remove('hidden');
 
+                await checkLibrarianStatus();
+
             } catch (err) {
                 console.error('Error initializing book detail page:', err);
                 if (loadingEl) loadingEl.classList.add('hidden');
@@ -729,12 +910,241 @@
             }
         }
 
+        async function checkLibrarianStatus() {
+            if (!currentUser) {
+                isUserLibrarian = false;
+            } else {
+                try {
+                    isUserLibrarian = await window.db.isLibrarian(currentUser.uid);
+                } catch (e) {
+                    console.warn("Could not check librarian status:", e);
+                    isUserLibrarian = false;
+                }
+            }
+            const tb = document.getElementById('librarian-toolbar');
+            if (tb) {
+                if (isUserLibrarian) tb.classList.remove('hidden');
+                else tb.classList.add('hidden');
+            }
+        }
+
+        // Edit Book Metadata Modal
+        function openEditBookModal() {
+            if (!currentBook) return;
+            document.getElementById('edit-book-title').value = currentBook.title || '';
+            document.getElementById('edit-book-authors').value = Array.isArray(currentBook.authors) ? currentBook.authors.join(', ') : (currentBook.authors || '');
+            document.getElementById('edit-book-year').value = currentBook.published_year || '';
+            document.getElementById('edit-book-publisher').value = currentBook.publisher || '';
+            document.getElementById('edit-book-isbn').value = currentBook.isbn_13 || currentBook.isbn_10 || (currentBook.isbns && currentBook.isbns[0]) || '';
+            document.getElementById('edit-book-cover').value = currentBook.cover_url || '';
+            document.getElementById('edit-book-description').value = currentBook.description || '';
+            document.getElementById('edit-book-error').classList.add('hidden');
+            document.getElementById('edit-book-modal').classList.remove('hidden');
+        }
+
+        function closeEditBookModal() {
+            document.getElementById('edit-book-modal').classList.add('hidden');
+            document.getElementById('edit-book-error').classList.add('hidden');
+        }
+
+        async function submitEditBook(e) {
+            e.preventDefault();
+            const btn = document.getElementById('save-book-btn');
+            const errDiv = document.getElementById('edit-book-error');
+            btn.disabled = true;
+            errDiv.classList.add('hidden');
+
+            try {
+                const authorsRaw = document.getElementById('edit-book-authors').value.split(',').map(s => s.trim()).filter(Boolean);
+                const isbnRaw = document.getElementById('edit-book-isbn').value.trim();
+                const updates = {
+                    title: document.getElementById('edit-book-title').value.trim(),
+                    authors: authorsRaw,
+                    published_year: parseInt(document.getElementById('edit-book-year').value, 10) || null,
+                    publisher: document.getElementById('edit-book-publisher').value.trim() || null,
+                    cover_url: document.getElementById('edit-book-cover').value.trim() || null,
+                    description: document.getElementById('edit-book-description').value.trim() || null
+                };
+                if (isbnRaw) {
+                    if (isbnRaw.length === 10) updates.isbn_10 = isbnRaw;
+                    else updates.isbn_13 = isbnRaw;
+                    updates.isbns = [isbnRaw];
+                }
+
+                await window.db.updateBookMetadata(currentBook.id, updates, currentUser?.uid);
+                showToast("Book metadata updated successfully!");
+                closeEditBookModal();
+                await initBookDetail();
+            } catch (err) {
+                console.error("Error updating book metadata:", err);
+                errDiv.textContent = err.message || "Failed to update book metadata.";
+                errDiv.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Merge Duplicates Modal
+        async function openMergeModal() {
+            if (!currentBook) return;
+            document.getElementById('merge-current-title').textContent = `${currentBook.title} (ID: ${currentBook.id})`;
+            document.getElementById('merge-manual-target-id').value = '';
+            document.getElementById('merge-book-error').classList.add('hidden');
+            const candidatesList = document.getElementById('merge-candidates-list');
+            candidatesList.innerHTML = '<div class="text-stone-400 text-xs py-3 text-center animate-pulse">Scanning for duplicates...</div>';
+            document.getElementById('merge-book-modal').classList.remove('hidden');
+
+            try {
+                const duplicates = await window.db.findDuplicateBooks(currentBook.id);
+                if (duplicates.length === 0) {
+                    candidatesList.innerHTML = '<p class="text-xs text-stone-500 italic py-2">No automatic duplicate candidates found. You can specify a target Book ID below manually.</p>';
+                } else {
+                    candidatesList.innerHTML = duplicates.map((dup, idx) => `
+                        <label class="flex items-center gap-3 p-3 bg-surface-container rounded-xl cursor-pointer hover:bg-surface-container-high transition-colors border border-outline-variant/10">
+                            <input type="radio" name="merge-target" value="${dup.id}" ${idx === 0 ? 'checked' : ''} class="accent-primary">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-xs font-bold text-on-surface truncate">${db.escapeHtml(dup.title)}</p>
+                                <p class="text-[11px] text-stone-500 truncate">${db.escapeHtml((dup.authors || []).join(', '))} • ID: ${dup.id}</p>
+                            </div>
+                        </label>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error("Error finding duplicates:", err);
+                candidatesList.innerHTML = '<p class="text-xs text-error py-2">Failed to scan for duplicate candidates.</p>';
+            }
+        }
+
+        function closeMergeModal() {
+            document.getElementById('merge-book-modal').classList.add('hidden');
+            document.getElementById('merge-book-error').classList.add('hidden');
+        }
+
+        async function submitMergeBook() {
+            const btn = document.getElementById('confirm-merge-btn');
+            const errDiv = document.getElementById('merge-book-error');
+            btn.disabled = true;
+            errDiv.classList.add('hidden');
+
+            try {
+                const selectedRadio = document.querySelector('input[name="merge-target"]:checked');
+                const manualId = document.getElementById('merge-manual-target-id').value.trim();
+                const targetBookId = manualId || (selectedRadio ? selectedRadio.value : null);
+
+                if (!targetBookId) {
+                    throw new Error("Please select a target duplicate book or enter a valid Book ID.");
+                }
+
+                if (targetBookId === currentBook.id) {
+                    throw new Error("Cannot merge a book into itself.");
+                }
+
+                const confirmed = confirm(`Are you sure you want to merge "${currentBook.title}" into canonical target book "${targetBookId}"? This will repoint all physical copies and transactions.`);
+                if (!confirmed) {
+                    btn.disabled = false;
+                    return;
+                }
+
+                await window.db.mergeDuplicateBooks(currentBook.id, targetBookId, currentUser?.uid);
+                showToast("Books merged successfully! Redirecting...");
+                closeMergeModal();
+                setTimeout(() => {
+                    window.location.href = `book-detail.html?id=${encodeURIComponent(targetBookId)}`;
+                }, 1000);
+            } catch (err) {
+                console.error("Error merging books:", err);
+                errDiv.textContent = err.message || "Failed to merge duplicate books.";
+                errDiv.classList.remove('hidden');
+                btn.disabled = false;
+            }
+        }
+
+        // Copy Withdrawal
+        async function handleWithdrawCopy(copyId) {
+            const reason = prompt("Reason for withdrawing this physical copy (optional):", "Copy damaged or no longer available");
+            if (reason === null) return;
+
+            try {
+                await window.db.withdrawItemCopy(copyId, reason, currentUser?.uid);
+                showToast("Copy withdrawn successfully.");
+                allCopies = allCopies.filter(c => c.id !== copyId);
+                renderCopies();
+            } catch (err) {
+                console.error("Error withdrawing copy:", err);
+                alert("Failed to withdraw copy: " + err.message);
+            }
+        }
+
+        // Report Content
+        function openReportModal(targetType, targetId, title) {
+            activeReportTarget = { type: targetType, id: targetId, title: title || '' };
+            const labelEl = document.getElementById('report-target-label');
+            if (labelEl) {
+                labelEl.textContent = `${targetType === 'book' ? 'Book' : 'Copy'}: ${title || targetId}`;
+            }
+            document.getElementById('report-details').value = '';
+            document.getElementById('report-error').classList.add('hidden');
+            document.getElementById('report-modal').classList.remove('hidden');
+        }
+
+        function closeReportModal() {
+            document.getElementById('report-modal').classList.add('hidden');
+            document.getElementById('report-error').classList.add('hidden');
+            activeReportTarget = { type: null, id: null, title: '' };
+        }
+
+        async function submitReportForm(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submit-report-btn');
+            const errDiv = document.getElementById('report-error');
+            btn.disabled = true;
+            errDiv.classList.add('hidden');
+
+            try {
+                const reason = document.getElementById('report-reason').value;
+                const details = document.getElementById('report-details').value.trim();
+
+                await window.db.submitReport({
+                    targetType: activeReportTarget.type,
+                    targetId: activeReportTarget.id,
+                    reporterId: currentUser?.uid,
+                    reason,
+                    details
+                });
+
+                showToast("Report submitted to librarians and moderators.");
+                closeReportModal();
+            } catch (err) {
+                console.error("Error submitting report:", err);
+                errDiv.textContent = err.message || "Failed to submit report.";
+                errDiv.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        window.openEditBookModal = openEditBookModal;
+        window.closeEditBookModal = closeEditBookModal;
+        window.submitEditBook = submitEditBook;
+        window.openMergeModal = openMergeModal;
+        window.closeMergeModal = closeMergeModal;
+        window.submitMergeBook = submitMergeBook;
+        window.handleWithdrawCopy = handleWithdrawCopy;
+        window.openReportModal = openReportModal;
+        window.closeReportModal = closeReportModal;
+        window.submitReportForm = submitReportForm;
+
         // Auth state listener for user recognition
-        firebase.auth().onAuthStateChanged((user) => {
+        firebase.auth().onAuthStateChanged(async (user) => {
             currentUser = user;
             if (user) {
                 const avatar = document.getElementById('header-avatar');
                 if (avatar && user.photoURL) avatar.src = user.photoURL;
+                await checkLibrarianStatus();
+            } else {
+                isUserLibrarian = false;
+                const tb = document.getElementById('librarian-toolbar');
+                if (tb) tb.classList.add('hidden');
             }
             if (allCopies.length > 0) {
                 renderCopies();
