@@ -925,5 +925,91 @@ await test('all writes require authentication', async () => {
     await assertFails(anon.collection('books').doc('b').set({ title: 'x' }));
 });
 
+// ----------------------------------------------------------- visibility & request policy (Issue #18)
+await test('items: visibility and request policy schema validation', async () => {
+    // Valid values succeed
+    await assertSucceeds(dbFor(ALICE).collection('items').doc('item_valid').set({
+        name: 'Valid Item',
+        owner_id: ALICE,
+        visibility: 'trusted',
+        request_policy: 'trusted_only',
+        trusted_user_ids: [BOB]
+    }));
+
+    // Invalid visibility fails
+    await assertFails(dbFor(ALICE).collection('items').doc('item_bad_vis').set({
+        name: 'Bad Vis',
+        owner_id: ALICE,
+        visibility: 'secret'
+    }));
+
+    // Invalid request policy fails
+    await assertFails(dbFor(ALICE).collection('items').doc('item_bad_pol').set({
+        name: 'Bad Policy',
+        owner_id: ALICE,
+        request_policy: 'nobody'
+    }));
+});
+
+await test('items: read scoping by visibility', async () => {
+    await seed(async db => {
+        await db.collection('circles').doc('circle1').set({ created_by: ALICE });
+        await db.collection('circle_members').doc('circle1_' + BOB).set({
+            circle_id: 'circle1', profile_id: BOB, role: 'member'
+        });
+        await db.collection('items').doc('item_public').set({
+            name: 'Public Item', owner_id: ALICE, visibility: 'public'
+        });
+        await db.collection('items').doc('item_circle').set({
+            name: 'Circle Item', owner_id: ALICE, visibility: 'circles', circle_id: 'circle1'
+        });
+        await db.collection('items').doc('item_trusted').set({
+            name: 'Trusted Item', owner_id: ALICE, visibility: 'trusted', trusted_user_ids: [BOB]
+        });
+    });
+
+    // Public readable by stranger
+    await assertSucceeds(dbFor(CAROL).collection('items').doc('item_public').get());
+
+    // Circle copy readable by member (Bob), denied to stranger (Carol)
+    await assertSucceeds(dbFor(BOB).collection('items').doc('item_circle').get());
+    await assertFails(dbFor(CAROL).collection('items').doc('item_circle').get());
+
+    // Trusted copy readable by trusted (Bob), denied to stranger (Carol)
+    await assertSucceeds(dbFor(BOB).collection('items').doc('item_trusted').get());
+    await assertFails(dbFor(CAROL).collection('items').doc('item_trusted').get());
+});
+
+await test('requests: creation governed by item request_policy and visibility', async () => {
+    await seed(async db => {
+        await db.collection('circles').doc('circle1').set({ created_by: ALICE });
+        await db.collection('circle_members').doc('circle1_' + BOB).set({
+            circle_id: 'circle1', profile_id: BOB, role: 'member'
+        });
+        await db.collection('items').doc('item_policy_circle').set({
+            name: 'Circle Policy Item', owner_id: ALICE, request_policy: 'circle_members', circle_id: 'circle1'
+        });
+        await db.collection('items').doc('item_policy_trusted').set({
+            name: 'Trusted Policy Item', owner_id: ALICE, request_policy: 'trusted_only', trusted_user_ids: [BOB]
+        });
+    });
+
+    // Circle policy: Member (Bob) succeeds, stranger (Carol) fails
+    await assertSucceeds(dbFor(BOB).collection('requests').doc('req_bob_circle').set({
+        borrower_id: BOB, lender_id: ALICE, item_id: 'item_policy_circle', status: 'pending'
+    }));
+    await assertFails(dbFor(CAROL).collection('requests').doc('req_carol_circle').set({
+        borrower_id: CAROL, lender_id: ALICE, item_id: 'item_policy_circle', status: 'pending'
+    }));
+
+    // Trusted policy: Trusted (Bob) succeeds, non-trusted (Carol) fails
+    await assertSucceeds(dbFor(BOB).collection('requests').doc('req_bob_trusted').set({
+        borrower_id: BOB, lender_id: ALICE, item_id: 'item_policy_trusted', status: 'pending'
+    }));
+    await assertFails(dbFor(CAROL).collection('requests').doc('req_carol_trusted').set({
+        borrower_id: CAROL, lender_id: ALICE, item_id: 'item_policy_trusted', status: 'pending'
+    }));
+});
+
 console.log(`\nEMULATOR RULES SUITE: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

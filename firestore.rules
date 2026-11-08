@@ -40,6 +40,53 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Item Visibility & Request Policy Helpers (Issue #18)
+    // ─────────────────────────────────────────────────────────────────────────
+    function canUserReadItem(itemData) {
+      return !('visibility' in itemData)
+        || itemData.visibility == 'public'
+        || (request.auth != null && (
+             itemData.owner_id == request.auth.uid
+             || (itemData.visibility == 'circles' && (
+                  ('circle_id' in itemData && itemData.circle_id != null
+                   && exists(/databases/$(database)/documents/circle_members/$(itemData.circle_id + '_' + request.auth.uid)))
+                  || ('circle_ids' in itemData && itemData.circle_ids.size() > 0
+                      && exists(/databases/$(database)/documents/circle_members/$(itemData.circle_ids[0] + '_' + request.auth.uid)))
+                ))
+             || (itemData.visibility == 'trusted'
+                 && 'trusted_user_ids' in itemData
+                 && request.auth.uid in itemData.trusted_user_ids)
+           ));
+    }
+
+    function canUserRequestItem(itemId) {
+      return !exists(/databases/$(database)/documents/items/$(itemId))
+        || (
+          canUserReadItem(get(/databases/$(database)/documents/items/$(itemId)).data)
+          && (
+            !('request_policy' in get(/databases/$(database)/documents/items/$(itemId)).data)
+            || get(/databases/$(database)/documents/items/$(itemId)).data.request_policy == 'anyone'
+            || (
+              get(/databases/$(database)/documents/items/$(itemId)).data.request_policy == 'circle_members'
+              && (
+                ('circle_id' in get(/databases/$(database)/documents/items/$(itemId)).data
+                 && get(/databases/$(database)/documents/items/$(itemId)).data.circle_id != null
+                 && exists(/databases/$(database)/documents/circle_members/$(get(/databases/$(database)/documents/items/$(itemId)).data.circle_id + '_' + request.auth.uid)))
+                || ('circle_ids' in get(/databases/$(database)/documents/items/$(itemId)).data
+                    && get(/databases/$(database)/documents/items/$(itemId)).data.circle_ids.size() > 0
+                    && exists(/databases/$(database)/documents/circle_members/$(get(/databases/$(database)/documents/items/$(itemId)).data.circle_ids[0] + '_' + request.auth.uid)))
+              )
+            )
+            || (
+              get(/databases/$(database)/documents/items/$(itemId)).data.request_policy == 'trusted_only'
+              && 'trusted_user_ids' in get(/databases/$(database)/documents/items/$(itemId)).data
+              && request.auth.uid in get(/databases/$(database)/documents/items/$(itemId)).data.trusted_user_ids
+            )
+          )
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Profiles
     // FIX VULN-01: Removed the branch that let any authenticated user write
     //              reputation_score directly. Reputation is now immutable from
@@ -202,7 +249,7 @@ service cloud.firestore {
     //              image_url (defense-in-depth alongside frontend sanitisation).
     // ─────────────────────────────────────────────────────────────────────────
     match /items/{itemId} {
-      allow read: if true;
+      allow read: if canUserReadItem(resource.data);
 
       allow create: if request.auth != null
         && request.resource.data.owner_id == request.auth.uid
@@ -224,7 +271,11 @@ service cloud.firestore {
               request.resource.data.book_id is string
               && request.resource.data.book_id.size() > 0))
         && (!('visibility' in request.resource.data) || (
-              request.resource.data.visibility in ['public', 'circles']));
+              request.resource.data.visibility in ['public', 'circles', 'trusted']))
+        && (!('request_policy' in request.resource.data) || (
+              request.resource.data.request_policy in ['anyone', 'circle_members', 'trusted_only']))
+        && (!('trusted_user_ids' in request.resource.data) || (
+              request.resource.data.trusted_user_ids is list));
 
       // FIX VULN-13: The original rule only let the OWNER update an item, but
       // the borrow lifecycle mutates item.status / is_available from both
@@ -252,7 +303,11 @@ service cloud.firestore {
               request.resource.data.book_id is string
               && request.resource.data.book_id.size() > 0))
         && (!('visibility' in request.resource.data) || (
-              request.resource.data.visibility in ['public', 'circles']))
+              request.resource.data.visibility in ['public', 'circles', 'trusted']))
+        && (!('request_policy' in request.resource.data) || (
+              request.resource.data.request_policy in ['anyone', 'circle_members', 'trusted_only']))
+        && (!('trusted_user_ids' in request.resource.data) || (
+              request.resource.data.trusted_user_ids is list))
         && (
           // Owner may rewrite the listing freely.
           resource.data.owner_id == request.auth.uid
@@ -323,7 +378,11 @@ service cloud.firestore {
         && request.resource.data.borrower_id == request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.lender_id is string
-        && request.resource.data.lender_id != request.auth.uid;
+        && request.resource.data.lender_id != request.auth.uid
+        && (!('item_id' in request.resource.data) || (
+              request.resource.data.item_id is string
+              && canUserRequestItem(request.resource.data.item_id)
+            ));
 
       // Updates: identity fields are immutable; role-based field restrictions
       allow update: if request.auth != null

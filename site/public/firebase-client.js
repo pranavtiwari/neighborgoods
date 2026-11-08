@@ -756,7 +756,19 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                             if (!matchesSearch) return false;
                         }
 
-                        // Visibility scoping
+                        // Visibility scoping (Issue #18)
+                        if (item.visibility === 'trusted') {
+                            const trustedList = Array.isArray(item.trusted_user_ids) ? item.trusted_user_ids : [];
+                            return !!(userId && (item.owner_id === userId || trustedList.includes(userId)));
+                        }
+                        if (item.visibility === 'circles') {
+                            if (!userId || !myCircleIds) return false;
+                            if (item.owner_id === userId) return true;
+                            if (item.circle_ids && item.circle_ids.length > 0) {
+                                return item.circle_ids.some(cid => myCircleIds.has(cid));
+                            }
+                            return !!(item.circle_id && myCircleIds.has(item.circle_id));
+                        }
                         if (item.visibility === 'public' || item.visibility_scope === 'world_of_books') {
                             return true;
                         }
@@ -1098,6 +1110,28 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     created_at: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
+                // Visibility, request policy, and trusted users defaults (Issue #18)
+                if (doc.kind === 'book') {
+                    doc.visibility = doc.visibility || 'public';
+                }
+                if (doc.visibility) {
+                    if (doc.visibility === 'public') {
+                        doc.visibility_scope = doc.visibility_scope || 'world_of_books';
+                    } else if (doc.visibility === 'circles') {
+                        doc.visibility_scope = 'circles';
+                    } else if (doc.visibility === 'trusted') {
+                        doc.visibility_scope = 'trusted';
+                    }
+                }
+                doc.request_policy = doc.request_policy || 'anyone';
+                if (Array.isArray(doc.trusted_user_ids)) {
+                    doc.trusted_user_ids = doc.trusted_user_ids.map(String).filter(Boolean);
+                } else if ('trusted_user_ids' in doc && doc.trusted_user_ids !== undefined) {
+                    // Keep non-array as-is so security rules reject invalid types
+                } else {
+                    doc.trusted_user_ids = [];
+                }
+
                 // Book spine fields. `name` is the display title used by the
                 // existing item-details/explore UI; metadata is kept alongside
                 // so the catalogue can be searched without loading everything.
@@ -1105,9 +1139,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     doc.condition = doc.condition || doc.condition_grade || null;
                     doc.condition_grade = doc.condition_grade || doc.condition || null;
                     doc.photos = Array.isArray(doc.photos) ? doc.photos : (doc.image_url ? [doc.image_url] : []);
-                    if (doc.visibility !== 'circles') {
-                        doc.visibility = 'public';
+                    if (doc.visibility === 'public') {
                         doc.visibility_scope = doc.visibility_scope || 'world_of_books';
+                    } else if (doc.visibility === 'circles') {
+                        doc.visibility_scope = 'circles';
+                    } else if (doc.visibility === 'trusted') {
+                        doc.visibility_scope = 'trusted';
                     }
                 }
                 if (doc.isbn13) {
@@ -1169,6 +1206,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     if (!Array.isArray(patch.photos)) {
                         patch.photos = patch.image_url ? [patch.image_url] : [];
                     }
+                }
+                if ('visibility' in patch && !['public', 'circles', 'trusted'].includes(patch.visibility)) {
+                    delete patch.visibility;
+                }
+                if ('request_policy' in patch && !['anyone', 'circle_members', 'trusted_only'].includes(patch.request_policy)) {
+                    delete patch.request_policy;
+                }
+                if ('trusted_user_ids' in patch && Array.isArray(patch.trusted_user_ids)) {
+                    patch.trusted_user_ids = patch.trusted_user_ids.map(String).filter(Boolean);
                 }
                 await firebase.firestore().collection('items').doc(itemId).set({
                     ...patch,
@@ -1446,6 +1492,38 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     );
                     if (hasActiveRequest) {
                         throw new Error("You already have an active request for this item.");
+                    }
+
+                    // Enforce visibility & request policy (Issue #18)
+                    const borrowerId = requestData.borrower_id;
+                    const itemVisibility = itemData.visibility || 'public';
+                    const itemPolicy = itemData.request_policy || 'anyone';
+                    const trustedUserIds = Array.isArray(itemData.trusted_user_ids) ? itemData.trusted_user_ids : [];
+                    const itemCircles = Array.isArray(itemData.circle_ids) ? itemData.circle_ids : (itemData.circle_id ? [itemData.circle_id] : []);
+
+                    let isBorrowerCircleMember = false;
+                    for (const cid of itemCircles) {
+                        const memberDoc = await db.collection('circle_members').doc(`${cid}_${borrowerId}`).get();
+                        if (memberDoc.exists) {
+                            isBorrowerCircleMember = true;
+                            break;
+                        }
+                    }
+
+                    // Visibility checks
+                    if (itemVisibility === 'trusted' && !trustedUserIds.includes(borrowerId)) {
+                        throw new Error("This copy is private to trusted neighbors only.");
+                    }
+                    if (itemVisibility === 'circles' && !isBorrowerCircleMember && itemCircles.length > 0) {
+                        throw new Error("This copy is visible only to circle members.");
+                    }
+
+                    // Request policy checks
+                    if (itemPolicy === 'trusted_only' && !trustedUserIds.includes(borrowerId)) {
+                        throw new Error("The owner only accepts borrow requests from trusted neighbors for this copy.");
+                    }
+                    if (itemPolicy === 'circle_members' && !isBorrowerCircleMember && itemCircles.length > 0) {
+                        throw new Error("The owner only accepts borrow requests from circle members for this copy.");
                     }
 
                     // Create the request
@@ -3903,6 +3981,39 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             return results;
         },
 
+        canUserViewItem: function(item, uid, userCircleIds = []) {
+            if (!item) return false;
+            const vis = item.visibility || 'public';
+            if (vis === 'public') return true;
+            if (!uid) return false;
+            if (item.owner_id === uid) return true;
+            if (vis === 'trusted') {
+                const trusted = Array.isArray(item.trusted_user_ids) ? item.trusted_user_ids : [];
+                return trusted.includes(uid);
+            }
+            if (vis === 'circles') {
+                const cids = Array.isArray(item.circle_ids) ? item.circle_ids : (item.circle_id ? [item.circle_id] : []);
+                return cids.some(cid => userCircleIds.includes(cid));
+            }
+            return false;
+        },
+
+        canUserRequestItem: function(item, uid, userCircleIds = []) {
+            if (!this.canUserViewItem(item, uid, userCircleIds)) return false;
+            if (!uid || item.owner_id === uid) return false;
+            if (item.is_available === false || ['approved', 'borrowed', 'returned'].includes(item.status)) return false;
+            const policy = item.request_policy || 'anyone';
+            const trusted = Array.isArray(item.trusted_user_ids) ? item.trusted_user_ids : [];
+            if (policy === 'trusted_only') {
+                return trusted.includes(uid);
+            }
+            if (policy === 'circle_members') {
+                const cids = Array.isArray(item.circle_ids) ? item.circle_ids : (item.circle_id ? [item.circle_id] : []);
+                return cids.some(cid => userCircleIds.includes(cid));
+            }
+            return true;
+        },
+
         getBookCopies: async function(bookId, filters = {}) {
             if (!bookId) return [];
             try {
@@ -3911,6 +4022,23 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     .get();
 
                 let copies = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // Filter out copies that the viewer is not authorized to view based on visibility (Issue #18)
+                const currentUser = firebase.auth().currentUser;
+                const viewerId = filters.viewer_id || (currentUser ? currentUser.uid : null);
+                
+                let viewerCircleIds = Array.isArray(filters.user_circle_ids) ? filters.user_circle_ids : [];
+                if (viewerId && viewerCircleIds.length === 0) {
+                    try {
+                        const memSnap = await firebase.firestore().collection('circle_members')
+                            .where('profile_id', '==', viewerId).get();
+                        viewerCircleIds = memSnap.docs.map(d => d.data().circle_id).filter(Boolean);
+                    } catch (e) {
+                        console.warn('Could not load viewer circle memberships:', e);
+                    }
+                }
+
+                copies = copies.filter(c => this.canUserViewItem(c, viewerId, viewerCircleIds));
 
                 // Populate owner profiles
                 const ownerIds = [...new Set(copies.map(c => c.owner_id).filter(Boolean))];
@@ -3941,13 +4069,34 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     const owner = profilesMap[copy.owner_id] || {};
                     const circle = circlesMap[copy.circle_id] || null;
                     const area = copy.location_area || copy.location || owner.location || 'Local area';
+                    const policy = copy.request_policy || 'anyone';
+                    const trusted = Array.isArray(copy.trusted_user_ids) ? copy.trusted_user_ids : [];
+                    const cids = Array.isArray(copy.circle_ids) ? copy.circle_ids : (copy.circle_id ? [copy.circle_id] : []);
+
+                    let canRequest = true;
+                    let requestRestrictionReason = null;
+                    if (viewerId && copy.owner_id === viewerId) {
+                        canRequest = false;
+                        requestRestrictionReason = 'Your copy';
+                    } else if (policy === 'trusted_only' && (!viewerId || !trusted.includes(viewerId))) {
+                        canRequest = false;
+                        requestRestrictionReason = 'Trusted neighbors only';
+                    } else if (policy === 'circle_members' && (!viewerId || !cids.some(cid => viewerCircleIds.includes(cid)))) {
+                        canRequest = false;
+                        requestRestrictionReason = 'Circle members only';
+                    }
+
                     const enriched = {
                         ...copy,
                         owner_profile: owner,
                         owner_name: owner.full_name || copy.owner_name || 'Neighbor',
                         owner_avatar: owner.avatar_url || 'https://placehold.co/100x100?text=U',
                         circle_name: circle ? circle.name : (copy.circle_name || null),
-                        display_area: area
+                        display_area: area,
+                        visibility: copy.visibility || 'public',
+                        request_policy: policy,
+                        can_request: canRequest,
+                        request_restriction_reason: requestRestrictionReason
                     };
                     delete enriched.exact_address;
                     return enriched;

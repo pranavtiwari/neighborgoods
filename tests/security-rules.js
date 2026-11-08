@@ -138,6 +138,37 @@ function buildRulesEngine(firestore) {
                     if (data.status !== 'pending') DENY("new requests must have status 'pending'");
                     if (typeof data.lender_id !== 'string') DENY("lender_id must be a string — this is the rule that createBorrowRequest violated");
                     if (data.lender_id === uid) DENY('cannot borrow from yourself');
+                    if (data.item_id) {
+                        const targetItem = firestore._getData('items', data.item_id);
+                        if (targetItem) {
+                            const vis = targetItem.visibility || 'public';
+                            const policy = targetItem.request_policy || 'anyone';
+                            const trusted = Array.isArray(targetItem.trusted_user_ids) ? targetItem.trusted_user_ids : [];
+                            const cids = Array.isArray(targetItem.circle_ids) ? targetItem.circle_ids : (targetItem.circle_id ? [targetItem.circle_id] : []);
+
+                            // Check visibility access
+                            if (vis === 'trusted' && !trusted.includes(uid) && targetItem.owner_id !== uid) {
+                                DENY('item is private to trusted neighbors only');
+                            }
+                            if (vis === 'circles') {
+                                const isMember = cids.some(cid => !!firestore._getData('circle_members', `${cid}_${uid}`));
+                                if (!isMember && targetItem.owner_id !== uid && cids.length > 0) {
+                                    DENY('item is private to circle members only');
+                                }
+                            }
+
+                            // Check request policy access
+                            if (policy === 'trusted_only' && !trusted.includes(uid) && targetItem.owner_id !== uid) {
+                                DENY('item request policy allows trusted neighbors only');
+                            }
+                            if (policy === 'circle_members') {
+                                const isMember = cids.some(cid => !!firestore._getData('circle_members', `${cid}_${uid}`));
+                                if (!isMember && targetItem.owner_id !== uid && cids.length > 0) {
+                                    DENY('item request policy allows circle members only');
+                                }
+                            }
+                        }
+                    }
                 } else {
                     if (!uid) DENY('not signed in');
                     if (!prior) DENY('request not found');
@@ -180,8 +211,14 @@ function buildRulesEngine(firestore) {
                     if (data.kind === 'book' && (typeof data.book_id !== 'string' || !data.book_id)) {
                         DENY('a book copy must be linked to a canonical book');
                     }
-                    if ('visibility' in data && !['public', 'circles'].includes(data.visibility)) {
+                    if ('visibility' in data && !['public', 'circles', 'trusted'].includes(data.visibility)) {
                         DENY('invalid visibility');
+                    }
+                    if ('request_policy' in data && !['anyone', 'circle_members', 'trusted_only'].includes(data.request_policy)) {
+                        DENY('invalid request_policy');
+                    }
+                    if ('trusted_user_ids' in data && !Array.isArray(data.trusted_user_ids)) {
+                        DENY('trusted_user_ids must be an array');
                     }
                 } else {
                     if (!prior) DENY('item not found');
@@ -191,6 +228,15 @@ function buildRulesEngine(firestore) {
                     if (changedFields.includes('listing_type') &&
                         !['borrow', 'giveaway', 'swap'].includes(data.listing_type)) {
                         DENY('new listings must use a v1 listing type (borrow, giveaway, swap)');
+                    }
+                    if ('visibility' in data && !['public', 'circles', 'trusted'].includes(data.visibility)) {
+                        DENY('invalid visibility');
+                    }
+                    if ('request_policy' in data && !['anyone', 'circle_members', 'trusted_only'].includes(data.request_policy)) {
+                        DENY('invalid request_policy');
+                    }
+                    if ('trusted_user_ids' in data && !Array.isArray(data.trusted_user_ids)) {
+                        DENY('trusted_user_ids must be an array');
                     }
                     if (prior.owner_id !== uid) {
                         // Non-owner: only if the denormalised active request

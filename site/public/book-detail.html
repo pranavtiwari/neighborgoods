@@ -418,13 +418,21 @@
                     if (copy.listing_type === 'giveaway') requestBtnText = 'Claim Free Copy 🎁';
                     else if (copy.listing_type === 'swap') requestBtnText = 'Propose Swap 🔄';
 
-                    const primaryAction = isAvailable
-                        ? `<a href="request-borrow.html?id=${encodeURIComponent(copy.id)}" class="flex-1 py-2.5 px-3 bg-primary text-white text-xs font-bold rounded-xl text-center active:scale-95 transition-all shadow-sm hover:opacity-90">
-                            ${requestBtnText}
-                           </a>`
-                        : `<button disabled class="flex-1 py-2.5 px-3 bg-stone-200 dark:bg-stone-800 text-stone-500 text-xs font-bold rounded-xl text-center cursor-not-allowed">
+                    let primaryAction = '';
+                    if (!isAvailable) {
+                        primaryAction = `<button disabled class="flex-1 py-2.5 px-3 bg-stone-200 dark:bg-stone-800 text-stone-500 text-xs font-bold rounded-xl text-center cursor-not-allowed">
                             Currently In Use
-                           </button>`;
+                        </button>`;
+                    } else if (copy.can_request === false) {
+                        const reason = copy.request_restriction_reason || 'Restricted';
+                        primaryAction = `<button disabled class="flex-1 py-2.5 px-3 bg-stone-100 dark:bg-stone-800 text-stone-400 text-xs font-bold rounded-xl text-center cursor-not-allowed" title="${db.escapeAttr(reason)}">
+                            ${db.escapeHtml(reason)}
+                        </button>`;
+                    } else {
+                        primaryAction = `<a href="request-borrow.html?id=${encodeURIComponent(copy.id)}" class="flex-1 py-2.5 px-3 bg-primary text-white text-xs font-bold rounded-xl text-center active:scale-95 transition-all shadow-sm hover:opacity-90">
+                            ${requestBtnText}
+                        </a>`;
+                    }
 
                     actionsHtml = `
                         <div class="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/15">
@@ -436,6 +444,19 @@
                                 <span class="material-symbols-outlined text-base">info</span>
                             </a>
                         </div>`;
+                }
+
+                // Policy & Visibility Badges
+                let policyBadge = '';
+                if (copy.request_policy === 'circle_members') {
+                    policyBadge = '<span class="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300 px-2 py-0.5 rounded-md"><span class="material-symbols-outlined text-[12px]">lock</span> Circle Requests Only</span>';
+                } else if (copy.request_policy === 'trusted_only') {
+                    policyBadge = '<span class="inline-flex items-center gap-1 text-[10px] font-bold text-purple-800 bg-purple-50 dark:bg-purple-950/40 dark:text-purple-300 px-2 py-0.5 rounded-md"><span class="material-symbols-outlined text-[12px]">verified_user</span> Trusted Requests Only</span>';
+                }
+
+                let visibilityBadge = '';
+                if (copy.visibility === 'trusted') {
+                    visibilityBadge = '<span class="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-md"><span class="material-symbols-outlined text-[12px]">security</span> Trusted Visibility</span>';
                 }
 
                 // Circle Chip
@@ -480,6 +501,8 @@
                             ${formatListingTypeBadge(copy.listing_type)}
                             ${formatConditionBadge(copy.condition)}
                             ${circleChip}
+                            ${visibilityBadge}
+                            ${policyBadge}
                         </div>
 
                         <!-- Edition and condition notes -->

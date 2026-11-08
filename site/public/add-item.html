@@ -235,8 +235,27 @@
                 <select id="item-visibility" name="visibility" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
                     <option value="public" selected>Public in World of Books</option>
                     <option value="circles">Only the selected circles</option>
+                    <option value="trusted">Trusted neighbors only</option>
                 </select>
                 <p class="text-[10px] text-stone-500 mt-1">New copies are public in World of Books by default. You can still add them to your circles below.</p>
+            </div>
+
+            <!-- Request Policy -->
+            <div>
+                <label for="item-request-policy" class="block text-sm font-bold mb-2">Borrow Request Policy</label>
+                <select id="item-request-policy" name="request_policy" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
+                    <option value="anyone" selected>Anyone eligible (Open to all neighbors)</option>
+                    <option value="circle_members">Circle members only</option>
+                    <option value="trusted_only">Trusted neighbors only</option>
+                </select>
+                <p class="text-[10px] text-stone-500 mt-1">Control who is permitted to request to borrow or swap this copy.</p>
+            </div>
+
+            <!-- Trusted Neighbors Input -->
+            <div id="trusted-users-container" class="hidden">
+                <label for="item-trusted-users" class="block text-sm font-bold mb-2">Trusted Neighbors (User IDs, comma-separated)</label>
+                <input type="text" id="item-trusted-users" name="trusted_user_ids" placeholder="e.g. user_123, user_456" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
+                <p class="text-[10px] text-stone-500 mt-1">Neighbors listed here will be granted access to view or request this copy.</p>
             </div>
 
             <!-- Pickup Location -->
@@ -1138,7 +1157,16 @@
                 document.getElementById('item-fulfillment').value = item.fulfillment_method || 'pickup';
                 const itemVisibility = item.visibility
                     || ((item.circle_id || (item.circle_ids && item.circle_ids.length > 0)) ? 'circles' : 'public');
-                document.getElementById('item-visibility').value = itemVisibility === 'circles' ? 'circles' : 'public';
+                document.getElementById('item-visibility').value = ['public', 'circles', 'trusted'].includes(itemVisibility) ? itemVisibility : 'public';
+                const policyEl = document.getElementById('item-request-policy');
+                if (policyEl) {
+                    policyEl.value = item.request_policy || 'anyone';
+                }
+                const trustedUsersEl = document.getElementById('item-trusted-users');
+                if (trustedUsersEl && Array.isArray(item.trusted_user_ids)) {
+                    trustedUsersEl.value = item.trusted_user_ids.join(', ');
+                }
+                updateTrustedFieldsVisibility();
 
                 if (item.book_id) {
                     try {
@@ -1201,11 +1229,30 @@
             }
         }
 
+        function updateTrustedFieldsVisibility() {
+            const vis = document.getElementById('item-visibility')?.value;
+            const pol = document.getElementById('item-request-policy')?.value;
+            const container = document.getElementById('trusted-users-container');
+            if (container) {
+                if (vis === 'trusted' || pol === 'trusted_only') {
+                    container.classList.remove('hidden');
+                } else {
+                    container.classList.add('hidden');
+                }
+            }
+        }
+        document.getElementById('item-visibility')?.addEventListener('change', updateTrustedFieldsVisibility);
+        document.getElementById('item-request-policy')?.addEventListener('change', updateTrustedFieldsVisibility);
+
         // Prevent DOMContentLoaded race conditions by running immediately if ready
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initPage);
+            document.addEventListener('DOMContentLoaded', () => {
+                initPage();
+                updateTrustedFieldsVisibility();
+            });
         } else {
             initPage();
+            updateTrustedFieldsVisibility();
         }
 
         const showError = (msg) => {
@@ -1244,6 +1291,9 @@
                 const editionNotes = document.getElementById('item-edition-notes').value.trim();
                 const fulfillment = document.getElementById('item-fulfillment').value;
                 const visibility = document.getElementById('item-visibility').value;
+                const requestPolicy = document.getElementById('item-request-policy')?.value || 'anyone';
+                const trustedUsersRaw = document.getElementById('item-trusted-users')?.value || '';
+                const trustedUserIds = trustedUsersRaw.split(',').map(s => s.trim()).filter(Boolean);
 
                 let imageUrl = currentItemImageUrl;
 
@@ -1327,7 +1377,9 @@
                     edition_notes: editionNotes,
                     fulfillment_method: fulfillment,
                     visibility: visibility,
-                    visibility_scope: visibility === 'public' ? 'world_of_books' : 'circles',
+                    visibility_scope: visibility === 'public' ? 'world_of_books' : (visibility === 'trusted' ? 'trusted' : 'circles'),
+                    request_policy: requestPolicy,
+                    trusted_user_ids: trustedUserIds,
                     location: itemLocation,
                     location_area: itemLocation,
                     latitude: itemLatitude || null,

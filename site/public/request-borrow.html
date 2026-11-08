@@ -437,6 +437,59 @@
                             </div>
                         `;
                         document.getElementById('send-request-btn').parentNode.insertBefore(alertBanner, document.getElementById('send-request-btn'));
+                } else {
+                    // Policy guard (Issue #18)
+                    const policy = item.request_policy || 'anyone';
+                    const visibility = item.visibility || 'public';
+                    const trusted = Array.isArray(item.trusted_user_ids) ? item.trusted_user_ids : [];
+                    const itemCircleIds = Array.isArray(item.circle_ids) ? item.circle_ids : (item.circle_id ? [item.circle_id] : []);
+                    
+                    let isMember = false;
+                    if (itemCircleIds.length > 0) {
+                        for (const cid of itemCircleIds) {
+                            const mDoc = await firebase.firestore().collection('circle_members').doc(`${cid}_${user.uid}`).get();
+                            if (mDoc.exists) {
+                                isMember = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    let policyRestricted = false;
+                    let policyMessage = '';
+
+                    if (visibility === 'trusted' && !trusted.includes(user.uid)) {
+                        policyRestricted = true;
+                        policyMessage = 'This copy is private to trusted neighbors only.';
+                    } else if (visibility === 'circles' && !isMember && itemCircleIds.length > 0) {
+                        policyRestricted = true;
+                        policyMessage = 'This copy is visible only to circle members.';
+                    } else if (policy === 'trusted_only' && !trusted.includes(user.uid)) {
+                        policyRestricted = true;
+                        policyMessage = 'The owner only accepts borrow requests from trusted neighbors for this copy.';
+                    } else if (policy === 'circle_members' && !isMember && itemCircleIds.length > 0) {
+                        policyRestricted = true;
+                        policyMessage = 'The owner only accepts borrow requests from circle members for this copy.';
+                    }
+
+                    if (policyRestricted) {
+                        document.getElementById('send-request-btn').disabled = true;
+                        document.getElementById('send-request-btn').classList.add('opacity-50', 'cursor-not-allowed');
+                        document.getElementById('send-request-btn').innerText = "Request Restricted";
+                        
+                        if (!document.getElementById('policy-warning-banner')) {
+                            const alertBanner = document.createElement('div');
+                            alertBanner.id = 'policy-warning-banner';
+                            alertBanner.className = 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 p-4 rounded-xl text-sm font-medium flex items-start gap-3 mt-4';
+                            alertBanner.innerHTML = `
+                                <span class="material-symbols-outlined text-[20px] text-amber-600 mt-0.5">lock</span>
+                                <div>
+                                    <p class="font-bold">Request Policy Restriction</p>
+                                    <p class="text-xs mt-1">${window.db.escapeHtml(policyMessage)}</p>
+                                </div>
+                            `;
+                            document.getElementById('send-request-btn').parentNode.insertBefore(alertBanner, document.getElementById('send-request-btn'));
+                        }
                     }
                 }
             }

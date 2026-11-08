@@ -39,6 +39,30 @@ class MockDocRef {
                 }
             }
         }
+        if (this.firestore.rulesEngine && this.collectionName === 'items') {
+            const auth = this.firestore._auth ? this.firestore._auth.currentUser : null;
+            const uid = auth ? auth.uid : null;
+            const itemData = this.firestore._getData('items', this.id);
+            if (itemData) {
+                const vis = itemData.visibility || 'public';
+                if (vis === 'trusted') {
+                    const trusted = Array.isArray(itemData.trusted_user_ids) ? itemData.trusted_user_ids : [];
+                    if ((!uid || !trusted.includes(uid)) && itemData.owner_id !== uid) {
+                        const err = new Error('PERMISSION_DENIED: item is private to trusted neighbors only');
+                        err.code = 'permission-denied';
+                        throw err;
+                    }
+                } else if (vis === 'circles') {
+                    const cids = Array.isArray(itemData.circle_ids) ? itemData.circle_ids : (itemData.circle_id ? [itemData.circle_id] : []);
+                    const isMember = uid && cids.some(cid => !!this.firestore._getData('circle_members', `${cid}_${uid}`));
+                    if (!isMember && itemData.owner_id !== uid && cids.length > 0) {
+                        const err = new Error('PERMISSION_DENIED: item is private to circle members only');
+                        err.code = 'permission-denied';
+                        throw err;
+                    }
+                }
+            }
+        }
         const data = this.firestore._getData(this.collectionName, this.id);
         return {
             exists: !!data,

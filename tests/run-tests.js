@@ -2636,6 +2636,229 @@ await test('Flow 15: Comprehensive transaction transitions, permissions, and loc
     );
 });
 
+await test('Flow 16: Per-copy visibility and request policy enforcement (Issue #18)', async () => {
+    const ownerUid = 'user-owner-18';
+    const memberUid = 'user-member-18';
+    const strangerUid = 'user-stranger-18';
+    const trustedUid = 'user-trusted-18';
+    const circleId = 'circle-readers-18';
+
+    // 1. Setup profiles and circle
+    firebase.auth().currentUser = { uid: ownerUid };
+    await db.updateProfile(ownerUid, { full_name: 'Book Owner' });
+    firebase.auth().currentUser = { uid: memberUid };
+    await db.updateProfile(memberUid, { full_name: 'Circle Member' });
+    firebase.auth().currentUser = { uid: strangerUid };
+    await db.updateProfile(strangerUid, { full_name: 'Stranger' });
+    firebase.auth().currentUser = { uid: trustedUid };
+    await db.updateProfile(trustedUid, { full_name: 'Trusted Neighbor' });
+
+    firebase.auth().currentUser = { uid: ownerUid };
+    await firebase.firestore().collection('circles').doc(circleId).set({
+        name: 'Avid Readers Circle',
+        created_by: ownerUid
+    });
+    await firebase.firestore().collection('circle_members').doc(`${circleId}_${ownerUid}`).set({
+        circle_id: circleId,
+        profile_id: ownerUid,
+        role: 'admin'
+    });
+    await firebase.firestore().collection('circle_members').doc(`${circleId}_${memberUid}`).set({
+        circle_id: circleId,
+        profile_id: memberUid,
+        role: 'member'
+    });
+
+    // 2. Create canonical book
+    const bookRes = await db.findOrCreateBook({
+        title: 'The Great Gatsby',
+        authors: ['F. Scott Fitzgerald'],
+        isbn13: '9780743273565'
+    });
+    const bookId = bookRes.book.id;
+
+    // 3. Test default copy values: defaults to public visibility and anyone policy
+    const defaultCopyRes = await db.addItem({
+        name: 'The Great Gatsby (Paperback)',
+        kind: 'book',
+        book_id: bookId,
+        owner_id: ownerUid,
+        condition: 'good',
+        listing_type: 'borrow'
+    });
+    const defaultCopyDoc = (await firebase.firestore().collection('items').doc(defaultCopyRes.id).get()).data();
+    assert.strictEqual(defaultCopyDoc.visibility, 'public', 'Default copy visibility must be public');
+    assert.strictEqual(defaultCopyDoc.request_policy, 'anyone', 'Default copy request_policy must be anyone');
+    assert.deepStrictEqual(defaultCopyDoc.trusted_user_ids, [], 'Default trusted_user_ids must be empty array');
+
+    // 4. Test invalid visibility / request_policy security rule rejections
+    await assert.rejects(
+        async () => {
+            await db.addItem({
+                name: 'Invalid Visibility Book',
+                kind: 'book',
+                book_id: bookId,
+                owner_id: ownerUid,
+                visibility: 'secret_hidden'
+            });
+        },
+        /PERMISSION_DENIED/,
+        'Invalid visibility must be denied by rules'
+    );
+    await assert.rejects(
+        async () => {
+            await db.addItem({
+                name: 'Invalid Policy Book',
+                kind: 'book',
+                book_id: bookId,
+                owner_id: ownerUid,
+                request_policy: 'vip_only'
+            });
+        },
+        /PERMISSION_DENIED/,
+        'Invalid request_policy must be denied by rules'
+    );
+
+    // 5. Create copies with each visibility & request policy combination
+    // Copy A: Circle-only visibility
+    const circleCopyRes = await db.addItem({
+        name: 'The Great Gatsby (Circle Edition)',
+        kind: 'book',
+        book_id: bookId,
+        owner_id: ownerUid,
+        condition: 'like_new',
+        listing_type: 'borrow',
+        visibility: 'circles',
+        circle_id: circleId,
+        circle_ids: [circleId],
+        request_policy: 'circle_members'
+    });
+
+    // Copy B: Trusted-only visibility
+    const trustedCopyRes = await db.addItem({
+        name: 'The Great Gatsby (Signed Collector Copy)',
+        kind: 'book',
+        book_id: bookId,
+        owner_id: ownerUid,
+        condition: 'as_new',
+        listing_type: 'borrow',
+        visibility: 'trusted',
+        trusted_user_ids: [trustedUid],
+        request_policy: 'trusted_only'
+    });
+
+    // Copy C: Public visibility, but circle_members request policy
+    const publicCirclePolicyRes = await db.addItem({
+        name: 'The Great Gatsby (Public View, Circle Requests)',
+        kind: 'book',
+        book_id: bookId,
+        owner_id: ownerUid,
+        condition: 'good',
+        listing_type: 'borrow',
+        visibility: 'public',
+        circle_id: circleId,
+        circle_ids: [circleId],
+        request_policy: 'circle_members'
+    });
+
+    // Copy D: Public visibility, but trusted_only request policy
+    const publicTrustedPolicyRes = await db.addItem({
+        name: 'The Great Gatsby (Public View, Trusted Requests)',
+        kind: 'book',
+        book_id: bookId,
+        owner_id: ownerUid,
+        condition: 'fair',
+        listing_type: 'borrow',
+        visibility: 'public',
+        trusted_user_ids: [trustedUid],
+        request_policy: 'trusted_only'
+    });
+
+    // 6. Test Visibility Filtering in getBookCopies
+    // Stranger's view: should see public copies only (Default, Copy C, Copy D), NOT circle (Copy A) or trusted (Copy B)
+    firebase.auth().currentUser = { uid: strangerUid };
+    const strangerCopies = await db.getBookCopies(bookId);
+    const strangerCopyIds = strangerCopies.map(c => c.id);
+    assert.ok(strangerCopyIds.includes(defaultCopyRes.id), 'Stranger can view public copy');
+    assert.ok(strangerCopyIds.includes(publicCirclePolicyRes.id), 'Stranger can view public visibility copy C');
+    assert.ok(strangerCopyIds.includes(publicTrustedPolicyRes.id), 'Stranger can view public visibility copy D');
+    assert.ok(!strangerCopyIds.includes(circleCopyRes.id), 'Stranger CANNOT view circle-only copy');
+    assert.ok(!strangerCopyIds.includes(trustedCopyRes.id), 'Stranger CANNOT view trusted-only copy');
+
+    // Circle member's view: should see circle copy (Copy A) and public copies, but NOT trusted copy (Copy B)
+    firebase.auth().currentUser = { uid: memberUid };
+    const memberCopies = await db.getBookCopies(bookId);
+    const memberCopyIds = memberCopies.map(c => c.id);
+    assert.ok(memberCopyIds.includes(circleCopyRes.id), 'Circle member can view circle-only copy');
+    assert.ok(!memberCopyIds.includes(trustedCopyRes.id), 'Circle member CANNOT view trusted-only copy');
+
+    // Trusted neighbor's view: should see trusted copy (Copy B) and public copies
+    firebase.auth().currentUser = { uid: trustedUid };
+    const trustedCopies = await db.getBookCopies(bookId);
+    const trustedCopyIds = trustedCopies.map(c => c.id);
+    assert.ok(trustedCopyIds.includes(trustedCopyRes.id), 'Trusted user can view trusted-only copy');
+
+    // Owner's view: can see all copies
+    firebase.auth().currentUser = { uid: ownerUid };
+    const ownerCopies = await db.getBookCopies(bookId);
+    const ownerCopyIds = ownerCopies.map(c => c.id);
+    assert.strictEqual(ownerCopyIds.length, 5, 'Owner can view all 5 of their copies');
+
+    // 7. Test Request Policy Enforcement via canUserRequestItem and createBorrowRequest
+    // Stranger testing:
+    firebase.auth().currentUser = { uid: strangerUid };
+    const strangerCopiesWithStatus = await db.getBookCopies(bookId);
+    const strangerDefaultCopy = strangerCopiesWithStatus.find(c => c.id === defaultCopyRes.id);
+    const strangerCopyC = strangerCopiesWithStatus.find(c => c.id === publicCirclePolicyRes.id);
+    const strangerCopyD = strangerCopiesWithStatus.find(c => c.id === publicTrustedPolicyRes.id);
+
+    assert.strictEqual(strangerDefaultCopy.can_request, true, 'Default copy requestable by stranger');
+    assert.strictEqual(strangerCopyC.can_request, false, 'Copy C not requestable by stranger');
+    assert.strictEqual(strangerCopyC.request_restriction_reason, 'Circle members only');
+    assert.strictEqual(strangerCopyD.can_request, false, 'Copy D not requestable by stranger');
+    assert.strictEqual(strangerCopyD.request_restriction_reason, 'Trusted neighbors only');
+
+    // Stranger attempting to create request for Copy C (circle_members policy) must be rejected
+    await assert.rejects(
+        async () => {
+            await db.createBorrowRequest({
+                item_id: publicCirclePolicyRes.id,
+                borrower_id: strangerUid
+            });
+        },
+        /circle members/,
+        'Stranger request on circle_members policy item must be rejected'
+    );
+
+    // Stranger attempting to create request for Copy D (trusted_only policy) must be rejected
+    await assert.rejects(
+        async () => {
+            await db.createBorrowRequest({
+                item_id: publicTrustedPolicyRes.id,
+                borrower_id: strangerUid
+            });
+        },
+        /trusted neighbors/,
+        'Stranger request on trusted_only policy item must be rejected'
+    );
+
+    // 8. Circle Member requesting Copy C (circle_members policy) succeeds
+    firebase.auth().currentUser = { uid: memberUid };
+    const memberReq = await db.createBorrowRequest({
+        item_id: publicCirclePolicyRes.id,
+        borrower_id: memberUid
+    });
+    assert.ok(memberReq.id, 'Circle member successfully requested circle policy copy');
+
+    // 9. Trusted Neighbor requesting Copy D (trusted_only policy) succeeds
+    firebase.auth().currentUser = { uid: trustedUid };
+    const trustedReq = await db.createBorrowRequest({
+        item_id: publicTrustedPolicyRes.id,
+        borrower_id: trustedUid
+    });
+    assert.ok(trustedReq.id, 'Trusted neighbor successfully requested trusted policy copy');
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================
