@@ -565,9 +565,10 @@
                         </p>
                     </div>
                     <div class="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                        <button onclick="window.location.href='chat.html?userId=' + encodeURIComponent(this.dataset.counterpart) + '&itemId=' + encodeURIComponent(this.dataset.item)"
+                        <button onclick="window.location.href='chat.html?userId=' + encodeURIComponent(this.dataset.counterpart) + '&itemId=' + encodeURIComponent(this.dataset.item) + '&requestId=' + encodeURIComponent(this.dataset.requestId)"
                             data-counterpart="${db.escapeAttr(t.borrower_id === targetUserId ? (t.lender_id || '') : (t.borrower_id || ''))}"
                             data-item="${db.escapeAttr(t.item_id || '')}"
+                            data-request-id="${db.escapeAttr(t.id || '')}"
                             class="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-bold transition-all">
                             Chat
                         </button>

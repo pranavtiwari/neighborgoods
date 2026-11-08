@@ -747,9 +747,10 @@
                                 </div>`;
                         })()}
                         <div class="flex justify-between items-center pt-4 border-t border-surface-container-low gap-3 flex-wrap">
-                            <button onclick="window.location.href='chat.html?userId=' + encodeURIComponent(this.dataset.userId) + '&itemId=' + encodeURIComponent(this.dataset.itemId)"
+                            <button onclick="window.location.href='chat.html?userId=' + encodeURIComponent(this.dataset.userId) + '&itemId=' + encodeURIComponent(this.dataset.itemId) + '&requestId=' + encodeURIComponent(this.dataset.requestId)"
                                 data-user-id="${db.escapeAttr(currentView === 'borrowing' ? item.owner_id : req.borrower_id)}"
                                 data-item-id="${db.escapeAttr(item.id)}"
+                                data-request-id="${db.escapeAttr(req.id)}"
                                 class="text-primary font-semibold text-sm hover:underline">
                                 Message
                             </button>

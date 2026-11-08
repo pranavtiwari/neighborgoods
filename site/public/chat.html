@@ -148,8 +148,9 @@
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
-        const targetUserId = urlParams.get('userId');
+        let targetUserId = urlParams.get('userId');
         let contextItemId = urlParams.get('itemId');
+        const contextRequestId = urlParams.get('requestId') || urlParams.get('request_id') || null;
         const escapeHtml = window.db.escapeHtml;
 
         const chatMessages = document.getElementById('chat-messages');
@@ -158,11 +159,40 @@
         
         let currentUser = null;
         let targetUser = null;
+        let activeRequest = null;
+
+        function sendChatMessage(content) {
+            const opts = {
+                itemId: contextItemId || null,
+                requestId: contextRequestId || (activeRequest ? activeRequest.id : null),
+                bookId: activeRequest ? (activeRequest.book_id || null) : null
+            };
+            return window.db.sendMessage(currentUser.uid, targetUserId, opts, content);
+        }
 
         async function initChat() {
             const session = await requireAuth();
             if (!session) return;
             currentUser = session.user;
+
+            if (contextRequestId) {
+                try {
+                    const reqDoc = await firebase.firestore().collection('requests').doc(contextRequestId).get();
+                    if (reqDoc.exists) {
+                        activeRequest = { id: reqDoc.id, ...reqDoc.data() };
+                        if (activeRequest.item_id && !contextItemId) {
+                            contextItemId = activeRequest.item_id;
+                        }
+                        if (!targetUserId && currentUser) {
+                            targetUserId = (activeRequest.borrower_id === currentUser.uid)
+                                ? (activeRequest.lender_id || activeRequest.owner_id)
+                                : activeRequest.borrower_id;
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Could not load request by contextRequestId:", e);
+                }
+            }
 
             if (!targetUserId) {
                 chatMessages.innerHTML = `<div class="text-center text-error mt-10 font-bold">Error: No target user specified.</div>`;
@@ -180,10 +210,7 @@
                 document.getElementById('target-name').textContent = profileData.full_name || 'Anonymous User';
                 if (profileData.avatar_url) document.getElementById('target-avatar').src = profileData.avatar_url;
                 
-                // Reputation comes from the batched ratee_id lookup. Both
-                // ratingsSummary.userRatings (scoped to the viewer's own
-                // requests) and the stale profile.reputation_score field
-                // (server-owned, never written) are unusable here.
+                // Reputation comes from the batched ratee_id lookup.
                 const reputations = await window.db.getReputations([targetUserId]);
                 const userRating = reputations[targetUserId];
                 if (userRating && userRating.count > 0) {
@@ -199,8 +226,8 @@
                 if (badge) badge.classList.add('hidden');
             }
 
-            // Dynamic resolution of contextItemId if not present in URL
-            if (!contextItemId) {
+            // Dynamic resolution of contextItemId if not present in URL and no contextRequestId
+            if (!contextItemId && !contextRequestId) {
                 try {
                     const reqSnap1 = await firebase.firestore().collection('requests')
                         .where('borrower_id', '==', currentUser.uid)
@@ -268,16 +295,35 @@
                 }
             }
 
-            // Context Item Logic
-            if (contextItemId) {
-                const itemData = await window.db.getItem(contextItemId);
-                if (itemData) {
+            // Context Item / Book Logic
+            if (contextItemId || activeRequest) {
+                const itemData = contextItemId ? await window.db.getItem(contextItemId) : null;
+                const bookId = (itemData && itemData.book_id) || (activeRequest && activeRequest.book_id);
+                let bookData = null;
+                if (bookId) {
+                    try {
+                        bookData = await window.db.getBook(bookId);
+                    } catch (bErr) {
+                        console.warn("Could not load book metadata for context card:", bErr);
+                    }
+                }
+
+                if (itemData || bookData) {
                     document.getElementById('context-card').classList.remove('hidden');
-                    document.getElementById('context-item-name').textContent = itemData.name;
+                    let displayName = itemData ? itemData.name : (bookData ? bookData.title : 'Item');
+                    let displayImg = itemData ? itemData.image_url : null;
+                    if (bookData) {
+                        const author = bookData.author || (Array.isArray(bookData.authors) ? bookData.authors.join(', ') : '');
+                        displayName = bookData.title + (author ? ` by ${author}` : '');
+                        if (bookData.cover_image_url || bookData.cover_image) {
+                            displayImg = bookData.cover_image_url || bookData.cover_image;
+                        }
+                    }
+                    document.getElementById('context-item-name').textContent = displayName;
                     
-                    const isLending = itemData.owner_id === currentUser.uid;
+                    const isLender = itemData ? (itemData.owner_id === currentUser.uid) : (activeRequest && (activeRequest.lender_id || activeRequest.owner_id) === currentUser.uid);
                     const contextCategoryEl = document.getElementById('context-item-category');
-                    if (isLending) {
+                    if (isLender) {
                         contextCategoryEl.textContent = 'Lending';
                         contextCategoryEl.className = 'text-[10px] uppercase font-black text-primary tracking-widest';
                     } else {
@@ -285,12 +331,12 @@
                         contextCategoryEl.className = 'text-[10px] uppercase font-black text-secondary tracking-widest';
                     }
 
-                    if (itemData.image_url) {
-                        document.getElementById('context-item-img').src = itemData.image_url;
+                    if (displayImg) {
+                        document.getElementById('context-item-img').src = displayImg;
                     }
                     
                     // Display listing rating from ratingsSummary
-                    const itemRating = ratingsSummary.listingRatings[contextItemId];
+                    const itemRating = contextItemId ? ratingsSummary.listingRatings[contextItemId] : null;
                     const ratingEl = document.getElementById('context-item-rating');
                     const ratingTextEl = document.getElementById('context-item-rating-text');
                     
@@ -303,7 +349,13 @@
                     
                     const viewItemBtn = document.querySelector('#context-card button');
                     if (viewItemBtn) {
-                        viewItemBtn.onclick = () => window.location.href = `item-details.html?id=${contextItemId}`;
+                        viewItemBtn.onclick = () => {
+                            if (bookId) {
+                                window.location.href = `book-detail.html?id=${encodeURIComponent(bookId)}`;
+                            } else if (contextItemId) {
+                                window.location.href = `item-details.html?id=${encodeURIComponent(contextItemId)}`;
+                            }
+                        };
                     }
                 }
             }
@@ -315,8 +367,8 @@
                 <span class="text-[10px] uppercase font-black text-on-surface-variant/40 tracking-[0.2em] bg-stone-100 px-4 py-1 rounded-full">Message History</span>
             </div>`;
 
-            // Mark messages as read on entry
-            await window.db.markMessagesAsRead(currentUser.uid, targetUserId);
+            // Mark messages as read on entry scoped to current transaction if specified
+            await window.db.markMessagesAsRead(currentUser.uid, targetUserId, contextRequestId);
 
             // Empty state placeholder (removed once messages arrive)
             chatMessages.innerHTML += `
@@ -330,8 +382,6 @@
             subscribeToMessages();
             loadTransactionStatus();
         }
-
-        let activeRequest = null;
 
         function renderStepperVisual(steps, currentStepIndex, isLender, isBorrower, activeRequest, listingType) {
             const container = document.getElementById('transaction-stepper-visual');
@@ -475,7 +525,7 @@
                 }
 
                 if (autoMsg) {
-                    await window.db.sendMessage(currentUser.uid, targetUserId, contextItemId, autoMsg);
+                    await sendChatMessage(autoMsg);
                 }
                 await loadTransactionStatus();
             } catch (err) {
@@ -485,16 +535,20 @@
         }
 
         async function loadTransactionStatus() {
-            if (!currentUser || !targetUserId || !contextItemId) return;
+            if (!currentUser || (!targetUserId && !contextRequestId)) return;
             
             try {
-                const itemDoc = await firebase.firestore().collection('items').doc(contextItemId).get();
-                if (!itemDoc.exists) return;
-                const itemData = itemDoc.data();
-                const itemOwnerId = itemData.owner_id;
-                const listingType = itemData.listing_type || 'free';
-
-                activeRequest = await window.db.getActiveRequest(contextItemId, currentUser.uid, targetUserId);
+                if (contextRequestId) {
+                    const reqDoc = await firebase.firestore().collection('requests').doc(contextRequestId).get();
+                    if (reqDoc.exists) {
+                        activeRequest = { id: reqDoc.id, ...reqDoc.data() };
+                        if (activeRequest.item_id && !contextItemId) {
+                            contextItemId = activeRequest.item_id;
+                        }
+                    }
+                } else if (contextItemId && targetUserId) {
+                    activeRequest = await window.db.getActiveRequest(contextItemId, currentUser.uid, targetUserId);
+                }
 
                 const bar = document.getElementById('transaction-bar');
                 if (!activeRequest) {
@@ -503,6 +557,22 @@
                 }
 
                 bar.classList.remove('hidden');
+
+                let itemOwnerId = activeRequest.lender_id || activeRequest.owner_id;
+                let listingType = activeRequest.type || 'free';
+
+                if (contextItemId) {
+                    try {
+                        const itemDoc = await firebase.firestore().collection('items').doc(contextItemId).get();
+                        if (itemDoc && itemDoc.exists) {
+                            const itemData = itemDoc.data();
+                            itemOwnerId = itemData.owner_id || itemOwnerId;
+                            listingType = itemData.listing_type || listingType;
+                        }
+                    } catch (e) {
+                        console.warn("Could not load item in loadTransactionStatus:", e);
+                    }
+                }
 
                 const statusText = document.getElementById('transaction-status-text');
                 const helperText = document.getElementById('transaction-helper-text');
@@ -781,7 +851,7 @@
             const tracking = prompt("Enter tracking number (optional):", "") || "";
             try {
                 await window.db.markShipped(activeRequest.id, { carrier, tracking_number: tracking });
-                await window.db.sendMessage(currentUser.uid, targetUserId, contextItemId, `📦 *Package Shipped!* Carrier: ${carrier}${tracking ? ', Tracking: ' + tracking : ''}`);
+                await sendChatMessage(`📦 *Package Shipped!* Carrier: ${carrier}${tracking ? ', Tracking: ' + tracking : ''}`);
                 await loadTransactionStatus();
             } catch (e) {
                 alert('Failed to mark shipped: ' + e.message);
@@ -793,7 +863,7 @@
             if (!confirm("Confirm package has been delivered and received?")) return;
             try {
                 await window.db.markDelivered(activeRequest.id);
-                await window.db.sendMessage(currentUser.uid, targetUserId, contextItemId, `📬 *Package Delivered & Received!*`);
+                await sendChatMessage(`📬 *Package Delivered & Received!*`);
                 await loadTransactionStatus();
             } catch (e) {
                 alert('Failed to mark delivered: ' + e.message);
@@ -843,7 +913,7 @@
                 }
 
                 if (autoMsg) {
-                    await window.db.sendMessage(currentUser.uid, targetUserId, contextItemId, autoMsg);
+                    await sendChatMessage(autoMsg);
                 }
 
                 await loadTransactionStatus();
@@ -857,7 +927,7 @@
             if (!activeRequest) return;
             try {
                 await window.db.confirmSwapExchange(activeRequest.id);
-                await window.db.sendMessage(currentUser.uid, targetUserId, contextItemId, '📢 *Transaction Update:* I confirmed receipt of the swapped item!');
+                await sendChatMessage('📢 *Transaction Update:* I confirmed receipt of the swapped item!');
                 await loadTransactionStatus();
             } catch (err) {
                 alert('Error confirming swap: ' + err.message);
@@ -869,7 +939,7 @@
             if (!activeRequest) return;
             try {
                 await window.db.cancelBorrowRequest(activeRequest.id);
-                await window.db.sendMessage(currentUser.uid, targetUserId, contextItemId, '📢 *Transaction Update:* I cancelled the request.');
+                await sendChatMessage('📢 *Transaction Update:* I cancelled the request.');
                 await loadTransactionStatus();
             } catch (err) {
                 alert('Error cancelling request: ' + err.message);
@@ -930,12 +1000,7 @@
             messageInput.value = '';
             
             try {
-                await window.db.sendMessage(
-                    currentUser.uid,
-                    targetUserId,
-                    contextItemId || null,
-                    text
-                );
+                await sendChatMessage(text);
             } catch (error) {
                 console.error("Failed to send", error);
                 alert("Message failed to send.");
@@ -951,10 +1016,10 @@
                 renderedMessageIds.add(msg.id);
                 appendMessage(msg);
                 if (msg.receiver_id === currentUser.uid && !msg.is_read) {
-                    window.db.markMessagesAsRead(currentUser.uid, targetUserId);
+                    window.db.markMessagesAsRead(currentUser.uid, targetUserId, contextRequestId);
                 }
                 loadTransactionStatus();
-            });
+            }, { requestId: contextRequestId });
         }
 
         if (document.readyState === 'loading') {

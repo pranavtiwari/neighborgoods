@@ -2321,22 +2321,76 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
-        sendMessage: async function(senderId, receiverId, itemId, content) {
+        sendMessage: async function(senderId, receiverId, itemIdOrOpts, content, requestIdOrOpts = null, explicitConvId = null) {
             try {
+                let itemId = null;
+                let requestId = null;
+                let convId = explicitConvId;
+                let bookId = null;
+
+                if (typeof itemIdOrOpts === 'object' && itemIdOrOpts !== null) {
+                    itemId = itemIdOrOpts.itemId || itemIdOrOpts.item_id || null;
+                    requestId = itemIdOrOpts.requestId || itemIdOrOpts.request_id || null;
+                    convId = itemIdOrOpts.conversationId || itemIdOrOpts.conversation_id || convId;
+                    bookId = itemIdOrOpts.bookId || itemIdOrOpts.book_id || null;
+                } else {
+                    itemId = itemIdOrOpts || null;
+                }
+
+                if (typeof requestIdOrOpts === 'object' && requestIdOrOpts !== null) {
+                    requestId = requestId || requestIdOrOpts.requestId || requestIdOrOpts.request_id || null;
+                    convId = convId || requestIdOrOpts.conversationId || requestIdOrOpts.conversation_id || null;
+                    bookId = bookId || requestIdOrOpts.bookId || requestIdOrOpts.book_id || null;
+                } else if (typeof requestIdOrOpts === 'string') {
+                    requestId = requestId || requestIdOrOpts;
+                }
+
+                if (!convId) {
+                    if (requestId) {
+                        convId = `tx_${requestId}`;
+                    } else {
+                        const sorted = [senderId, receiverId].sort();
+                        convId = itemId ? `chat_${sorted[0]}_${sorted[1]}_${itemId}` : `direct_${sorted[0]}_${sorted[1]}`;
+                    }
+                }
+
                 let circleId = null;
                 let circleIds = [];
                 if (itemId) {
-                    const itemDoc = await firebase.firestore().collection('items').doc(itemId).get();
-                    if (itemDoc.exists) {
-                        const itemData = itemDoc.data();
-                        circleId = itemData.circle_id || null;
-                        circleIds = itemData.circle_ids || [];
+                    try {
+                        const itemDoc = await firebase.firestore().collection('items').doc(itemId).get();
+                        if (itemDoc.exists) {
+                            const itemData = itemDoc.data();
+                            circleId = itemData.circle_id || null;
+                            circleIds = itemData.circle_ids || [];
+                            bookId = itemData.book_id || null;
+                        }
+                    } catch (e) {
+                        console.warn("Could not load item metadata for message:", e);
                     }
                 }
+                if (requestId && (!bookId || !itemId)) {
+                    try {
+                        const reqDoc = await firebase.firestore().collection('requests').doc(requestId).get();
+                        if (reqDoc.exists) {
+                            const rData = reqDoc.data();
+                            circleId = circleId || rData.circle_id || null;
+                            circleIds = (circleIds.length > 0) ? circleIds : (rData.circle_ids || []);
+                            bookId = bookId || rData.book_id || null;
+                            itemId = itemId || rData.item_id || null;
+                        }
+                    } catch (e) {
+                        console.warn("Could not load request metadata for message:", e);
+                    }
+                }
+
                 const ref = await firebase.firestore().collection('messages').add({
                     sender_id: senderId,
                     receiver_id: receiverId,
                     item_id: itemId || null,
+                    book_id: bookId || null,
+                    request_id: requestId || null,
+                    conversation_id: convId,
                     circle_id: circleId,
                     circle_ids: circleIds,
                     content: content,
@@ -2352,16 +2406,27 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
-        subscribeToChatMessages: function(currentUserId, targetUserId, callback) {
+        subscribeToChatMessages: function(currentUserId, targetUserId, callback, opts = {}) {
             const db = firebase.firestore();
             const seenIds = new Set();
+            const filterRequestId = typeof opts === 'string' ? opts : (opts ? (opts.requestId || opts.request_id || null) : null);
+            const filterConvId = (typeof opts === 'object' && opts) ? (opts.conversationId || opts.conversation_id || null) : null;
 
             const handleSnapshot = (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     if (change.type === 'added') {
                         if (seenIds.has(change.doc.id)) return;
-                        seenIds.add(change.doc.id);
                         const data = { id: change.doc.id, ...change.doc.data() };
+
+                        // Scoping filter if requestId or conversationId is provided (Issue #19)
+                        if (filterRequestId) {
+                            if (data.request_id && data.request_id !== filterRequestId) return;
+                            if (!data.request_id && data.conversation_id && !data.conversation_id.includes(filterRequestId)) return;
+                        } else if (filterConvId) {
+                            if (data.conversation_id && data.conversation_id !== filterConvId) return;
+                        }
+
+                        seenIds.add(change.doc.id);
                         if (data.created_at && data.created_at.toDate) {
                             data.created_at = data.created_at.toDate().toISOString();
                         }
@@ -2388,6 +2453,128 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
             // Return a combined unsubscribe function
             return () => { unsub1(); unsub2(); };
+        },
+
+        getInboxThreads: async function(userId) {
+            try {
+                const messages = await this.getInboxMessages(userId);
+                if (!messages || messages.length === 0) {
+                    return [];
+                }
+
+                const threadsMap = new Map();
+
+                for (const msg of messages) {
+                    const isSender = msg.sender_id === userId;
+                    const partnerId = isSender ? msg.receiver_id : msg.sender_id;
+                    const partnerProfile = isSender ? msg.receiver : msg.sender;
+
+                    let threadKey;
+                    let isTx = false;
+                    let requestId = null;
+
+                    if (msg.request_id) {
+                        requestId = msg.request_id;
+                        threadKey = `tx_${msg.request_id}`;
+                        isTx = true;
+                    } else if (msg.conversation_id && msg.conversation_id.startsWith('tx_')) {
+                        requestId = msg.conversation_id.replace(/^tx_/, '');
+                        threadKey = msg.conversation_id;
+                        isTx = true;
+                    } else if (msg.item_id) {
+                        threadKey = `item_${partnerId}_${msg.item_id}`;
+                    } else {
+                        threadKey = `general_${partnerId}`;
+                    }
+
+                    if (!threadsMap.has(threadKey)) {
+                        threadsMap.set(threadKey, {
+                            id: threadKey,
+                            threadKey: threadKey,
+                            requestId: requestId,
+                            isTransaction: isTx,
+                            partnerId: partnerId,
+                            partner: partnerProfile,
+                            itemId: msg.item_id || null,
+                            bookId: msg.book_id || null,
+                            latestMessage: msg,
+                            unreadCount: (!isSender && !msg.is_read) ? 1 : 0,
+                            isUnread: (!isSender && !msg.is_read),
+                            messages: [msg]
+                        });
+                    } else {
+                        const existing = threadsMap.get(threadKey);
+                        existing.messages.push(msg);
+                        if (!isSender && !msg.is_read) {
+                            existing.unreadCount = (existing.unreadCount || 0) + 1;
+                            existing.isUnread = true;
+                        }
+                        if (!existing.itemId && msg.item_id) existing.itemId = msg.item_id;
+                        if (!existing.bookId && msg.book_id) existing.bookId = msg.book_id;
+                    }
+                }
+
+                const threads = Array.from(threadsMap.values());
+
+                // Fetch metadata for transactions and items/books in parallel
+                await Promise.all(threads.map(async (thread) => {
+                    if (thread.requestId) {
+                        try {
+                            const reqDoc = await firebase.firestore().collection('requests').doc(thread.requestId).get();
+                            if (reqDoc.exists) {
+                                thread.request = { id: reqDoc.id, ...reqDoc.data() };
+                                thread.status = thread.request.status;
+                                thread.transactionType = thread.request.type || 'borrow';
+                                thread.itemId = thread.itemId || thread.request.item_id;
+                                thread.bookId = thread.bookId || thread.request.book_id;
+                            }
+                        } catch (err) {
+                            console.warn('Could not fetch request for thread:', thread.requestId, err);
+                        }
+                    }
+
+                    if (thread.itemId) {
+                        try {
+                            const itemData = await this.getItem(thread.itemId);
+                            if (itemData) {
+                                thread.item = itemData;
+                                thread.itemName = itemData.name;
+                                thread.itemImage = itemData.image_url;
+                                thread.listingType = itemData.listing_type;
+                                thread.bookId = thread.bookId || itemData.book_id;
+                            }
+                        } catch (err) {
+                            console.warn('Could not fetch item for thread:', thread.itemId, err);
+                        }
+                    }
+
+                    if (thread.bookId) {
+                        try {
+                            const bookData = await this.getBook(thread.bookId);
+                            if (bookData) {
+                                thread.book = bookData;
+                                thread.bookTitle = bookData.title;
+                                thread.bookAuthor = bookData.author || (Array.isArray(bookData.authors) ? bookData.authors.join(', ') : '');
+                                thread.bookCover = bookData.cover_image_url || bookData.cover_image;
+                            }
+                        } catch (err) {
+                            console.warn('Could not fetch book for thread:', thread.bookId, err);
+                        }
+                    }
+                }));
+
+                // Sort threads by latest message timestamp descending
+                threads.sort((a, b) => {
+                    const timeA = a.latestMessage?.created_at?.toDate ? a.latestMessage.created_at.toDate().getTime() : new Date(a.latestMessage?.created_at || 0).getTime();
+                    const timeB = b.latestMessage?.created_at?.toDate ? b.latestMessage.created_at.toDate().getTime() : new Date(b.latestMessage?.created_at || 0).getTime();
+                    return timeB - timeA;
+                });
+
+                return threads;
+            } catch (err) {
+                console.error("Error getting inbox threads:", err);
+                return [];
+            }
         },
 
         getCirclePosts: async function(circleId) {
@@ -3216,8 +3403,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
-        markMessagesAsRead: async function(currentUserId, targetUserId) {
+        markMessagesAsRead: async function(currentUserId, targetUserId, requestIdOrOpts = null) {
             try {
+                const reqId = typeof requestIdOrOpts === 'string' ? requestIdOrOpts : (requestIdOrOpts ? (requestIdOrOpts.requestId || requestIdOrOpts.request_id || null) : null);
                 const snap = await firebase.firestore().collection('messages')
                     .where('sender_id', '==', targetUserId)
                     .where('receiver_id', '==', currentUserId)
@@ -3226,6 +3414,11 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 
                 const batch = firebase.firestore().batch();
                 snap.docs.forEach(doc => {
+                    const data = doc.data();
+                    if (reqId) {
+                        const matchesReq = (data.request_id === reqId) || (data.conversation_id && data.conversation_id.includes(reqId));
+                        if (!matchesReq) return;
+                    }
                     batch.update(doc.ref, { is_read: true });
                 });
                 await batch.commit();

@@ -314,7 +314,7 @@
                     title: `Return ${req.items?.name || 'borrowed item'}`,
                     desc: `You are borrowing this item. Please coordinate return by ${new Date(req.end_date).toLocaleDateString()}.`,
                     actionText: 'Message Owner',
-                    actionUrl: `chat.html?userId=${req.items?.owner_id}&itemId=${req.item_id}`,
+                    actionUrl: `chat.html?userId=${encodeURIComponent(req.items?.owner_id)}&itemId=${encodeURIComponent(req.item_id)}&requestId=${encodeURIComponent(req.id)}`,
                     icon: 'keyboard_return',
                     created_at: req.created_at
                 });
@@ -335,12 +335,19 @@
                 const threadMsgs = messages.filter(m => m.sender_id === senderId && m.receiver_id === user.uid && !m.is_read);
                 const latestMsg = threadMsgs[0]; // Messages are already sorted descending in getInboxMessages
                 
+                let replyUrl = `chat.html?userId=${encodeURIComponent(senderId)}`;
+                if (latestMsg?.request_id) {
+                    replyUrl += `&requestId=${encodeURIComponent(latestMsg.request_id)}`;
+                } else if (latestMsg?.item_id) {
+                    replyUrl += `&itemId=${encodeURIComponent(latestMsg.item_id)}`;
+                }
+
                 pendingActions.push({
                     type: 'message',
                     title: `New message from ${profile?.full_name || 'Neighbor'}`,
                     desc: latestMsg ? `"${latestMsg.content}"` : `You have unread messages in your conversation thread.`,
                     actionText: 'Reply',
-                    actionUrl: `chat.html?userId=${senderId}`,
+                    actionUrl: replyUrl,
                     icon: 'chat_bubble',
                     created_at: latestMsg?.created_at
                 });

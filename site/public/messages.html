@@ -93,7 +93,7 @@
         <div class="mb-6">
             <div class="bg-surface-container-low rounded-2xl px-4 py-3 flex gap-3 items-center">
                 <span class="material-symbols-outlined text-on-surface-variant/60 text-xl">filter_list</span>
-                <input type="text" placeholder="Search conversations..." class="bg-transparent border-none focus:ring-0 w-full text-sm placeholder:text-on-surface-variant/40">
+                <input type="text" id="thread-search" placeholder="Search conversations..." class="bg-transparent border-none focus:ring-0 w-full text-sm placeholder:text-on-surface-variant/40">
             </div>
         </div>
 
@@ -138,34 +138,19 @@
             const currentUser = session.user;
 
             const inboxList = document.getElementById('inbox-list');
+            const searchInput = document.getElementById('thread-search');
 
             try {
-                // Fetch all messages where currentUser is involved
-                const messages = await window.db.getInboxMessages(currentUser.id);
+                // Fetch grouped inbox threads
+                const threads = await window.db.getInboxThreads(currentUser.id);
 
-                if (!messages || messages.length === 0) {
+                if (!threads || threads.length === 0) {
                     inboxList.innerHTML = `
                         <div class="text-center font-medium text-stone-400 mt-10">
                             No messages yet.<br>
                             <a href="explore.html" class="text-primary mt-2 inline-block">Go find something to borrow!</a>
                         </div>`;
                     return;
-                }
-
-                // Group by conversation partner
-                const threads = new Map();
-                for (const msg of messages) {
-                    const isSender = msg.sender_id === currentUser.id;
-                    const partnerId = isSender ? msg.receiver_id : msg.sender_id;
-                    const partnerProfile = isSender ? msg.receiver : msg.sender;
-
-                    if (!threads.has(partnerId)) {
-                        threads.set(partnerId, {
-                            partner: partnerProfile,
-                            latestMessage: msg,
-                            isUnread: !isSender && !msg.is_read
-                        });
-                    }
                 }
 
                 inboxList.innerHTML = ''; // clear loading state
@@ -181,7 +166,7 @@
                     const currentUserId = btnEl.dataset.userId;
                     try {
                         if (nextStatus === 'approved') {
-                            const itemData = await window.db.getItem(contextItemId);
+                            const itemData = contextItemId ? await window.db.getItem(contextItemId) : null;
                             const listingType = itemData ? itemData.listing_type : 'free';
                             await window.db.confirmBorrowRequest(requestId, contextItemId, listingType);
                         } else if (nextStatus === 'borrowed') {
@@ -193,7 +178,7 @@
                         }
                         
                         let autoMsg = `📢 *Transaction Update (Inbox):* Status progressed to ${nextStatus}.`;
-                        await window.db.sendMessage(currentUserId, partnerId, contextItemId, autoMsg);
+                        await window.db.sendMessage(currentUserId, partnerId, { itemId: contextItemId, requestId: requestId }, autoMsg);
                         
                         // Reload thread list
                         window.location.reload();
@@ -228,7 +213,7 @@
                         }
                         
                         if (autoMsg) {
-                            await window.db.sendMessage(currentUserId, partnerId, contextItemId, autoMsg);
+                            await window.db.sendMessage(currentUserId, partnerId, { itemId: contextItemId, requestId: requestId }, autoMsg);
                         }
                         window.location.reload();
                     } catch (err) {
@@ -236,150 +221,193 @@
                     }
                 };
 
-                // Prepare data arrays to trigger fetches in parallel
-                const stepperLoadPromises = [];
-
-                // Render inbox cards
-                for (const [partnerId, thread] of threads.entries()) {
+                // Render inbox cards from threads
+                threads.forEach((thread, index) => {
                     const profile = thread.partner;
-                    const lastMsg = thread.latestMessage;
-                    
+                    const lastMsg = thread.latestMessage || {};
+                    const partnerId = thread.partnerId;
+                    const partnerName = profile?.full_name || 'Neighbor';
+
                     const rawTime = lastMsg.created_at?.toDate ? lastMsg.created_at.toDate() : new Date(lastMsg.created_at || 0);
                     const timeString = rawTime.toLocaleDateString([], { month: 'short', day: 'numeric' });
-                    const snippet = lastMsg.sender_id === currentUser.id ? `You: ${lastMsg.content}` : lastMsg.content;
+                    const snippet = (lastMsg.sender_id === currentUser.id) ? `You: ${lastMsg.content || ''}` : (lastMsg.content || '');
 
-                    const avatarUrl = profile?.avatar_url || 'https://placehold.co/100x100?text=U';
-                    const name = profile?.full_name || 'Unknown User';
+                    let threadUrl = `chat.html?userId=${encodeURIComponent(partnerId)}`;
+                    if (thread.requestId) {
+                        threadUrl += `&requestId=${encodeURIComponent(thread.requestId)}`;
+                    } else if (thread.itemId) {
+                        threadUrl += `&itemId=${encodeURIComponent(thread.itemId)}`;
+                    }
 
-                    // Create unique ID for the thread stepper container
-                    const threadContainerId = `stepper-${partnerId}`;
+                    let displayTitle = partnerName;
+                    let cardImage = profile?.avatar_url || 'https://placehold.co/100x100?text=U';
+                    let badgeLabel = 'Direct Message';
+                    let badgeClass = 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300';
 
-                    inboxList.innerHTML += `
-                    <div class="block p-4 rounded-2xl hover:bg-surface-container-low transition-all active:scale-[0.98] duration-200 group relative ${thread.isUnread ? 'bg-surface-container-lowest shadow-sm' : 'opacity-80'} mb-2 border border-outline-variant/10">
-                        <a href="chat.html?userId=${partnerId}" class="flex items-center gap-4">
-                            <div class="relative">
-                                <div class="w-14 h-14 rounded-full overflow-hidden bg-stone-200">
-                                    <img src="${db.sanitizeUrl(avatarUrl)}" class="w-full h-full object-cover">
+                    if (thread.bookTitle) {
+                        displayTitle = thread.bookTitle;
+                        if (thread.bookCover) cardImage = thread.bookCover;
+                    } else if (thread.itemName) {
+                        displayTitle = thread.itemName;
+                        if (thread.itemImage) cardImage = thread.itemImage;
+                    }
+
+                    if (thread.request) {
+                        const status = thread.status || 'pending';
+                        badgeLabel = status.charAt(0).toUpperCase() + status.slice(1);
+                        if (status === 'pending') {
+                            badgeClass = 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300';
+                        } else if (status === 'approved') {
+                            badgeClass = 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+                        } else if (status === 'borrowed') {
+                            badgeClass = 'bg-primary/10 text-primary dark:text-green-300';
+                        } else if (status === 'returned') {
+                            badgeClass = 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
+                        } else if (status === 'completed') {
+                            badgeClass = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
+                        } else if (status === 'declined') {
+                            badgeClass = 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+                        }
+                    }
+
+                    const threadContainerId = `stepper-${index}`;
+
+                    const cardHtml = `
+                    <div class="thread-card block p-4 rounded-2xl hover:bg-surface-container-low transition-all active:scale-[0.98] duration-200 group relative ${thread.isUnread ? 'bg-surface-container-lowest shadow-sm' : 'opacity-85'} mb-3 border border-outline-variant/10" data-search="${escapeHtml((displayTitle + ' ' + partnerName + ' ' + snippet).toLowerCase())}">
+                        <a href="${threadUrl}" class="flex items-start gap-4">
+                            <div class="relative shrink-0">
+                                <div class="w-14 h-14 rounded-2xl overflow-hidden bg-stone-200 border border-outline-variant/10 flex items-center justify-center">
+                                    <img src="${db.sanitizeUrl(cardImage)}" class="w-full h-full object-cover">
                                 </div>
-                                ${thread.isUnread ? `<div class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary border-2 border-surface"></div>` : ''}
+                                ${thread.unreadCount > 0 ? `<div class="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-[10px] font-black flex items-center justify-center border-2 border-surface shadow-sm">${thread.unreadCount}</div>` : ''}
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="flex justify-between items-baseline mb-0.5">
-                                    <h2 class="font-bold text-base truncate ${thread.isUnread ? 'text-on-surface' : ''}">${escapeHtml(name)}</h2>
-                                    <span class="text-[10px] font-bold text-on-surface-variant/40 uppercase tracking-widest">${timeString}</span>
+                                <div class="flex justify-between items-baseline mb-1">
+                                    <h2 class="font-bold text-base truncate ${thread.isUnread ? 'text-on-surface' : ''}">${escapeHtml(displayTitle)}</h2>
+                                    <span class="text-[10px] font-bold text-on-surface-variant/40 uppercase tracking-widest shrink-0 ml-2">${timeString}</span>
                                 </div>
-                                <p class="text-sm text-on-surface-variant truncate ${thread.isUnread ? 'font-bold text-on-surface' : ''}">${escapeHtml(snippet)}</p>
+                                <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+                                    <span class="text-xs text-on-surface-variant font-medium flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[13px] text-stone-400">person</span>
+                                        ${escapeHtml(partnerName)}
+                                    </span>
+                                    <span class="text-stone-300 dark:text-stone-700 text-xs">•</span>
+                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeClass}">
+                                        ${escapeHtml(badgeLabel)}
+                                    </span>
+                                </div>
+                                <p class="text-xs text-on-surface-variant truncate ${thread.isUnread ? 'font-semibold text-on-surface' : ''}">${escapeHtml(snippet)}</p>
                             </div>
                         </a>
                         <!-- Mini Stepper Container -->
                         <div id="${threadContainerId}" class="mt-3 pt-3 border-t border-outline-variant/5 hidden">
-                            <!-- Injected by async loader -->
+                            <!-- Injected by inline stepper renderer -->
                         </div>
                     </div>`;
 
-                    // Push load operation to parallel execution array
-                    if (lastMsg.item_id) {
-                        stepperLoadPromises.push((async () => {
-                            try {
-                                const activeRequest = await window.db.getActiveRequest(lastMsg.item_id, currentUser.id, partnerId);
-                                if (activeRequest && activeRequest.status !== 'declined') {
-                                    const stepperDiv = document.getElementById(threadContainerId);
-                                    if (!stepperDiv) return;
-                                    stepperDiv.classList.remove('hidden');
-                                    
-                                    const itemData = await window.db.getItem(lastMsg.item_id);
-                                    if (!itemData) return;
-                                    
-                                    const listingType = itemData.listing_type || 'free';
-                                    const isLender = itemData.owner_id === currentUser.id;
-                                    const isBorrower = activeRequest.borrower_id === currentUser.id;
-                                    
-                                    let steps = [];
-                                    if (listingType === 'giveaway') {
-                                        steps = [
-                                            { label: 'Req', statusKey: 'pending' },
-                                            { label: 'Appr', statusKey: 'approved' },
-                                            { label: 'Done', statusKey: 'completed' }
-                                        ];
-                                    } else {
-                                        steps = [
-                                            { label: 'Req', statusKey: 'pending' },
-                                            { label: 'Appr', statusKey: 'approved' },
-                                            { label: 'Pick', statusKey: 'borrowed' },
-                                            { label: 'Ret', statusKey: 'returned' },
-                                            { label: 'Done', statusKey: 'completed' }
-                                        ];
-                                    }
-                                    
-                                    const currentStepIndex = steps.findIndex(s => s.statusKey === activeRequest.status);
-                                    if (currentStepIndex !== -1) {
-                                        let html = `<div class="flex items-center justify-between w-full px-2 max-w-sm mx-auto">`;
-                                        steps.forEach((step, idx) => {
-                                            let stepClass = 'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold transition-all z-10 ';
-                                            let clickableAttr = 'disabled';
-                                            let clickAction = '';
-                                            
-                                            if (idx < currentStepIndex) {
-                                                // Completed
-                                                stepClass += 'bg-green-500 text-white';
-                                                if (idx === currentStepIndex - 1) {
-                                                    // Undoable
-                                                    let canUndo = false;
-                                                    if (step.statusKey === 'pending' && isLender) canUndo = true;
-                                                    if (step.statusKey === 'approved' && isBorrower && listingType !== 'giveaway') canUndo = true;
-                                                    if (step.statusKey === 'borrowed' && isBorrower && listingType !== 'giveaway') canUndo = true;
-                                                    if (step.statusKey === 'returned' && isLender && listingType !== 'giveaway') canUndo = true;
-                                                    if (step.statusKey === 'approved' && isLender && listingType === 'giveaway') canUndo = true;
-                                                    
-                                                    if (canUndo) {
-                                                        clickableAttr = '';
-                                                        stepClass += ' cursor-pointer hover:bg-red-500 hover:scale-105';
-                                                        clickAction = `onclick="window.inboxUndoStatus(event, this)" data-prev-status-key="${db.escapeAttr(step.statusKey)}" data-request-id="${db.escapeAttr(activeRequest.id)}" data-item-id="${db.escapeAttr(lastMsg.item_id)}" data-partner-id="${db.escapeAttr(partnerId)}" data-user-id="${db.escapeAttr(currentUser.id)}"`;
-                                                    }
-                                                }
-                                            } else if (idx === currentStepIndex) {
-                                                // Active
-                                                stepClass += 'bg-primary text-white ring-2 ring-primary/20 animate-pulse';
-                                                let nextStatus = null;
-                                                if (step.statusKey === 'pending' && isLender) nextStatus = 'approved';
-                                                if (step.statusKey === 'approved') {
-                                                    if (listingType === 'giveaway' && isLender) nextStatus = 'completed';
-                                                    else if (listingType !== 'giveaway' && isBorrower) nextStatus = 'borrowed';
-                                                }
-                                                if (step.statusKey === 'borrowed' && isBorrower && listingType !== 'giveaway') nextStatus = 'returned';
-                                                if (step.statusKey === 'returned' && isLender && listingType !== 'giveaway') nextStatus = 'completed';
-                                                
-                                                if (nextStatus) {
-                                                    clickableAttr = '';
-                                                    stepClass += ' cursor-pointer hover:scale-105';
-                                                    clickAction = `onclick="window.inboxUpdateStatus(event, this)" data-request-id="${db.escapeAttr(activeRequest.id)}" data-item-id="${db.escapeAttr(lastMsg.item_id)}" data-next-status="${db.escapeAttr(nextStatus)}" data-partner-id="${db.escapeAttr(partnerId)}" data-user-id="${db.escapeAttr(currentUser.id)}"`;
-                                                }
-                                            } else {
-                                                // Upcoming
-                                                stepClass += 'bg-stone-200 text-stone-500';
-                                            }
-                                            
-                                            html += `
-                                            <div class="flex flex-col items-center relative flex-1">
-                                                <button ${clickableAttr} ${clickAction} class="${stepClass}">${idx < currentStepIndex ? '✓' : idx + 1}</button>
-                                                <span class="text-[8px] font-bold text-stone-400 mt-1">${step.label}</span>
-                                                ${idx < steps.length - 1 ? `<div class="absolute top-3 left-[50%] right-[-50%] h-[1.5px] -z-0 ${idx < currentStepIndex ? 'bg-green-500' : 'bg-stone-200'}"></div>` : ''}
-                                            </div>`;
-                                        });
-                                        html += `</div>`;
-                                        stepperDiv.innerHTML = html;
-                                    }
-                                }
-                            } catch (e) {
-                                console.error("Error loading stepper thread data:", e);
+                    inboxList.innerHTML += cardHtml;
+
+                    // If transaction thread with activeRequest, render mini-stepper
+                    if (thread.request && thread.request.status !== 'declined') {
+                        const activeRequest = thread.request;
+                        const stepperDiv = document.getElementById(threadContainerId);
+                        if (stepperDiv) {
+                            stepperDiv.classList.remove('hidden');
+                            const listingType = thread.listingType || activeRequest.type || 'free';
+                            const itemOwnerId = thread.item?.owner_id || activeRequest.lender_id || activeRequest.owner_id;
+                            const isLender = itemOwnerId === currentUser.id;
+                            const isBorrower = activeRequest.borrower_id === currentUser.id;
+
+                            let steps = [];
+                            if (listingType === 'giveaway') {
+                                steps = [
+                                    { label: 'Req', statusKey: 'pending' },
+                                    { label: 'Appr', statusKey: 'approved' },
+                                    { label: 'Done', statusKey: 'completed' }
+                                ];
+                            } else {
+                                steps = [
+                                    { label: 'Req', statusKey: 'pending' },
+                                    { label: 'Appr', statusKey: 'approved' },
+                                    { label: 'Pick', statusKey: 'borrowed' },
+                                    { label: 'Ret', statusKey: 'returned' },
+                                    { label: 'Done', statusKey: 'completed' }
+                                ];
                             }
-                        })());
+
+                            const currentStepIndex = steps.findIndex(s => s.statusKey === activeRequest.status);
+                            if (currentStepIndex !== -1) {
+                                let html = `<div class="flex items-center justify-between w-full px-2 max-w-sm mx-auto">`;
+                                steps.forEach((step, idx) => {
+                                    let stepClass = 'w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold transition-all z-10 ';
+                                    let clickableAttr = 'disabled';
+                                    let clickAction = '';
+                                    
+                                    if (idx < currentStepIndex) {
+                                        stepClass += 'bg-green-500 text-white';
+                                        if (idx === currentStepIndex - 1) {
+                                            let canUndo = false;
+                                            if (step.statusKey === 'pending' && isLender) canUndo = true;
+                                            if (step.statusKey === 'approved' && isBorrower && listingType !== 'giveaway') canUndo = true;
+                                            if (step.statusKey === 'borrowed' && isBorrower && listingType !== 'giveaway') canUndo = true;
+                                            if (step.statusKey === 'returned' && isLender && listingType !== 'giveaway') canUndo = true;
+                                            if (step.statusKey === 'approved' && isLender && listingType === 'giveaway') canUndo = true;
+                                            
+                                            if (canUndo) {
+                                                clickableAttr = '';
+                                                stepClass += ' cursor-pointer hover:bg-red-500 hover:scale-105';
+                                                clickAction = `onclick="window.inboxUndoStatus(event, this)" data-prev-status-key="${db.escapeAttr(step.statusKey)}" data-request-id="${db.escapeAttr(activeRequest.id)}" data-item-id="${db.escapeAttr(thread.itemId || '')}" data-partner-id="${db.escapeAttr(partnerId)}" data-user-id="${db.escapeAttr(currentUser.id)}"`;
+                                            }
+                                        }
+                                    } else if (idx === currentStepIndex) {
+                                        stepClass += 'bg-primary text-white ring-2 ring-primary/20 animate-pulse';
+                                        let nextStatus = null;
+                                        if (step.statusKey === 'pending' && isLender) nextStatus = 'approved';
+                                        if (step.statusKey === 'approved') {
+                                            if (listingType === 'giveaway' && isLender) nextStatus = 'completed';
+                                            else if (listingType !== 'giveaway' && isBorrower) nextStatus = 'borrowed';
+                                        }
+                                        if (step.statusKey === 'borrowed' && isBorrower && listingType !== 'giveaway') nextStatus = 'returned';
+                                        if (step.statusKey === 'returned' && isLender && listingType !== 'giveaway') nextStatus = 'completed';
+                                        
+                                        if (nextStatus) {
+                                            clickableAttr = '';
+                                            stepClass += ' cursor-pointer hover:scale-105';
+                                            clickAction = `onclick="window.inboxUpdateStatus(event, this)" data-request-id="${db.escapeAttr(activeRequest.id)}" data-item-id="${db.escapeAttr(thread.itemId || '')}" data-next-status="${db.escapeAttr(nextStatus)}" data-partner-id="${db.escapeAttr(partnerId)}" data-user-id="${db.escapeAttr(currentUser.id)}"`;
+                                        }
+                                    } else {
+                                        stepClass += 'bg-stone-200 text-stone-500';
+                                    }
+                                    
+                                    html += `
+                                    <div class="flex flex-col items-center relative flex-1">
+                                        <button ${clickableAttr} ${clickAction} class="${stepClass}">${idx < currentStepIndex ? '✓' : idx + 1}</button>
+                                        <span class="text-[8px] font-bold text-stone-400 mt-1">${step.label}</span>
+                                        ${idx < steps.length - 1 ? `<div class="absolute top-3 left-[50%] right-[-50%] h-[1.5px] -z-0 ${idx < currentStepIndex ? 'bg-green-500' : 'bg-stone-200'}"></div>` : ''}
+                                    </div>`;
+                                });
+                                html += `</div>`;
+                                stepperDiv.innerHTML = html;
+                            }
+                        }
                     }
+                });
+
+                // Attach search filter
+                if (searchInput) {
+                    searchInput.addEventListener('input', (e) => {
+                        const term = (e.target.value || '').trim().toLowerCase();
+                        const cards = inboxList.querySelectorAll('.thread-card');
+                        cards.forEach(card => {
+                            const searchData = card.getAttribute('data-search') || '';
+                            if (!term || searchData.includes(term)) {
+                                card.style.display = '';
+                            } else {
+                                card.style.display = 'none';
+                            }
+                        });
+                    });
                 }
-
-                // Execute all stepper requests in parallel
-                await Promise.all(stepperLoadPromises);
-
             } catch (err) {
                 console.error(err);
                 inboxList.innerHTML = `<div class="text-center text-error mt-4">Failed to load inbox</div>`;

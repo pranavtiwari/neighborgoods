@@ -2859,6 +2859,176 @@ await test('Flow 16: Per-copy visibility and request policy enforcement (Issue #
     assert.ok(trustedReq.id, 'Trusted neighbor successfully requested trusted policy copy');
 });
 
+await test('Flow 17: Per-transaction chat threads, message scoping, non-colliding steppers, and inbox grouping (Issue #19)', async () => {
+    resetSandbox();
+    const aliceUid = 'alice-tx-chat';
+    const bobUid = 'bob-tx-chat';
+
+    // 1. Seed profiles
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('profiles').doc(aliceUid).set({
+        id: aliceUid,
+        full_name: 'Alice Bookseller',
+        avatar_url: 'https://placehold.co/100x100?text=Alice',
+        location: 'Hayes Valley, SF'
+    });
+
+    firebase.auth().currentUser = { uid: bobUid };
+    await firebase.firestore().collection('profiles').doc(bobUid).set({
+        id: bobUid,
+        full_name: 'Bob Reader',
+        avatar_url: 'https://placehold.co/100x100?text=Bob',
+        location: 'Mission, SF'
+    });
+
+    // 2. Create two distinct canonical books
+    firebase.auth().currentUser = { uid: aliceUid };
+    const bookA = await window.db.createBook({
+        title: 'The Pragmatic Programmer',
+        author: 'Andy Hunt',
+        isbn: '978-0201616224'
+    });
+    const bookB = await window.db.createBook({
+        title: 'Designing Data-Intensive Applications',
+        author: 'Martin Kleppmann',
+        isbn: '978-1449373320'
+    });
+
+    // 3. Alice lists a copy for Book A and Book B
+    const copyA = await window.db.addItem({
+        name: bookA.title,
+        kind: 'book',
+        book_id: bookA.id,
+        owner_id: aliceUid,
+        condition: 'good',
+        listing_type: 'borrow',
+        visibility: 'public',
+        request_policy: 'anyone'
+    });
+    const copyB = await window.db.addItem({
+        name: bookB.title,
+        kind: 'book',
+        book_id: bookB.id,
+        owner_id: aliceUid,
+        condition: 'like_new',
+        listing_type: 'borrow',
+        visibility: 'public',
+        request_policy: 'anyone'
+    });
+
+    // 4. Bob creates a borrow request for Book A and Book B
+    firebase.auth().currentUser = { uid: bobUid };
+    const reqA = await window.db.createBorrowRequest({
+        item_id: copyA.id,
+        borrower_id: bobUid
+    });
+    const reqB = await window.db.createBorrowRequest({
+        item_id: copyB.id,
+        borrower_id: bobUid
+    });
+
+    assert.ok(reqA.id && reqB.id, 'Both requests created successfully');
+    assert.notStrictEqual(reqA.id, reqB.id, 'Request IDs must be unique');
+
+    // 5. Bob sends message in Thread A and Thread B with explicit transaction scoping
+    const msgA = await window.db.sendMessage(
+        bobUid,
+        aliceUid,
+        { itemId: copyA.id, requestId: reqA.id },
+        'Hi Alice! Looking forward to borrowing Pragmatic Programmer.'
+    );
+    const msgB = await window.db.sendMessage(
+        bobUid,
+        aliceUid,
+        { itemId: copyB.id, requestId: reqB.id },
+        'Hi Alice! Hope DDIA is also available to pick up soon.'
+    );
+
+    assert.strictEqual(msgA.request_id, reqA.id);
+    assert.strictEqual(msgA.conversation_id, `tx_${reqA.id}`);
+    assert.strictEqual(msgA.book_id, bookA.id);
+    assert.strictEqual(msgA.item_id, copyA.id);
+
+    assert.strictEqual(msgB.request_id, reqB.id);
+    assert.strictEqual(msgB.conversation_id, `tx_${reqB.id}`);
+    assert.strictEqual(msgB.book_id, bookB.id);
+    assert.strictEqual(msgB.item_id, copyB.id);
+
+    // 6. Test realtime listener message scoping
+    const receivedA = [];
+    const receivedB = [];
+    const unsubA = window.db.subscribeToChatMessages(aliceUid, bobUid, (msg) => {
+        receivedA.push(msg);
+    }, { requestId: reqA.id });
+
+    const unsubB = window.db.subscribeToChatMessages(aliceUid, bobUid, (msg) => {
+        receivedB.push(msg);
+    }, { requestId: reqB.id });
+
+    // Allow async onSnapshot trigger to fire
+    await new Promise(r => setTimeout(r, 20));
+
+    assert.strictEqual(receivedA.length, 1, 'Scoped subscriber A receives exactly 1 message');
+    assert.strictEqual(receivedA[0].id, msgA.id, 'Subscriber A receives only message A');
+
+    assert.strictEqual(receivedB.length, 1, 'Scoped subscriber B receives exactly 1 message');
+    assert.strictEqual(receivedB[0].id, msgB.id, 'Subscriber B receives only message B');
+
+    unsubA();
+    unsubB();
+
+    // 7. Test getInboxThreads for Alice (recipient with 2 unread threads)
+    firebase.auth().currentUser = { uid: aliceUid };
+    const aliceThreads = await window.db.getInboxThreads(aliceUid);
+    assert.strictEqual(aliceThreads.length, 2, 'Alice has 2 distinct inbox threads with Bob');
+
+    const threadA = aliceThreads.find(t => t.requestId === reqA.id);
+    const threadB = aliceThreads.find(t => t.requestId === reqB.id);
+
+    assert.ok(threadA, 'Thread A exists in Alice inbox');
+    assert.ok(threadB, 'Thread B exists in Alice inbox');
+
+    assert.strictEqual(threadA.isTransaction, true);
+    assert.strictEqual(threadA.partnerId, bobUid);
+    assert.strictEqual(threadA.bookTitle, 'The Pragmatic Programmer');
+    assert.strictEqual(threadA.status, 'pending');
+    assert.strictEqual(threadA.unreadCount, 1);
+    assert.strictEqual(threadA.isUnread, true);
+
+    assert.strictEqual(threadB.isTransaction, true);
+    assert.strictEqual(threadB.partnerId, bobUid);
+    assert.strictEqual(threadB.bookTitle, 'Designing Data-Intensive Applications');
+    assert.strictEqual(threadB.status, 'pending');
+    assert.strictEqual(threadB.unreadCount, 1);
+    assert.strictEqual(threadB.isUnread, true);
+
+    // 8. Test markMessagesAsRead scoped to Thread A only
+    await window.db.markMessagesAsRead(aliceUid, bobUid, reqA.id);
+    const aliceThreadsAfterRead = await window.db.getInboxThreads(aliceUid);
+    const updatedThreadA = aliceThreadsAfterRead.find(t => t.requestId === reqA.id);
+    const updatedThreadB = aliceThreadsAfterRead.find(t => t.requestId === reqB.id);
+
+    assert.strictEqual(updatedThreadA.unreadCount, 0, 'Thread A unread count reset to 0');
+    assert.strictEqual(updatedThreadA.isUnread, false);
+    assert.strictEqual(updatedThreadB.unreadCount, 1, 'Thread B unread count remains 1');
+    assert.strictEqual(updatedThreadB.isUnread, true);
+
+    // 9. Test Non-colliding Steppers
+    // Alice approves reqA and advances it to borrowed
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.confirmBorrowRequest(reqA.id, copyA.id, 'borrow');
+    firebase.auth().currentUser = { uid: bobUid };
+    await window.db.markPickedUp(reqA.id, copyA.id);
+
+    // Verify reqA is borrowed while reqB is untouched (still pending)
+    const refreshedThreads = await window.db.getInboxThreads(aliceUid);
+    const finalThreadA = refreshedThreads.find(t => t.requestId === reqA.id);
+    const finalThreadB = refreshedThreads.find(t => t.requestId === reqB.id);
+
+    assert.strictEqual(finalThreadA.status, 'borrowed', 'Req A stepped to borrowed');
+    assert.strictEqual(finalThreadB.status, 'pending', 'Req B strictly remains pending');
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================
