@@ -1273,6 +1273,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     ...circleData,
                     allowed_categories: circleData.allowed_categories || [],
                     created_by: creatorId,
+                    member_count: 1,
                     created_at: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 
@@ -1292,12 +1293,33 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
-        getCircles: async function() {
+        getCircles: async function(opts = {}) {
             try {
+                const isPaginated = !!(opts && (opts.paginated || opts.pageSize || opts.cursor));
+                if (isPaginated) {
+                    const pageSize = Math.max(1, Math.min(Number(opts.pageSize) || 12, 100));
+                    let query = firebase.firestore().collection('circles')
+                        .orderBy('created_at', 'desc');
+                    if (opts.cursor) {
+                        query = query.startAfter(opts.cursor);
+                    }
+                    query = query.limit(pageSize + 1);
+
+                    const snapshot = await query.get();
+                    const hasMore = snapshot.docs.length > pageSize;
+                    const pagedDocs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
+                    const nextCursor = hasMore ? pagedDocs[pagedDocs.length - 1] : null;
+                    const circles = pagedDocs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    return { circles, nextCursor, hasMore };
+                }
+
                 const snapshot = await firebase.firestore().collection('circles').get();
                 return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             } catch (err) {
                 console.error("Error getting circles:", err);
+                if (opts && (opts.paginated || opts.pageSize || opts.cursor)) {
+                    return { circles: [], nextCursor: null, hasMore: false };
+                }
                 return [];
             }
         },
@@ -1312,8 +1334,76 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
-        getCircleMembers: async function(circleId) {
+        getCircleMemberCount: async function(circleId) {
+            if (!circleId) return 0;
             try {
+                const circleDoc = await firebase.firestore().collection('circles').doc(circleId).get();
+                if (circleDoc.exists) {
+                    const data = circleDoc.data();
+                    if (typeof data.member_count === 'number') {
+                        return Math.max(0, data.member_count);
+                    }
+                }
+                // Fallback if not yet initialized
+                const snapshot = await firebase.firestore().collection('circle_members')
+                    .where('circle_id', '==', circleId).get();
+                return snapshot.docs.length;
+            } catch (err) {
+                console.error("Error getting circle member count:", err);
+                return 0;
+            }
+        },
+
+        getCircleMembership: async function(circleId, userId) {
+            if (!circleId || !userId) return null;
+            try {
+                const doc = await firebase.firestore().collection('circle_members').doc(`${circleId}_${userId}`).get();
+                return doc.exists ? { id: doc.id, ...doc.data() } : null;
+            } catch (err) {
+                console.error("Error getting circle membership:", err);
+                return null;
+            }
+        },
+
+        getCircleMembers: async function(circleId, opts = {}) {
+            try {
+                const isPaginated = !!(opts && (opts.paginated || opts.pageSize || opts.cursor));
+                if (isPaginated) {
+                    const pageSize = Math.max(1, Math.min(Number(opts.pageSize) || 20, 100));
+                    let query = firebase.firestore().collection('circle_members')
+                        .where('circle_id', '==', circleId)
+                        .orderBy('joined_at', 'desc');
+
+                    if (opts.cursor) {
+                        query = query.startAfter(opts.cursor);
+                    }
+                    query = query.limit(pageSize + 1);
+
+                    const snapshot = await query.get();
+                    const hasMore = snapshot.docs.length > pageSize;
+                    const pagedDocs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
+                    const nextCursor = hasMore ? pagedDocs[pagedDocs.length - 1] : null;
+
+                    const memberships = pagedDocs.map(doc => doc.data());
+                    const members = await Promise.all(memberships.map(async (m) => {
+                        const profile = await this.getProfile(m.profile_id);
+                        if (profile) {
+                            return { ...profile, role: m.role, joined_at: m.joined_at };
+                        }
+                        return null;
+                    }));
+
+                    const totalCount = await this.getCircleMemberCount(circleId);
+
+                    return {
+                        members: members.filter(Boolean),
+                        nextCursor,
+                        hasMore,
+                        totalCount
+                    };
+                }
+
+                // Legacy unpaginated behavior
                 const snapshot = await firebase.firestore().collection('circle_members')
                     .where('circle_id', '==', circleId).get();
                 
@@ -1328,6 +1418,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 return members.filter(Boolean);
             } catch (err) {
                 console.error("Error getting circle members:", err);
+                if (opts && (opts.paginated || opts.pageSize || opts.cursor)) {
+                    return { members: [], nextCursor: null, hasMore: false, totalCount: 0 };
+                }
                 return [];
             }
         },
@@ -1346,12 +1439,30 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         joinCircle: async function(circleId, profileId, role = 'member') {
             try {
                 const id = `${circleId}_${profileId}`;
-                await firebase.firestore().collection('circle_members').doc(id).set({
+                const memRef = firebase.firestore().collection('circle_members').doc(id);
+                const memDoc = await memRef.get();
+                const isNew = !memDoc.exists;
+
+                await memRef.set({
                     circle_id: circleId,
                     profile_id: profileId,
                     role: role,
                     joined_at: new Date().toISOString()
                 });
+
+                if (isNew) {
+                    try {
+                        const circleRef = firebase.firestore().collection('circles').doc(circleId);
+                        const cSnap = await circleRef.get();
+                        if (cSnap.exists) {
+                            const curCount = cSnap.data().member_count;
+                            const newCount = typeof curCount === 'number' ? Math.max(1, curCount + 1) : 1;
+                            await circleRef.set({ member_count: newCount }, { merge: true });
+                        }
+                    } catch (e) {
+                        console.warn("Could not increment circle member_count:", e);
+                    }
+                }
             } catch (err) {
                 console.error("Error joining circle:", err);
                 throw err;
@@ -1361,7 +1472,22 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         leaveCircle: async function(circleId, profileId) {
             try {
                 const id = `${circleId}_${profileId}`;
-                await firebase.firestore().collection('circle_members').doc(id).delete();
+                const memRef = firebase.firestore().collection('circle_members').doc(id);
+                const memDoc = await memRef.get();
+                if (memDoc.exists) {
+                    await memRef.delete();
+                    try {
+                        const circleRef = firebase.firestore().collection('circles').doc(circleId);
+                        const cSnap = await circleRef.get();
+                        if (cSnap.exists) {
+                            const curCount = cSnap.data().member_count;
+                            const newCount = typeof curCount === 'number' ? Math.max(0, curCount - 1) : 0;
+                            await circleRef.set({ member_count: newCount }, { merge: true });
+                        }
+                    } catch (e) {
+                        console.warn("Could not decrement circle member_count:", e);
+                    }
+                }
             } catch (err) {
                 console.error("Error leaving circle:", err);
                 throw err;
@@ -2577,10 +2703,35 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
-        getCirclePosts: async function(circleId) {
+        getCirclePosts: async function(circleId, opts = {}) {
             try {
-                const snapshot = await firebase.firestore().collection('circle_posts')
-                    .where('circle_id', '==', circleId).get();
+                const isPaginated = !!(opts && (opts.paginated || opts.pageSize || opts.cursor));
+                let query = firebase.firestore().collection('circle_posts')
+                    .where('circle_id', '==', circleId)
+                    .orderBy('created_at', 'desc');
+
+                if (isPaginated) {
+                    const pageSize = Math.max(1, Math.min(Number(opts.pageSize) || 10, 100));
+                    if (opts.cursor) {
+                        query = query.startAfter(opts.cursor);
+                    }
+                    query = query.limit(pageSize + 1);
+
+                    const snapshot = await query.get();
+                    const hasMore = snapshot.docs.length > pageSize;
+                    const pagedDocs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
+                    const nextCursor = hasMore ? pagedDocs[pagedDocs.length - 1] : null;
+
+                    const posts = pagedDocs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    await Promise.all(posts.map(async (post) => {
+                        const profile = await this.getProfile(post.profile_id);
+                        post.profiles = profile;
+                    }));
+
+                    return { posts, nextCursor, hasMore };
+                }
+
+                const snapshot = await query.get();
                 const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
                 // Fetch profiles in parallel
@@ -2589,7 +2740,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     post.profiles = profile;
                 }));
                 
-                // Sort by created_at descending
+                // Sort by created_at descending (fallback for in-memory or legacy dates)
                 posts.sort((a, b) => {
                     const dateA = a.created_at?.toDate ? a.created_at.toDate() : new Date(a.created_at || 0);
                     const dateB = b.created_at?.toDate ? b.created_at.toDate() : new Date(b.created_at || 0);
@@ -2598,6 +2749,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 return posts;
             } catch (err) {
                 console.error("Error getting circle posts:", err);
+                if (opts && (opts.paginated || opts.pageSize || opts.cursor)) {
+                    return { posts: [], nextCursor: null, hasMore: false };
+                }
                 return [];
             }
         },
@@ -3454,6 +3608,52 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             } catch (err) {
                 console.error("Error getting impact summary:", err);
                 return { credit_kg: 0, donations: 0, loans: 0, reversals: 0 };
+            }
+        },
+
+        getImpactLeaderboard: async function(opts = {}) {
+            try {
+                const pageSize = Math.max(1, Math.min(Number(opts && opts.pageSize) || 20, 100));
+                let query = firebase.firestore().collection('profiles')
+                    .orderBy('carbon_saved_kg', 'desc');
+
+                if (opts && opts.cursor) {
+                    query = query.startAfter(opts.cursor);
+                }
+                query = query.limit(pageSize + 1);
+
+                const snapshot = await query.get();
+                const hasMore = snapshot.docs.length > pageSize;
+                const pagedDocs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
+                const nextCursor = hasMore ? pagedDocs[pagedDocs.length - 1] : null;
+
+                const leaderboard = await Promise.all(pagedDocs.map(async (doc) => {
+                    const data = doc.data();
+                    let creditKg = typeof data.carbon_saved_kg === 'number' ? data.carbon_saved_kg : 0;
+                    try {
+                        const summary = await this.getImpactSummary(doc.id);
+                        if (summary && summary.credit_kg > 0) creditKg = summary.credit_kg;
+                    } catch (_) {}
+
+                    return {
+                        id: doc.id,
+                        full_name: data.full_name || 'Neighbor',
+                        avatar_url: data.avatar_url || `https://i.pravatar.cc/150?u=${doc.id}`,
+                        carbon_saved_kg: creditKg,
+                        reputation_score: typeof data.reputation_score === 'number' ? data.reputation_score : 5.0,
+                        bio: data.bio || '',
+                        location: data.location || ''
+                    };
+                }));
+
+                return {
+                    leaderboard,
+                    nextCursor,
+                    hasMore
+                };
+            } catch (err) {
+                console.error("Error getting impact leaderboard:", err);
+                return { leaderboard: [], nextCursor: null, hasMore: false };
             }
         },
 

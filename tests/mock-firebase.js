@@ -120,12 +120,12 @@ class MockQuery {
             { orderBy: this._orderBy, limit: n, startAfterId: this._startAfterId });
     }
 
-    // startAfter takes a DocumentSnapshot in real Firestore. The mock keys off
+    // startAfter takes a DocumentSnapshot or id string. The mock keys off
     // the snapshot's id, which is enough to model keyset pagination.
     startAfter(snapshotOrDoc) {
         const id = snapshotOrDoc && typeof snapshotOrDoc === 'object'
             ? (snapshotOrDoc.id || (snapshotOrDoc.ref && snapshotOrDoc.ref.id) || null)
-            : null;
+            : (typeof snapshotOrDoc === 'string' ? snapshotOrDoc : null);
         return new MockQuery(this.collectionName, this.firestore, this.filters,
             { orderBy: this._orderBy, limit: this._limit, startAfterId: id });
     }

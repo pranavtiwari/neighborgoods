@@ -267,6 +267,25 @@ function buildRulesEngine(firestore) {
                 return;
             }
 
+            // ── circles ─────────────────────────────────────────────────────
+            case 'circles': {
+                if (!uid) DENY('not signed in');
+                if (isCreate) {
+                    if (data.created_by !== uid) DENY('created_by must be authenticated user');
+                } else {
+                    const isCreator = prior.created_by === uid;
+                    const changedKeys = Object.keys(data).filter(k => data[k] !== prior[k]);
+                    const onlyCount = changedKeys.every(k => ['member_count', 'updated_at'].includes(k));
+                    if (!isCreator && !onlyCount) {
+                        DENY('only creator may update circle');
+                    }
+                    if (data.created_by !== prior.created_by) {
+                        DENY('created_by is immutable');
+                    }
+                }
+                return;
+            }
+
             // ── circle_members ──────────────────────────────────────────────
             // firestore.rules:67-84. Self-join must declare role 'member'.
             case 'circle_members': {

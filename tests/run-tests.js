@@ -3281,6 +3281,144 @@ await test('Flow 18: Librarian roles, moderation, duplicate book merging, copy w
     assert.ok(actions.includes('resolve_report'), 'resolve_report recorded');
 });
 
+await test('Flow 19: Pagination for circles, members, posts, and leaderboards (Issue #21)', async () => {
+    const creatorUid = 'creator_' + Math.random().toString(36).substring(2, 9);
+    const member1Uid = 'm1_' + Math.random().toString(36).substring(2, 9);
+    const member2Uid = 'm2_' + Math.random().toString(36).substring(2, 9);
+    const member3Uid = 'm3_' + Math.random().toString(36).substring(2, 9);
+    const member4Uid = 'm4_' + Math.random().toString(36).substring(2, 9);
+
+    // Setup profiles
+    const users = [creatorUid, member1Uid, member2Uid, member3Uid, member4Uid];
+    for (let i = 0; i < users.length; i++) {
+        const u = users[i];
+        firebase.auth().currentUser = { uid: u };
+        await firebase.firestore().collection('profiles').doc(u).set({
+            full_name: `Member ${i}`,
+            avatar_url: `https://i.pravatar.cc/150?u=${u}`,
+            carbon_saved_kg: 0,
+            reputation_score: 5.0,
+            created_at: new Date(Date.now() - (users.length - i) * 1000).toISOString(),
+            updated_at: new Date().toISOString()
+        });
+        // Simulate trusted server process updating carbon_saved_kg
+        firebase.firestore()._getData('profiles', u).carbon_saved_kg = (5 - i) * 10;
+    }
+
+    // 1. Create circle and check initial aggregate member_count
+    firebase.auth().currentUser = { uid: creatorUid };
+    const circle = await window.db.createCircle({
+        name: 'Scale Book Club',
+        description: 'Testing large-scale circle pagination',
+        is_private: false
+    }, creatorUid);
+    assert.ok(circle.id, 'Circle created');
+
+    const initialCircleDoc = await firebase.firestore().collection('circles').doc(circle.id).get();
+    assert.strictEqual(initialCircleDoc.data().member_count, 1, 'Initial member_count must be 1 (creator)');
+
+    // 2. O(1) single-document membership check
+    const creatorMem = await window.db.getCircleMembership(circle.id, creatorUid);
+    assert.ok(creatorMem, 'Creator membership found');
+    assert.strictEqual(creatorMem.role, 'admin', 'Creator role is admin');
+
+    const nonMem = await window.db.getCircleMembership(circle.id, 'random_nobody');
+    assert.strictEqual(nonMem, null, 'Non-member returns null');
+
+    // 3. Add 4 more members and test aggregate member_count increment
+    for (const u of [member1Uid, member2Uid, member3Uid, member4Uid]) {
+        firebase.auth().currentUser = { uid: u };
+        await window.db.joinCircle(circle.id, u, 'member');
+    }
+
+    const countAfterJoins = await window.db.getCircleMemberCount(circle.id);
+    assert.strictEqual(countAfterJoins, 5, 'Circle member count should be 5 after joins');
+
+    // 4. Test Paginated Circle Members (pageSize: 2)
+    const memPage1 = await window.db.getCircleMembers(circle.id, { pageSize: 2, paginated: true });
+    assert.strictEqual(memPage1.members.length, 2, 'Member page 1 should have 2 members');
+    assert.strictEqual(memPage1.hasMore, true, 'Member page 1 should have more');
+    assert.ok(memPage1.nextCursor, 'Member page 1 has nextCursor');
+    assert.strictEqual(memPage1.totalCount, 5, 'Total count should match 5');
+
+    const memPage2 = await window.db.getCircleMembers(circle.id, { pageSize: 2, cursor: memPage1.nextCursor, paginated: true });
+    assert.strictEqual(memPage2.members.length, 2, 'Member page 2 should have 2 members');
+    assert.strictEqual(memPage2.hasMore, true, 'Member page 2 should have more');
+    assert.ok(memPage2.nextCursor, 'Member page 2 has nextCursor');
+
+    const memPage3 = await window.db.getCircleMembers(circle.id, { pageSize: 2, cursor: memPage2.nextCursor, paginated: true });
+    assert.strictEqual(memPage3.members.length, 1, 'Member page 3 should have remaining 1 member');
+    assert.strictEqual(memPage3.hasMore, false, 'Member page 3 hasMore should be false');
+
+    // Verify member ID uniqueness across pages
+    const allRetrievedMemberIds = [...memPage1.members, ...memPage2.members, ...memPage3.members].map(m => m.id);
+    assert.strictEqual(allRetrievedMemberIds.length, 5, 'Total retrieved members should be 5');
+    const uniqueMemberIds = new Set(allRetrievedMemberIds);
+    assert.strictEqual(uniqueMemberIds.size, 5, 'All retrieved member IDs must be unique across pages (no duplicates)');
+
+    // 5. Test leaveCircle decrements aggregate member_count
+    firebase.auth().currentUser = { uid: member4Uid };
+    await window.db.leaveCircle(circle.id, member4Uid);
+
+    const countAfterLeave = await window.db.getCircleMemberCount(circle.id);
+    assert.strictEqual(countAfterLeave, 4, 'Member count should be 4 after member leaves');
+
+    const leftMem = await window.db.getCircleMembership(circle.id, member4Uid);
+    assert.strictEqual(leftMem, null, 'Left member membership returns null');
+
+    // 6. Test Paginated Circle Posts
+    firebase.auth().currentUser = { uid: creatorUid };
+    for (let i = 1; i <= 5; i++) {
+        await window.db.createCirclePost(circle.id, creatorUid, `Circle discussion message ${i}`);
+    }
+
+    const postsPage1 = await window.db.getCirclePosts(circle.id, { pageSize: 2, paginated: true });
+    assert.strictEqual(postsPage1.posts.length, 2, 'Posts page 1 should have 2 posts');
+    assert.strictEqual(postsPage1.hasMore, true, 'Posts page 1 hasMore should be true');
+    assert.ok(postsPage1.nextCursor, 'Posts page 1 has nextCursor');
+
+    const postsPage2 = await window.db.getCirclePosts(circle.id, { pageSize: 2, cursor: postsPage1.nextCursor, paginated: true });
+    assert.strictEqual(postsPage2.posts.length, 2, 'Posts page 2 should have 2 posts');
+    assert.strictEqual(postsPage2.hasMore, true, 'Posts page 2 hasMore should be true');
+
+    const postsPage3 = await window.db.getCirclePosts(circle.id, { pageSize: 2, cursor: postsPage2.nextCursor, paginated: true });
+    assert.strictEqual(postsPage3.posts.length, 1, 'Posts page 3 should have remaining 1 post');
+    assert.strictEqual(postsPage3.hasMore, false, 'Posts page 3 hasMore should be false');
+
+    const allPostIds = [...postsPage1.posts, ...postsPage2.posts, ...postsPage3.posts].map(p => p.id);
+    assert.strictEqual(allPostIds.length, 5, 'Total 5 posts retrieved');
+    assert.strictEqual(new Set(allPostIds).size, 5, 'All post IDs are unique across pages');
+
+    // 7. Test Paginated Circles
+    const circlesPage = await window.db.getCircles({ pageSize: 2, paginated: true });
+    assert.ok(circlesPage.circles.length <= 2, 'Circles page size respects limit');
+    assert.ok(circlesPage.nextCursor !== undefined, 'Circles page returns nextCursor field');
+
+    // 8. Test Impact Leaderboard Pagination and Stable Sorting
+    const lbPage1 = await window.db.getImpactLeaderboard({ pageSize: 2 });
+    assert.strictEqual(lbPage1.leaderboard.length, 2, 'Leaderboard page 1 should have 2 entries');
+    assert.strictEqual(lbPage1.hasMore, true, 'Leaderboard page 1 hasMore should be true');
+    assert.ok(lbPage1.nextCursor, 'Leaderboard page 1 has nextCursor');
+    // Verify descending order
+    assert.ok(lbPage1.leaderboard[0].carbon_saved_kg >= lbPage1.leaderboard[1].carbon_saved_kg, 'Leaderboard sorted by carbon_saved_kg descending');
+
+    const lbPage2 = await window.db.getImpactLeaderboard({ pageSize: 2, cursor: lbPage1.nextCursor });
+    assert.strictEqual(lbPage2.leaderboard.length, 2, 'Leaderboard page 2 should have 2 entries');
+    assert.ok(lbPage2.leaderboard[0].carbon_saved_kg >= lbPage2.leaderboard[1].carbon_saved_kg, 'Leaderboard page 2 sorted descending');
+
+    // 9. Backwards compatibility checks (unpaginated calls return plain arrays)
+    const legacyMembers = await window.db.getCircleMembers(circle.id);
+    assert.ok(Array.isArray(legacyMembers), 'getCircleMembers() without opts returns an Array');
+    assert.strictEqual(legacyMembers.length, 4, 'Returns all current 4 members');
+
+    const legacyPosts = await window.db.getCirclePosts(circle.id);
+    assert.ok(Array.isArray(legacyPosts), 'getCirclePosts() without opts returns an Array');
+    assert.strictEqual(legacyPosts.length, 5, 'Returns all 5 posts');
+
+    const legacyCircles = await window.db.getCircles();
+    assert.ok(Array.isArray(legacyCircles), 'getCircles() without opts returns an Array');
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================

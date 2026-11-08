@@ -243,6 +243,11 @@
                             <div class="h-24 bg-surface-container rounded-xl"></div>
                         </div>
                     </div>
+                    <div id="feed-load-more" class="hidden pt-6 text-center">
+                        <button id="feed-load-more-btn" onclick="fetchMoreFeed()" class="px-5 py-2.5 text-xs font-bold rounded-xl border border-outline-variant/30 hover:bg-surface-container transition-all text-on-surface">
+                            Load More Activity
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Commons Stats -->
@@ -433,6 +438,10 @@
                 <div id="members-list" class="space-y-4">
                     <!-- Members list items will be injected here -->
                 </div>
+                <div id="members-loading" class="hidden text-center py-4 text-xs font-bold text-stone-400">Loading members...</div>
+                <div id="members-load-more" class="hidden pt-4 text-center">
+                    <button id="members-load-more-btn" onclick="fetchMoreMembers()" class="px-4 py-2 text-xs font-bold rounded-lg border border-outline-variant hover:bg-surface-container transition-all">Load More Members</button>
+                </div>
             </div>
         </div>
     </div>
@@ -445,6 +454,12 @@
         let currentUserRole = null; // 'admin' | 'member' | null
         let currentUserIsMember = false;
         let currentCircleMembers = [];
+        let membersCursor = null;
+        let membersHasMore = false;
+        let membersLoading = false;
+        let feedCursor = null;
+        let feedHasMore = false;
+        let feedLoading = false;
         let editSelectedFile = null;
         let editSelectedCategories = [];
         let ratingsSummary = null;
@@ -837,27 +852,27 @@
                     document.getElementById('privacy-badge').classList.add('flex');
                 }
 
-                // 2. Fetch Members & determine current user role
-                const members = await window.db.getCircleMembers(currentCircleId);
-                currentCircleMembers = members || [];
-                if (members) {
-                    const displayMembers = members.slice(0, 4);
-                    const avatarContainer = document.getElementById('member-avatars');
-                    avatarContainer.innerHTML = displayMembers.map(m =>
-                        `<img class="h-10 w-10 rounded-full ring-4 ring-surface object-cover" src="${db.sanitizeUrl(m.avatar_url) || 'https://i.pravatar.cc/150?u=' + m.id}" />`
-                    ).join('');
-                    if (members.length > 4) {
-                        avatarContainer.innerHTML += `<div class="h-10 w-10 rounded-full bg-surface-container ring-4 ring-surface flex items-center justify-center text-[10px] font-black text-primary">+${members.length - 4}</div>`;
-                    }
-                    document.getElementById('member-count-text').textContent = `${members.length} Neighbors Active`;
+                // 2. Fetch aggregate count, preview members & determine current user role in O(1)
+                const totalMemberCount = await window.db.getCircleMemberCount(currentCircleId);
+                const previewResult = await window.db.getCircleMembers(currentCircleId, { pageSize: 5, paginated: true });
+                const previewMembers = (previewResult && previewResult.members) || [];
 
-                    // Determine membership
-                    if (user) {
-                        const myMembership = members.find(m => m.id === user.uid);
-                        if (myMembership) {
-                            currentUserIsMember = true;
-                            currentUserRole = myMembership.role;
-                        }
+                const displayMembers = previewMembers.slice(0, 4);
+                const avatarContainer = document.getElementById('member-avatars');
+                avatarContainer.innerHTML = displayMembers.map(m =>
+                    `<img class="h-10 w-10 rounded-full ring-4 ring-surface object-cover" src="${db.sanitizeUrl(m.avatar_url) || 'https://i.pravatar.cc/150?u=' + m.id}" />`
+                ).join('');
+                if (totalMemberCount > 4) {
+                    avatarContainer.innerHTML += `<div class="h-10 w-10 rounded-full bg-surface-container ring-4 ring-surface flex items-center justify-center text-[10px] font-black text-primary">+${totalMemberCount - 4}</div>`;
+                }
+                document.getElementById('member-count-text').textContent = `${totalMemberCount} Neighbors Active`;
+
+                // Determine membership in O(1) without reading every member
+                if (user) {
+                    const myMembership = await window.db.getCircleMembership(currentCircleId, user.uid);
+                    if (myMembership) {
+                        currentUserIsMember = true;
+                        currentUserRole = myMembership.role;
                     }
                 }
 
@@ -898,6 +913,17 @@
                 // 6. Load feed if member (or public circle)
                 if (currentUserIsMember || !currentCircle.is_private) {
                     loadFeed(currentCircleId);
+                } else {
+                    const feedContainer = document.getElementById('circle-feed');
+                    if (feedContainer) {
+                        feedContainer.innerHTML = `
+                            <div class="bg-surface-container-low rounded-xl p-8 text-center border border-outline-variant/10">
+                                <span class="material-symbols-outlined text-4xl text-on-surface-variant/30 mb-3">lock</span>
+                                <p class="text-on-surface-variant font-medium text-sm">This circle is private. Request to join to see recent discussions.</p>
+                            </div>`;
+                    }
+                    const loadMoreContainer = document.getElementById('feed-load-more');
+                    if (loadMoreContainer) loadMoreContainer.classList.add('hidden');
                 }
 
                 // 7. Admin: load join requests and circle transaction ledger
@@ -1397,75 +1423,114 @@
         }
         window.submitReply = submitReply;
 
-        async function loadFeed(circleId) {
+        function renderPostItem(post, currentUser) {
+            const date = post.created_at?.toDate ? post.created_at.toDate() : new Date(post.created_at || 0);
+            const timeStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            const helpfulBy = post.helpful_by || [];
+            const isHelpful = currentUser && helpfulBy.includes(currentUser.uid);
+            const iconFill = isHelpful ? "'FILL' 1" : "'FILL' 0";
+            const textColor = isHelpful ? "text-primary font-bold" : "text-on-surface-variant font-medium";
+            const replies = post.replies || [];
+            const repliesHtml = replies.map(r => `
+                <div class="flex items-start gap-3 bg-stone-100 dark:bg-stone-800/40 p-3.5 rounded-xl text-sm">
+                    <img class="h-6 w-6 rounded-full object-cover shrink-0 mt-0.5" src="${db.sanitizeUrl(r.author_avatar) || 'https://i.pravatar.cc/150?u=' + r.author_id}"/>
+                    <div class="flex-1">
+                        <div class="flex items-baseline justify-between">
+                            <span class="font-bold text-on-surface text-xs">${escapeHtml(r.author_name)}</span>
+                            <span class="text-[9px] text-outline">${new Date(r.created_at).toLocaleDateString([], {month: 'short', day: 'numeric'})}</span>
+                        </div>
+                        <p class="text-on-surface-variant mt-1 leading-snug">${escapeHtml(r.content)}</p>
+                    </div>
+                </div>`).join('');
+
+            return `
+            <div class="bg-surface-container-lowest rounded-xl p-8 shadow-sm hover:shadow-md transition-all duration-300">
+                <div class="flex items-center gap-4 mb-6">
+                    <img class="h-12 w-12 rounded-full object-cover" src="${db.sanitizeUrl(post.profiles?.avatar_url) || 'https://i.pravatar.cc/150?u=' + post.profile_id}"/>
+                    <div>
+                        <p class="font-bold text-on-surface">${escapeHtml(post.profiles?.full_name || 'Neighbor')}</p>
+                        <p class="text-[10px] text-on-surface-variant font-black uppercase tracking-widest">${timeStr}</p>
+                    </div>
+                </div>
+                <p class="text-xl leading-relaxed text-on-surface mb-8">${escapeHtml(post.content)}</p>
+                <div class="flex items-center gap-8 pt-6 border-t border-surface-container">
+                    <button onclick="toggleHelpful(this)" data-post-id="${db.escapeAttr(post.id)}" class="group flex items-center gap-2 ${textColor} hover:text-primary transition-colors">
+                        <span class="material-symbols-outlined text-xl transition-transform group-active:scale-125" style="font-variation-settings: ${iconFill}">favorite</span>
+                        <span class="text-xs">Helpful (${helpfulBy.length})</span>
+                    </button>
+                    <button onclick="toggleRepliesSection(this)" data-post-id="${db.escapeAttr(post.id)}" class="group flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
+                        <span class="material-symbols-outlined text-xl">comment</span>
+                        <span class="font-bold text-xs">Reply (${replies.length})</span>
+                    </button>
+                </div>
+                <div id="replies-section-${post.id}" class="hidden mt-6 pt-6 border-t border-surface-container-high/40 space-y-3">
+                    <div class="max-h-48 overflow-y-auto pr-2 custom-scrollbar space-y-3">${repliesHtml}</div>
+                    <div class="flex gap-2 mt-4 pt-2">
+                        <input type="text" id="reply-input-${post.id}" placeholder="Write a reply..." class="flex-1 bg-surface-container-low border-none rounded-lg px-4 py-2.5 text-sm focus:ring-1 focus:ring-primary placeholder:text-outline-variant">
+                        <button onclick="submitReply(this)" data-post-id="${db.escapeAttr(post.id)}" class="px-4 py-2.5 bg-primary text-on-primary font-bold text-xs rounded-lg active:scale-95 transition-all">Send</button>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        async function loadFeed(circleId, append = false) {
+            if (feedLoading) return;
             const feedContainer = document.getElementById('circle-feed');
+            const loadMoreContainer = document.getElementById('feed-load-more');
             const currentUser = firebase.auth().currentUser;
+
+            if (!append) {
+                feedCursor = null;
+                feedHasMore = false;
+            }
+
+            feedLoading = true;
             try {
-                const posts = await window.db.getCirclePosts(circleId);
-                if (posts.length === 0) {
-                    feedContainer.innerHTML = `
-                        <div class="bg-surface-container-low rounded-xl p-12 text-center">
-                            <span class="material-symbols-outlined text-4xl text-on-surface-variant/20 mb-4">chat_bubble</span>
-                            <p class="text-on-surface-variant font-medium">Nothing here yet. Start a conversation!</p>
-                        </div>`;
-                    return;
+                const res = await window.db.getCirclePosts(circleId, {
+                    pageSize: 10,
+                    cursor: feedCursor,
+                    paginated: true
+                });
+
+                const posts = (res && res.posts) || [];
+                feedCursor = res && res.nextCursor;
+                feedHasMore = !!(res && res.hasMore);
+
+                if (!append) {
+                    if (posts.length === 0) {
+                        feedContainer.innerHTML = `
+                            <div class="bg-surface-container-low rounded-xl p-12 text-center">
+                                <span class="material-symbols-outlined text-4xl text-on-surface-variant/20 mb-4">chat_bubble</span>
+                                <p class="text-on-surface-variant font-medium">Nothing here yet. Start a conversation!</p>
+                            </div>`;
+                        if (loadMoreContainer) loadMoreContainer.classList.add('hidden');
+                        return;
+                    }
+                    feedContainer.innerHTML = posts.map(post => renderPostItem(post, currentUser)).join('');
+                } else {
+                    feedContainer.insertAdjacentHTML('beforeend', posts.map(post => renderPostItem(post, currentUser)).join(''));
                 }
 
-                feedContainer.innerHTML = posts.map(post => {
-                    const date = post.created_at?.toDate ? post.created_at.toDate() : new Date(post.created_at || 0);
-                    const timeStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-                    const helpfulBy = post.helpful_by || [];
-                    const isHelpful = currentUser && helpfulBy.includes(currentUser.uid);
-                    const iconFill = isHelpful ? "'FILL' 1" : "'FILL' 0";
-                    const textColor = isHelpful ? "text-primary font-bold" : "text-on-surface-variant font-medium";
-                    const replies = post.replies || [];
-                    const repliesHtml = replies.map(r => `
-                        <div class="flex items-start gap-3 bg-stone-100 dark:bg-stone-800/40 p-3.5 rounded-xl text-sm">
-                            <img class="h-6 w-6 rounded-full object-cover shrink-0 mt-0.5" src="${db.sanitizeUrl(r.author_avatar) || 'https://i.pravatar.cc/150?u=' + r.author_id}"/>
-                            <div class="flex-1">
-                                <div class="flex items-baseline justify-between">
-                                    <span class="font-bold text-on-surface text-xs">${escapeHtml(r.author_name)}</span>
-                                    <span class="text-[9px] text-outline">${new Date(r.created_at).toLocaleDateString([], {month: 'short', day: 'numeric'})}</span>
-                                </div>
-                                <p class="text-on-surface-variant mt-1 leading-snug">${escapeHtml(r.content)}</p>
-                            </div>
-                        </div>`).join('');
-
-                    return `
-                    <div class="bg-surface-container-lowest rounded-xl p-8 shadow-sm hover:shadow-md transition-all duration-300">
-                        <div class="flex items-center gap-4 mb-6">
-                            <img class="h-12 w-12 rounded-full object-cover" src="${db.sanitizeUrl(post.profiles?.avatar_url) || 'https://i.pravatar.cc/150?u=' + post.profile_id}"/>
-                            <div>
-                                <p class="font-bold text-on-surface">${escapeHtml(post.profiles?.full_name || 'Neighbor')}</p>
-                                <p class="text-[10px] text-on-surface-variant font-black uppercase tracking-widest">${timeStr}</p>
-                            </div>
-                        </div>
-                        <p class="text-xl leading-relaxed text-on-surface mb-8">${escapeHtml(post.content)}</p>
-                        <div class="flex items-center gap-8 pt-6 border-t border-surface-container">
-                            <button onclick="toggleHelpful(this)" data-post-id="${db.escapeAttr(post.id)}" class="group flex items-center gap-2 ${textColor} hover:text-primary transition-colors">
-                                <span class="material-symbols-outlined text-xl transition-transform group-active:scale-125" style="font-variation-settings: ${iconFill}">favorite</span>
-                                <span class="text-xs">Helpful (${helpfulBy.length})</span>
-                            </button>
-                            <button onclick="toggleRepliesSection(this)" data-post-id="${db.escapeAttr(post.id)}" class="group flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors">
-                                <span class="material-symbols-outlined text-xl">comment</span>
-                                <span class="font-bold text-xs">Reply (${replies.length})</span>
-                            </button>
-                        </div>
-                        <div id="replies-section-${post.id}" class="hidden mt-6 pt-6 border-t border-surface-container-high/40 space-y-3">
-                            <div class="max-h-48 overflow-y-auto pr-2 custom-scrollbar space-y-3">${repliesHtml}</div>
-                            <div class="flex gap-2 mt-4 pt-2">
-                                <input type="text" id="reply-input-${post.id}" placeholder="Write a reply..." class="flex-1 bg-surface-container-low border-none rounded-lg px-4 py-2.5 text-sm focus:ring-1 focus:ring-primary placeholder:text-outline-variant">
-                                <button onclick="submitReply(this)" data-post-id="${db.escapeAttr(post.id)}" class="px-4 py-2.5 bg-primary text-on-primary font-bold text-xs rounded-lg active:scale-95 transition-all">Send</button>
-                            </div>
-                        </div>
-                    </div>`;
-                }).join('');
-
+                if (loadMoreContainer) {
+                    if (feedHasMore) loadMoreContainer.classList.remove('hidden');
+                    else loadMoreContainer.classList.add('hidden');
+                }
             } catch (err) {
                 console.error("Error loading feed:", err);
-                feedContainer.innerHTML = `<div class="text-center py-12 text-error">Failed to load activity.</div>`;
+                if (!append) {
+                    feedContainer.innerHTML = `<div class="text-center py-12 text-error">Failed to load activity.</div>`;
+                }
+            } finally {
+                feedLoading = false;
             }
         }
+
+        function fetchMoreFeed() {
+            if (feedHasMore && !feedLoading) {
+                loadFeed(currentCircleId, true);
+            }
+        }
+        window.fetchMoreFeed = fetchMoreFeed;
 
         // Modal Logic
         function openPostModal() {
@@ -1502,10 +1567,53 @@
         };
 
         // Members Modal Logic
+        async function fetchMoreMembers(reset = false) {
+            if (membersLoading) return;
+            const listEl = document.getElementById('members-list');
+            const loadingEl = document.getElementById('members-loading');
+            const loadMoreContainer = document.getElementById('members-load-more');
+
+            if (reset) {
+                membersCursor = null;
+                membersHasMore = false;
+                currentCircleMembers = [];
+                listEl.innerHTML = '';
+            }
+
+            membersLoading = true;
+            if (loadingEl) loadingEl.classList.remove('hidden');
+
+            try {
+                const res = await window.db.getCircleMembers(currentCircleId, {
+                    pageSize: 20,
+                    cursor: membersCursor,
+                    paginated: true
+                });
+
+                const newMembers = (res && res.members) || [];
+                membersCursor = res && res.nextCursor;
+                membersHasMore = !!(res && res.hasMore);
+
+                currentCircleMembers = currentCircleMembers.concat(newMembers);
+                renderMembersList();
+
+                if (loadMoreContainer) {
+                    if (membersHasMore) loadMoreContainer.classList.remove('hidden');
+                    else loadMoreContainer.classList.add('hidden');
+                }
+            } catch (err) {
+                console.error("Error fetching members:", err);
+            } finally {
+                membersLoading = false;
+                if (loadingEl) loadingEl.classList.add('hidden');
+            }
+        }
+        window.fetchMoreMembers = fetchMoreMembers;
+
         function openMembersModal() {
             if (!currentUserIsMember) return; // Only members can see the member list modal
-            renderMembersList();
             document.getElementById('members-modal').classList.remove('hidden');
+            fetchMoreMembers(true);
         }
 
         function closeMembersModal() {
@@ -1568,8 +1676,8 @@
                 // Refresh data
                 await loadCircleDetails();
                 
-                // Re-render members list in modal
-                renderMembersList();
+                // Re-fetch members list in modal
+                fetchMoreMembers(true);
             } catch (err) {
                 alert('Failed to remove member: ' + err.message);
             }
@@ -1586,7 +1694,7 @@
                     await window.db.appointLibrarian(profileId, currentCircleId, currentUser.uid);
                 }
                 await loadCircleDetails();
-                renderMembersList();
+                fetchMoreMembers(true);
             } catch (err) {
                 alert('Failed to update librarian role: ' + err.message);
                 btnEl.disabled = false;

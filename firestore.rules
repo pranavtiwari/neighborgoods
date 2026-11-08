@@ -204,8 +204,12 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.resource.data.created_by == request.auth.uid;
       allow update: if request.auth != null
-        && resource.data.created_by == request.auth.uid
-        && request.resource.data.created_by == resource.data.created_by;
+        && (
+          (resource.data.created_by == request.auth.uid
+            && request.resource.data.created_by == resource.data.created_by)
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['member_count', 'updated_at'])
+              && request.resource.data.created_by == resource.data.created_by)
+        );
       allow delete: if request.auth != null
         && resource.data.created_by == request.auth.uid;
     }
