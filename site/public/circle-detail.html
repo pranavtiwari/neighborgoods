@@ -121,11 +121,15 @@
                         <span id="member-count-text" class="label-md text-on-surface-variant hover:underline">Neighbors</span>
                     </div>
                     <!-- Member action buttons (shown when user is a member) -->
-                    <div id="member-actions" class="hidden flex gap-4 w-full md:w-auto">
-                        <button onclick="openPostModal()" class="flex-1 md:flex-none px-8 py-4 rounded-lg bg-surface-container-lowest text-primary font-bold shadow-sm hover:shadow-md transition-all active:scale-95">
+                    <div id="member-actions" class="hidden flex gap-3 w-full md:w-auto">
+                        <button onclick="openSeedFeedbackModal()" class="flex-1 md:flex-none px-4 py-4 rounded-lg bg-surface-container-high text-on-surface text-xs font-bold shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5" title="Give Feedback on this Circle Soft Launch">
+                            <span class="material-symbols-outlined text-[16px] text-amber-500">rate_review</span>
+                            Feedback
+                        </button>
+                        <button onclick="openPostModal()" class="flex-1 md:flex-none px-6 py-4 rounded-lg bg-surface-container-lowest text-primary font-bold shadow-sm hover:shadow-md transition-all active:scale-95">
                             Post Update
                         </button>
-                        <button id="share-item-btn" class="flex-1 md:flex-none px-8 py-4 rounded-lg bg-forest-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all active:scale-95">
+                        <button id="share-item-btn" class="flex-1 md:flex-none px-6 py-4 rounded-lg bg-forest-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all active:scale-95">
                             Share Item
                         </button>
                     </div>
@@ -443,6 +447,54 @@
                     <button id="members-load-more-btn" onclick="fetchMoreMembers()" class="px-4 py-2 text-xs font-bold rounded-lg border border-outline-variant hover:bg-surface-container transition-all">Load More Members</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Seed Feedback Modal (Issue #22: Feedback path for seed users) -->
+    <div id="seed-feedback-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 bg-on-surface/20 backdrop-blur-md">
+        <div class="modal-content bg-surface w-full max-w-md rounded-2xl shadow-2xl p-6 border border-outline-variant/10">
+            <div class="flex items-center justify-between pb-4 border-b border-surface-container mb-4">
+                <h3 class="text-lg font-bold flex items-center gap-2">
+                    <span class="material-symbols-outlined text-amber-500">rate_review</span>
+                    Soft Launch Feedback
+                </h3>
+                <button onclick="closeSeedFeedbackModal()" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-surface-container">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+            <form id="seed-feedback-form" onsubmit="handleSeedFeedbackSubmit(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-stone-400 mb-1">Feedback Category</label>
+                    <select id="seed-feedback-type" class="w-full bg-surface-container rounded-xl py-2 px-3 text-sm font-medium border-none focus:ring-2 focus:ring-primary">
+                        <option value="usability">Usability & Navigation</option>
+                        <option value="catalog">Book / Catalog Matching</option>
+                        <option value="borrowing">Borrowing & Request Flow</option>
+                        <option value="bug">Bug or Issue</option>
+                        <option value="general">General Suggestion</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-stone-400 mb-1">Rating</label>
+                    <div class="flex items-center gap-3">
+                        <select id="seed-feedback-rating" class="w-full bg-surface-container rounded-xl py-2 px-3 text-sm font-medium border-none focus:ring-2 focus:ring-primary">
+                            <option value="5">⭐⭐⭐⭐⭐ Excellent (5/5)</option>
+                            <option value="4">⭐⭐⭐⭐ Good (4/5)</option>
+                            <option value="3">⭐⭐⭐ Neutral (3/5)</option>
+                            <option value="2">⭐⭐ Needs Improvement (2/5)</option>
+                            <option value="1">⭐ Poor (1/5)</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-stone-400 mb-1">Your Feedback</label>
+                    <textarea id="seed-feedback-comment" rows="4" required placeholder="What worked well? What felt confusing or broken?" class="w-full bg-surface-container rounded-xl py-3 px-4 text-sm resize-none border-none focus:ring-2 focus:ring-primary"></textarea>
+                </div>
+                <div id="seed-feedback-status" class="hidden text-xs p-3 rounded-lg font-bold"></div>
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeSeedFeedbackModal()" class="flex-1 py-2.5 rounded-xl border border-outline-variant text-xs font-bold text-on-surface-variant hover:bg-surface-container">Cancel</button>
+                    <button type="submit" id="seed-feedback-submit-btn" class="flex-1 py-2.5 rounded-xl bg-primary text-on-primary text-xs font-bold shadow-md">Submit Feedback</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1701,6 +1753,56 @@
             }
         }
 
+        function openSeedFeedbackModal() {
+            const modal = document.getElementById('seed-feedback-modal');
+            const status = document.getElementById('seed-feedback-status');
+            if (status) status.classList.add('hidden');
+            document.getElementById('seed-feedback-comment').value = '';
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeSeedFeedbackModal() {
+            const modal = document.getElementById('seed-feedback-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        async function handleSeedFeedbackSubmit(e) {
+            e.preventDefault();
+            const btn = document.getElementById('seed-feedback-submit-btn');
+            const status = document.getElementById('seed-feedback-status');
+            const type = document.getElementById('seed-feedback-type').value;
+            const rating = Number(document.getElementById('seed-feedback-rating').value) || 5;
+            const comment = document.getElementById('seed-feedback-comment').value.trim();
+
+            if (!comment) return;
+            btn.disabled = true;
+            btn.textContent = 'Submitting...';
+
+            try {
+                await window.db.submitSeedFeedback({
+                    circle_id: currentCircleId,
+                    feedback_type: type,
+                    rating: rating,
+                    comment: comment
+                });
+                status.textContent = 'Thank you! Your feedback helps us improve the circle experience.';
+                status.className = 'text-xs p-3 rounded-lg font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 block';
+                setTimeout(() => {
+                    closeSeedFeedbackModal();
+                    btn.disabled = false;
+                    btn.textContent = 'Submit Feedback';
+                }, 1500);
+            } catch (err) {
+                status.textContent = 'Error: ' + err.message;
+                status.className = 'text-xs p-3 rounded-lg font-bold bg-error/10 text-error block';
+                btn.disabled = false;
+                btn.textContent = 'Submit Feedback';
+            }
+        }
+
+        window.openSeedFeedbackModal = openSeedFeedbackModal;
+        window.closeSeedFeedbackModal = closeSeedFeedbackModal;
+        window.handleSeedFeedbackSubmit = handleSeedFeedbackSubmit;
         window.openMembersModal = openMembersModal;
         window.closeMembersModal = closeMembersModal;
         window.handleRemoveMember = handleRemoveMember;

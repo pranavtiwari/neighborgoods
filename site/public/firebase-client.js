@@ -929,6 +929,13 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
 
             results.totalResults = results.books.length + results.items.length;
+
+            await this.logAnalyticsEvent('search_executed', {
+                query: cleanQuery || '',
+                category: category || 'all',
+                results_count: results.totalResults
+            });
+
             return results;
         },
 
@@ -1188,6 +1195,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 if (doc.book_id) {
                     await this.syncBookCopyCounts(doc.book_id);
                 }
+
+                await this.logAnalyticsEvent('listing_created', {
+                    item_id: ref.id,
+                    name: doc.name,
+                    kind: doc.kind,
+                    listing_type: doc.listing_type,
+                    circle_id: doc.circle_id || null,
+                    book_id: doc.book_id || null
+                });
 
                 return { id: ref.id };
             } catch (err) {
@@ -1589,13 +1605,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             try {
                 const db = firebase.firestore();
                 const itemRef = db.collection('items').doc(requestData.item_id);
+                let itemCircleId = null;
                 
-                return await db.runTransaction(async (transaction) => {
+                const result = await db.runTransaction(async (transaction) => {
                     const itemDoc = await transaction.get(itemRef);
                     if (!itemDoc.exists) {
                         throw new Error("Item does not exist.");
                     }
                     const itemData = itemDoc.data();
+                    itemCircleId = itemData.circle_id || (Array.isArray(itemData.circle_ids) ? itemData.circle_ids[0] : null);
                     
                     // Enforce ownership: owner cannot borrow their own item
                     if (itemData.owner_id === requestData.borrower_id) {
@@ -1756,6 +1774,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     
                     return { id: newRequestRef.id };
                 });
+
+                await this.logAnalyticsEvent('request_created', {
+                    request_id: result.id,
+                    item_id: requestData.item_id,
+                    circle_id: itemCircleId,
+                    borrower_id: requestData.borrower_id
+                });
+
+                return result;
             } catch (err) {
                 console.error("Error creating borrow request:", err);
                 throw err;
@@ -1947,6 +1974,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 const db = firebase.firestore();
                 const requestRef = db.collection('requests').doc(requestId);
                 const itemRef = db.collection('items').doc(itemId);
+                let itemCircleId = null;
 
                 await db.runTransaction(async (transaction) => {
                     const itemDoc = await transaction.get(itemRef);
@@ -1954,6 +1982,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         throw new Error("Item does not exist.");
                     }
                     const itemData = itemDoc.data();
+                    itemCircleId = itemData.circle_id || (Array.isArray(itemData.circle_ids) ? itemData.circle_ids[0] : null);
                     
                     // Check if item is already lent/promised (i.e., is_available is false, or status is approved/borrowed/returned)
                     if (itemData.is_available === false || ['approved', 'borrowed', 'returned'].includes(itemData.status)) {
@@ -2030,6 +2059,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         fulfillment_method: requestData.fulfillment_method || 'pickup',
                         created_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
+                });
+
+                await this.logAnalyticsEvent('request_approved', {
+                    request_id: requestId,
+                    item_id: itemId,
+                    circle_id: itemCircleId
                 });
             } catch (err) {
                 console.error("Error confirming borrow request:", err);
@@ -3107,6 +3142,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
                 let ledgerWrites = [];
                 let beneficiaries = [];
+                let completedItemId = null;
+                let completedCircleId = null;
 
                 await db.runTransaction(async (transaction) => {
                     const requestDoc = await transaction.get(requestRef);
@@ -3115,6 +3152,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     if (requestData.status !== 'returned') {
                         throw new Error("Return must be marked by borrower before confirmation.");
                     }
+                    completedItemId = requestData.item_id;
+                    completedCircleId = requestData.circle_id || null;
 
                     const eventRef = db.collection('transaction_events').doc();
                     const now = new Date();
@@ -3217,6 +3256,13 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 // Ledger writes are outside the transaction so a credit-write
                 // failure can never roll back a confirmed return.
                 await Promise.all(ledgerWrites.map(w => w.ref.set(w.data)));
+
+                await this.logAnalyticsEvent('transaction_completed', {
+                    request_id: requestId,
+                    item_id: completedItemId,
+                    circle_id: completedCircleId,
+                    status: 'completed'
+                });
 
                 return { credited: beneficiaries.length };
             } catch (err) {
@@ -5114,13 +5160,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             return { success: true, copyId, is_withdrawn: true };
         },
 
-        submitReport: async function({ targetType, targetId, reporterId = null, reason, details = '' }) {
+        submitReport: async function({ targetType, targetId, reporterId = null, reason, details = '', circle_id = null, circleId = null }) {
             const currentUid = reporterId || firebase.auth().currentUser?.uid;
             if (!currentUid) throw new Error('Authentication required to submit report');
             if (!reason) throw new Error('Reason is required');
             if (!targetType || !targetId) throw new Error('Target type and target ID required');
 
-            const ref = await firebase.firestore().collection('reports').add({
+            const reportCircleId = circle_id || circleId || null;
+
+            const reportData = {
                 target_type: targetType,
                 target_id: targetId,
                 reporter_id: currentUid,
@@ -5129,6 +5177,19 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 status: 'pending',
                 created_at: firebase.firestore.FieldValue.serverTimestamp(),
                 updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (reportCircleId) {
+                reportData.circle_id = reportCircleId;
+            }
+
+            const ref = await firebase.firestore().collection('reports').add(reportData);
+
+            await this.logAnalyticsEvent('report_submitted', {
+                report_id: ref.id,
+                target_type: targetType,
+                target_id: targetId,
+                circle_id: reportCircleId,
+                reason: String(reason).trim()
             });
 
             return { id: ref.id, status: 'pending' };
@@ -5230,6 +5291,292 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 console.error('Error getting moderation events:', err);
                 return [];
             }
+        },
+
+        // --- Feature Flags (Issue #22: Soft Launch Rollout) ---
+        _featureFlags: {
+            universal_catalog: {
+                enabled: false,
+                enabledCircles: ['a-world-of-books', 'seed-books-circle'],
+                enabledForSeedUsers: true
+            },
+            book_pages: {
+                enabled: false,
+                enabledCircles: ['a-world-of-books', 'seed-books-circle'],
+                enabledForSeedUsers: true
+            },
+            soft_launch_active: true
+        },
+
+        getFeatureFlags: async function() {
+            return { ...this._featureFlags };
+        },
+
+        setFeatureFlag: async function(flagName, config) {
+            this._featureFlags[flagName] = config;
+            try {
+                if (firebase.auth().currentUser) {
+                    await firebase.firestore().collection('feature_flags').doc(flagName).set({
+                        ...((typeof config === 'object' && config !== null) ? config : { enabled: !!config }),
+                        updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            } catch (err) {
+                console.warn('Feature flag persistence non-fatal error:', err);
+            }
+            return this._featureFlags[flagName];
+        },
+
+        isFeatureEnabled: function(flagName, context = {}) {
+            const flag = this._featureFlags[flagName];
+            if (!flag) return false;
+            if (typeof flag === 'boolean') return flag;
+            if (flag.enabled === true) return true;
+
+            const circleId = context.circleId || context.circle_id;
+            if (circleId && Array.isArray(flag.enabledCircles)) {
+                if (flag.enabledCircles.includes(circleId)) return true;
+                if (typeof circleId === 'string' && flag.enabledCircles.some(c => circleId.toLowerCase().includes(c.toLowerCase()))) {
+                    return true;
+                }
+            }
+
+            if ((context.isSeedUser || context.seed_user) && flag.enabledForSeedUsers) {
+                return true;
+            }
+
+            return false;
+        },
+
+        // --- Instrumentation & Analytics (Issue #22) ---
+        logAnalyticsEvent: async function(eventType, metadata = {}) {
+            try {
+                if (!eventType) return null;
+                const user = firebase.auth().currentUser;
+                const eventDoc = {
+                    event_type: String(eventType),
+                    user_id: metadata.user_id || (user ? user.uid : null),
+                    circle_id: metadata.circle_id || null,
+                    metadata: { ...metadata },
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                const ref = await firebase.firestore().collection('analytics_events').add(eventDoc);
+                return { id: ref.id, ...eventDoc };
+            } catch (err) {
+                console.warn("Analytics event logging non-fatal error:", err);
+                return null;
+            }
+        },
+
+        // --- Seed Feedback Path (Issue #22) ---
+        submitSeedFeedback: async function(data) {
+            try {
+                const user = firebase.auth().currentUser;
+                const uid = data.user_id || (user ? user.uid : null);
+                if (!uid) throw new Error("Must be logged in to submit feedback");
+                if (!data.comment || !data.comment.trim()) throw new Error("Comment is required");
+
+                const feedbackDoc = {
+                    circle_id: data.circle_id || null,
+                    user_id: uid,
+                    feedback_type: data.feedback_type || 'general',
+                    rating: Math.max(1, Math.min(Number(data.rating) || 5, 5)),
+                    comment: data.comment.trim(),
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                const ref = await firebase.firestore().collection('seed_feedback').add(feedbackDoc);
+                await this.logAnalyticsEvent('seed_feedback_submitted', {
+                    feedback_id: ref.id,
+                    circle_id: feedbackDoc.circle_id,
+                    feedback_type: feedbackDoc.feedback_type,
+                    rating: feedbackDoc.rating
+                });
+                return { id: ref.id, ...feedbackDoc };
+            } catch (err) {
+                console.error("Error submitting seed feedback:", err);
+                throw err;
+            }
+        },
+
+        getSeedFeedback: async function(circleId = null) {
+            try {
+                let query = firebase.firestore().collection('seed_feedback');
+                if (circleId) {
+                    query = query.where('circle_id', '==', circleId);
+                }
+                const snapshot = await query.get();
+                return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            } catch (err) {
+                console.error("Error getting seed feedback:", err);
+                return [];
+            }
+        },
+
+        // --- Soft Launch Metrics & Go/No-Go Decision (Issue #22) ---
+        getSoftLaunchMetrics: async function(circleId = null) {
+            try {
+                let query = firebase.firestore().collection('analytics_events');
+                if (circleId) {
+                    query = query.where('circle_id', '==', circleId);
+                }
+                const snapshot = await query.get();
+                const events = snapshot.docs.map(d => d.data());
+
+                let listings = 0;
+                let searches = 0;
+                let searchSuccesses = 0;
+                let requests = 0;
+                let approved = 0;
+                let completed = 0;
+                let reports = 0;
+
+                events.forEach(e => {
+                    switch (e.event_type) {
+                        case 'listing_created':
+                            listings++;
+                            break;
+                        case 'search_executed':
+                            searches++;
+                            if (e.metadata && Number(e.metadata.results_count) > 0) {
+                                searchSuccesses++;
+                            }
+                            break;
+                        case 'request_created':
+                            requests++;
+                            break;
+                        case 'request_approved':
+                            approved++;
+                            break;
+                        case 'transaction_completed':
+                            completed++;
+                            break;
+                        case 'report_submitted':
+                            reports++;
+                            break;
+                    }
+                });
+
+                // Calculate rates
+                const searchSuccessRate = searches > 0 ? Math.round((searchSuccesses / searches) * 100) : 100;
+                const completionRate = approved > 0 ? Math.round((completed / approved) * 100) : (requests > 0 ? Math.round((completed / requests) * 100) : 0);
+                const disputeRate = completed > 0 ? Math.round((reports / completed) * 100) : (reports > 0 ? 100 : 0);
+
+                // Feedback stats
+                const feedback = await this.getSeedFeedback(circleId);
+                const feedbackCount = feedback.length;
+                const totalRating = feedback.reduce((sum, f) => sum + (Number(f.rating) || 0), 0);
+                const averageRating = feedbackCount > 0 ? Math.round((totalRating / feedbackCount) * 10) / 10 : 5.0;
+
+                return {
+                    circle_id: circleId,
+                    listings,
+                    searches,
+                    search_successes: searchSuccesses,
+                    search_success_rate: searchSuccessRate,
+                    requests,
+                    approved,
+                    completed,
+                    completion_rate: completionRate,
+                    reports,
+                    dispute_rate: disputeRate,
+                    feedback_count: feedbackCount,
+                    average_rating: averageRating
+                };
+            } catch (err) {
+                console.error("Error calculating soft launch metrics:", err);
+                return {
+                    circle_id: circleId,
+                    listings: 0,
+                    searches: 0,
+                    search_successes: 0,
+                    search_success_rate: 0,
+                    requests: 0,
+                    approved: 0,
+                    completed: 0,
+                    completion_rate: 0,
+                    reports: 0,
+                    dispute_rate: 0,
+                    feedback_count: 0,
+                    average_rating: 0
+                };
+            }
+        },
+
+        evaluateGoNoGoCriteria: async function(circleId = null, customTargets = {}) {
+            const metrics = await this.getSoftLaunchMetrics(circleId);
+            const targets = {
+                min_listings: 5,
+                min_requests: 3,
+                min_completion_rate: 70, // >= 70%
+                max_dispute_rate: 15,    // <= 15%
+                min_search_success_rate: 60, // >= 60%
+                min_average_rating: 3.5, // >= 3.5 stars
+                ...customTargets
+            };
+
+            const criteria = [
+                {
+                    name: 'Active Listings Threshold',
+                    key: 'listings',
+                    actual: metrics.listings,
+                    target: targets.min_listings,
+                    passed: metrics.listings >= targets.min_listings,
+                    rule: `>= ${targets.min_listings}`
+                },
+                {
+                    name: 'Request Activity Threshold',
+                    key: 'requests',
+                    actual: metrics.requests,
+                    target: targets.min_requests,
+                    passed: metrics.requests >= targets.min_requests,
+                    rule: `>= ${targets.min_requests}`
+                },
+                {
+                    name: 'Transaction Completion Rate',
+                    key: 'completion_rate',
+                    actual: metrics.completion_rate,
+                    target: targets.min_completion_rate,
+                    passed: metrics.completion_rate >= targets.min_completion_rate,
+                    rule: `>= ${targets.min_completion_rate}%`
+                },
+                {
+                    name: 'Dispute / Report Rate',
+                    key: 'dispute_rate',
+                    actual: metrics.dispute_rate,
+                    target: targets.max_dispute_rate,
+                    passed: metrics.dispute_rate <= targets.max_dispute_rate,
+                    rule: `<= ${targets.max_dispute_rate}%`
+                },
+                {
+                    name: 'Search Discovery Success Rate',
+                    key: 'search_success_rate',
+                    actual: metrics.search_success_rate,
+                    target: targets.min_search_success_rate,
+                    passed: metrics.search_success_rate >= targets.min_search_success_rate,
+                    rule: `>= ${targets.min_search_success_rate}%`
+                },
+                {
+                    name: 'Seed User Satisfaction Rating',
+                    key: 'average_rating',
+                    actual: metrics.average_rating,
+                    target: targets.min_average_rating,
+                    passed: metrics.average_rating >= targets.min_average_rating,
+                    rule: `>= ${targets.min_average_rating} / 5.0`
+                }
+            ];
+
+            const blockers = criteria.filter(c => !c.passed).map(c => `${c.name}: actual ${c.actual} did not meet ${c.rule}`);
+            const allPassed = blockers.length === 0;
+
+            return {
+                decision: allPassed ? 'GO' : 'NO_GO',
+                allPassed,
+                blockers,
+                metrics,
+                criteria,
+                evaluated_at: new Date().toISOString()
+            };
         }
     };
 

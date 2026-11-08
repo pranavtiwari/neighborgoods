@@ -3419,6 +3419,158 @@ await test('Flow 19: Pagination for circles, members, posts, and leaderboards (I
     assert.ok(Array.isArray(legacyCircles), 'getCircles() without opts returns an Array');
 });
 
+await test('Flow 20: Instrument and run soft launch with existing circles (Issue #22)', async () => {
+    const seedCircleId = 'a-world-of-books';
+    const nonSeedCircleId = 'unseeded-neighborhood';
+    const lenderUid = 'lender_' + Math.random().toString(36).substring(2, 9);
+    const borrowerUid = 'borrower_' + Math.random().toString(36).substring(2, 9);
+
+    // Setup profiles
+    for (const u of [lenderUid, borrowerUid]) {
+        firebase.auth().currentUser = { uid: u };
+        await firebase.firestore().collection('profiles').doc(u).set({
+            full_name: `Seed User ${u.substring(0, 4)}`,
+            avatar_url: `https://i.pravatar.cc/150?u=${u}`,
+            carbon_saved_kg: 0,
+            reputation_score: 5.0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        });
+    }
+
+    // 1. Feature Flag Scoping & Cohort Control
+    const flags = await window.db.getFeatureFlags();
+    assert.ok(flags.universal_catalog, 'universal_catalog flag exists');
+    assert.ok(flags.book_pages, 'book_pages flag exists');
+
+    // Seed circle 'a-world-of-books' is enabled
+    assert.strictEqual(window.db.isFeatureEnabled('book_pages', { circleId: seedCircleId }), true, 'Seed circle has book_pages enabled');
+    assert.strictEqual(window.db.isFeatureEnabled('book_pages', { circleId: nonSeedCircleId }), false, 'Non-seed circle has book_pages disabled');
+
+    // Seed user has access
+    assert.strictEqual(window.db.isFeatureEnabled('universal_catalog', { isSeedUser: true }), true, 'Seed user has universal_catalog enabled');
+    assert.strictEqual(window.db.isFeatureEnabled('universal_catalog', { isSeedUser: false, circleId: nonSeedCircleId }), false, 'Non-seed user without seed circle has flag disabled');
+
+    // Dynamic flag update
+    await window.db.setFeatureFlag('universal_catalog', { enabled: true, enabledCircles: ['all'] });
+    assert.strictEqual(window.db.isFeatureEnabled('universal_catalog'), true, 'Dynamically enabled flag takes effect');
+
+    // 2. Lifecycle Instrumentation
+    firebase.auth().currentUser = { uid: lenderUid };
+    const addItemRes = await window.db.addItem({
+        name: 'The Great Gatsby',
+        description: 'Classic American novel in excellent condition',
+        category: 'books',
+        listing_type: 'borrow',
+        visibility: 'public',
+        request_policy: 'anyone',
+        owner_id: lenderUid,
+        circle_id: seedCircleId,
+        is_available: true,
+        address: '123 Seed Street, Booktown'
+    });
+    assert.ok(addItemRes.id, 'Item listed');
+
+    // Verify search executed instrumentation
+    firebase.auth().currentUser = { uid: borrowerUid };
+    const searchRes = await window.db.searchCatalog({ query: 'Gatsby', limit: 5 });
+    assert.ok(searchRes.items.length > 0, 'Found Gatsby in search');
+
+    // Verify request creation instrumentation
+    const reqRes = await window.db.createBorrowRequest({
+        item_id: addItemRes.id,
+        borrower_id: borrowerUid
+    });
+    assert.ok(reqRes.id, 'Borrow request created');
+
+    // Verify request approval instrumentation
+    firebase.auth().currentUser = { uid: lenderUid };
+    await window.db.confirmBorrowRequest(reqRes.id, addItemRes.id);
+
+    // Verify transaction completion instrumentation
+    firebase.auth().currentUser = { uid: borrowerUid };
+    await window.db.markPickedUp(reqRes.id, addItemRes.id);
+    await window.db.markReturned(reqRes.id);
+    firebase.auth().currentUser = { uid: lenderUid };
+    await window.db.confirmReturn(reqRes.id);
+
+    // Verify report submitted instrumentation
+    firebase.auth().currentUser = { uid: borrowerUid };
+    const reportRes = await window.db.submitReport({
+        targetType: 'item',
+        targetId: addItemRes.id,
+        reporterId: borrowerUid,
+        reason: 'minor_wear',
+        details: 'Minor crease on back cover',
+        circle_id: seedCircleId
+    });
+    assert.ok(reportRes.id, 'Report submitted');
+
+    // 3. Seed Feedback Path
+    firebase.auth().currentUser = { uid: borrowerUid };
+    const feedback1 = await window.db.submitSeedFeedback({
+        circle_id: seedCircleId,
+        user_id: borrowerUid,
+        feedback_type: 'usability',
+        rating: 5,
+        comment: 'Borrow and handover flow was very smooth!'
+    });
+    assert.ok(feedback1.id, 'Seed feedback 1 submitted');
+
+    firebase.auth().currentUser = { uid: lenderUid };
+    const feedback2 = await window.db.submitSeedFeedback({
+        circle_id: seedCircleId,
+        user_id: lenderUid,
+        feedback_type: 'catalog',
+        rating: 4,
+        comment: 'Easy listing, would love automatic ISBN barcode scanning next.'
+    });
+    assert.ok(feedback2.id, 'Seed feedback 2 submitted');
+
+    const seedFeedbacks = await window.db.getSeedFeedback(seedCircleId);
+    assert.strictEqual(seedFeedbacks.length, 2, 'Retrieved 2 seed feedbacks for cohort');
+
+    // Rejection on empty comment
+    await assert.rejects(async () => {
+        await window.db.submitSeedFeedback({
+            circle_id: seedCircleId,
+            user_id: lenderUid,
+            comment: '   '
+        });
+    }, /Comment is required/);
+
+    // 4. Soft Launch Cohort Metrics
+    const metrics = await window.db.getSoftLaunchMetrics(seedCircleId);
+    assert.ok(metrics.listings >= 1, 'Metrics tracked listings');
+    assert.ok(metrics.requests >= 1, 'Metrics tracked requests');
+    assert.ok(metrics.approved >= 1, 'Metrics tracked approvals');
+    assert.ok(metrics.completed >= 1, 'Metrics tracked completions');
+    assert.strictEqual(metrics.completion_rate, 100, 'Completion rate is 100%');
+    assert.strictEqual(metrics.feedback_count, 2, 'Tracked 2 feedback entries');
+    assert.strictEqual(metrics.average_rating, 4.5, 'Average rating is (5+4)/2 = 4.5');
+
+    // 5. Go / No-Go Decision Framework
+    // Test with targets that our test run satisfies
+    const goDecision = await window.db.evaluateGoNoGoCriteria(seedCircleId, {
+        min_listings: 1,
+        min_requests: 1,
+        min_completion_rate: 70,
+        max_dispute_rate: 100,
+        min_average_rating: 4.0
+    });
+    assert.strictEqual(goDecision.decision, 'GO', 'Soft launch satisfies criteria for GO');
+    assert.strictEqual(goDecision.allPassed, true);
+    assert.strictEqual(goDecision.blockers.length, 0);
+
+    // Test with targets that fail (e.g. requires 100 listings)
+    const noGoDecision = await window.db.evaluateGoNoGoCriteria(seedCircleId, {
+        min_listings: 100
+    });
+    assert.strictEqual(noGoDecision.decision, 'NO_GO', 'Failing targets return NO_GO');
+    assert.strictEqual(noGoDecision.allPassed, false);
+    assert.ok(noGoDecision.blockers.length > 0, 'Blockers list explains why NO_GO');
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================

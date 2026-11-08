@@ -82,6 +82,8 @@ function enforceDelete(collectionName, docId, data, uid, firestore) {
 
         case 'impact_events':
         case 'transaction_events':
+        case 'analytics_events':
+        case 'seed_feedback':
             // firestore.rules: allow update, delete: if false
             DENY(`${collectionName} are immutable (append-only ledger)`);
 
@@ -106,7 +108,7 @@ function enforceDelete(collectionName, docId, data, uid, firestore) {
 const ENFORCED = new Set([
     'requests', 'items', 'circle_members', 'circle_join_requests',
     'ratings', 'wishlists', 'reports', 'blocks', 'profiles', 'impact_events',
-    'transaction_events'
+    'transaction_events', 'analytics_events', 'seed_feedback'
 ]);
 
 function buildRulesEngine(firestore) {
@@ -477,6 +479,27 @@ function buildRulesEngine(firestore) {
                     }
                 } else {
                     DENY('transaction_events are immutable (append-only ledger)');
+                }
+                return;
+            }
+
+            // ── analytics_events (immutable metrics log) ────────────────────
+            case 'analytics_events': {
+                if (!uid) DENY('not signed in');
+                if (!isCreate) DENY('analytics_events are immutable (append-only log)');
+                if (typeof data.event_type !== 'string' || !data.event_type) {
+                    DENY('event_type is required');
+                }
+                return;
+            }
+
+            // ── seed_feedback (immutable feedback submissions) ─────────────
+            case 'seed_feedback': {
+                if (!uid) DENY('not signed in');
+                if (!isCreate) DENY('seed_feedback is immutable once submitted');
+                if (data.user_id !== uid) DENY('user_id must match authenticated user');
+                if (typeof data.comment !== 'string' || !data.comment) {
+                    DENY('comment is required');
                 }
                 return;
             }
