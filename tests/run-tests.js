@@ -3729,6 +3729,134 @@ await test('Flow 21: Make circles shareable: invite links, view-only landing, an
     global.window.location = originalLocation;
 });
 
+await test('Flow 22: Typesense search integration at catalog threshold, typo tolerance, and resilient fallback (Issue #23)', async () => {
+    // 1. Threshold Configuration & Monitoring
+    const initialConfig = window.db.getTypesenseConfig();
+    assert.strictEqual(typeof initialConfig.threshold, 'number');
+    assert.strictEqual(initialConfig.threshold, 50, 'Default threshold is 50 catalog items');
+
+    // Configure lower threshold for test environment
+    window.TYPESENSE_THRESHOLD = 2;
+    window.TYPESENSE_FORCE_ENABLED = true;
+    const testConfig = window.db.getTypesenseConfig();
+    assert.strictEqual(testConfig.threshold, 2);
+    assert.strictEqual(window.db.isTypesenseEnabled(), true, 'Typesense enabled under custom threshold');
+
+    const statusBefore = window.db.getSearchServiceStatus();
+    assert.strictEqual(statusBefore.enabled, true);
+    assert.strictEqual(statusBefore.provider, 'typesense');
+
+    // 2. Seed catalog books in Firestore and test bulk reindexing
+    const userUid = 'search-tester-' + Math.random().toString(36).substring(2, 7);
+    firebase.auth().currentUser = { uid: userUid };
+
+    const neuroBook = await window.db.createBook({
+        title: 'Neuromancer',
+        authors: ['William Gibson'],
+        isbn: '9780441569595',
+        copies_count: 3,
+        available_copies_count: 2,
+        circle_ids: ['cyberpunk-circle-1']
+    });
+
+    const snowBook = await window.db.createBook({
+        title: 'Snow Crash',
+        authors: ['Neal Stephenson'],
+        isbn: '9780553380958',
+        copies_count: 1,
+        available_copies_count: 0,
+        circle_ids: ['cyberpunk-circle-1', 'cyberpunk-circle-2']
+    });
+
+    const reindexRes = await window.db.reindexCatalogToTypesense();
+    assert.strictEqual(reindexRes.success, true);
+    assert.ok(reindexRes.totalIndexed >= 2, 'Indexed catalog books into Typesense mock index');
+
+    const statusAfter = window.db.getSearchServiceStatus();
+    assert.ok(statusAfter.totalIndexed >= 2);
+    assert.strictEqual(statusAfter.isHealthy, true);
+
+    // 3. Typo-tolerant search
+    // Typo in title: "Neuromancr" -> "Neuromancer"
+    const typoTitleResults = await window.db.searchBooks({ query: 'Neuromancr' });
+    assert.ok(typoTitleResults.length > 0, 'Found book despite title typo');
+    assert.strictEqual(typoTitleResults[0].id, neuroBook.id);
+    assert.strictEqual(typoTitleResults[0].searchProvider, 'typesense');
+
+    // Typo in author: "Gibsn" -> "Neuromancer"
+    const typoAuthorResults = await window.db.searchBooks({ query: 'Gibsn' });
+    assert.ok(typoAuthorResults.length > 0, 'Found book despite author typo');
+    assert.strictEqual(typoAuthorResults[0].id, neuroBook.id);
+
+    // Exact ISBN search
+    const isbnResults = await window.db.searchBooks({ query: '9780441569595' });
+    assert.ok(isbnResults.length > 0, 'Found book by exact ISBN in search index');
+    assert.strictEqual(isbnResults[0].id, neuroBook.id);
+
+    // 4. Availability Ranking & Circle Scoping
+    // "available_only" filter
+    const availOnlyResults = await window.db.searchBooksTypesense({ query: 'Crash', available_only: true });
+    assert.strictEqual(availOnlyResults.length, 0, 'Available-only filter excludes zero-copy books');
+
+    // Circle scoping
+    const circleScoped = await window.db.searchBooksTypesense({ query: 'Crash', circle_id: 'cyberpunk-circle-2' });
+    assert.ok(circleScoped.some(b => b.id === snowBook.id), 'Circle scoped query includes matching circle books');
+    assert.ok(!circleScoped.some(b => b.id === neuroBook.id), 'Circle scoped query excludes non-member circle books');
+
+    // 5. Dynamic Sync on Metadata Update & Duplicate Book Merge
+    // Appoint user as librarian to perform metadata update and merge
+    await firebase.firestore().collection('librarians').doc(userUid).set({ is_active: true });
+    await window.db.updateBookMetadata(neuroBook.id, {
+        title: 'Neuromancer: 40th Anniversary Edition'
+    }, userUid);
+
+    const updatedSearch = await window.db.searchBooks({ query: 'Anniversary' });
+    assert.ok(updatedSearch.length > 0, 'Search index dynamically updated after metadata edit');
+    assert.strictEqual(updatedSearch[0].id, neuroBook.id);
+
+    // Duplicate Book Merge
+    const dupBook = await window.db.createBook({
+        title: 'Neuromancer Duplicate Copy',
+        authors: ['William Gibson'],
+        isbn: '9780441569599'
+    });
+    assert.ok(window.db._typesenseMockIndex.has(dupBook.id), 'Duplicate book indexed prior to merge');
+
+    await window.db.mergeDuplicateBooks(dupBook.id, neuroBook.id, userUid);
+    assert.strictEqual(window.db._typesenseMockIndex.has(dupBook.id), false, 'Source book removed from search index on merge');
+
+    // 6. Resilient Fallback to Firestore Search
+    // Force fallback to Firestore
+    const fallbackResults = await window.db.searchBooks({ query: 'Snow Crash', forceFallback: true });
+    assert.ok(fallbackResults.length > 0, 'Fallback returned results');
+    assert.strictEqual(fallbackResults[0].searchProvider, 'firestore', 'Provider tagged as firestore on fallback');
+
+    // Non-blocking sync resilience: even if index throws, writes succeed
+    const originalSync = window.db.syncBookToSearchIndex;
+    let syncAttempted = false;
+    window.db.syncBookToSearchIndex = async () => {
+        syncAttempted = true;
+        throw new Error('Simulated Typesense Network Outage');
+    };
+
+    // Creating a book should still succeed even if sync throws!
+    let resilientBook = null;
+    resilientBook = await window.db.createBook({
+        title: 'Resilient Catalog Entry',
+        authors: ['Fault Tolerant Author'],
+        isbn: '9780000000001'
+    });
+    assert.ok(resilientBook && resilientBook.id, 'Book created in Firestore despite search sync error');
+    assert.ok(syncAttempted, 'Sync attempt was triggered');
+
+    // Restore sync function
+    window.db.syncBookToSearchIndex = originalSync;
+
+    // Reset test threshold overrides
+    delete window.TYPESENSE_THRESHOLD;
+    delete window.TYPESENSE_FORCE_ENABLED;
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================

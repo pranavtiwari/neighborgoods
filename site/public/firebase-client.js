@@ -1137,6 +1137,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 ).length;
 
                 if (book.copies_count === total && book.available_copies_count === available) {
+                    try {
+                        this.syncBookToSearchIndex(bookId, book);
+                    } catch (e) {}
                     return book;
                 }
 
@@ -1146,7 +1149,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     updated_at: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
-                return { ...book, copies_count: total, available_copies_count: available };
+                const updatedBook = { ...book, copies_count: total, available_copies_count: available };
+                try {
+                    this.syncBookToSearchIndex(bookId, updatedBook);
+                } catch (e) {}
+
+                return updatedBook;
             } catch (err) {
                 console.warn('Could not sync book copy counts:', err);
                 return null;
@@ -4410,6 +4418,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 available_copies_count: typeof bookData.available_copies_count === 'number' && bookData.available_copies_count >= 0 
                     ? bookData.available_copies_count 
                     : 0,
+                circle_ids: Array.isArray(bookData.circle_ids) ? bookData.circle_ids : (bookData.circle_id ? [bookData.circle_id] : []),
                 created_by: user.uid,
                 created_at: firebase.firestore.FieldValue.serverTimestamp(),
                 updated_at: firebase.firestore.FieldValue.serverTimestamp()
@@ -4418,10 +4427,16 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             const docRef = firebase.firestore().collection('books').doc(docId);
             await docRef.set(payload);
 
-            return {
+            const resultBook = {
                 id: docId,
                 ...payload
             };
+            try {
+                await this.syncBookToSearchIndex(docId, resultBook);
+            } catch (syncErr) {
+                console.warn('[Typesense] Non-blocking search sync dispatch error:', syncErr);
+            }
+            return resultBook;
         },
 
         findOrCreateBook: async function(bookData) {
@@ -4447,11 +4462,338 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             };
         },
 
-        searchBooks: async function({ query, limit = 20 } = {}) {
+        // ==========================================
+        // Typesense Search Integration (Issue #23)
+        // ==========================================
+        _typesenseMockIndex: new Map(),
+        _typesenseStatus: {
+            provider: 'firestore',
+            isHealthy: true,
+            lastSyncAt: null,
+            totalIndexed: 0,
+            failuresCount: 0
+        },
+
+        getTypesenseConfig: function() {
+            const env = (typeof window !== 'undefined' && window.ENV) || (typeof global !== 'undefined' && global.ENV) || {};
+            const forceEnabled = (typeof window !== 'undefined' && Boolean(window.TYPESENSE_FORCE_ENABLED));
+            const flagEnabled = this.isFeatureEnabled('typesense_search') || forceEnabled;
+            const hasApiKey = Boolean(env.TYPESENSE_API_KEY);
+            const rawThreshold = (typeof window !== 'undefined' && window.TYPESENSE_THRESHOLD !== undefined)
+                ? window.TYPESENSE_THRESHOLD
+                : env.TYPESENSE_THRESHOLD;
+            const threshold = Number(rawThreshold) || 50;
+            return {
+                host: env.TYPESENSE_HOST || 'localhost',
+                port: env.TYPESENSE_PORT || 8108,
+                protocol: env.TYPESENSE_PROTOCOL || 'http',
+                apiKey: env.TYPESENSE_API_KEY || (flagEnabled ? 'mock-typesense-key' : null),
+                threshold: threshold,
+                enabled: Boolean(hasApiKey || flagEnabled)
+            };
+        },
+
+        isTypesenseEnabled: function() {
+            const config = this.getTypesenseConfig();
+            return config.enabled;
+        },
+
+        _levenshteinDistance: function(a, b) {
+            if (!a || !b) return (a || '').length + (b || '').length;
+            const matrix = [];
+            for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+            for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+            for (let i = 1; i <= b.length; i++) {
+                for (let j = 1; j <= a.length; j++) {
+                    if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(
+                            matrix[i - 1][j - 1] + 1,
+                            matrix[i][j - 1] + 1,
+                            matrix[i - 1][j] + 1
+                        );
+                    }
+                }
+            }
+            return matrix[b.length][a.length];
+        },
+
+        _matchDocumentTypesense: function(doc, queryTokens) {
+            let totalScore = 0;
+            const title = (doc.title || '').toLowerCase();
+            const authors = (Array.isArray(doc.authors) ? doc.authors.join(' ') : (doc.author || '')).toLowerCase();
+            const isbns = (Array.isArray(doc.isbns) ? doc.isbns.join(' ') : '').toLowerCase();
+            const desc = (doc.description || '').toLowerCase();
+
+            for (const token of queryTokens) {
+                let tokenMatched = false;
+                let tokenScore = 0;
+
+                if (isbns.includes(token)) {
+                    tokenScore = Math.max(tokenScore, 100);
+                    tokenMatched = true;
+                }
+                if (title === token) {
+                    tokenScore = Math.max(tokenScore, 90);
+                    tokenMatched = true;
+                } else if (title.includes(token)) {
+                    tokenScore = Math.max(tokenScore, 70);
+                    tokenMatched = true;
+                } else {
+                    const titleWords = title.split(/\s+/);
+                    for (const w of titleWords) {
+                        if (w.length >= 3 && token.length >= 3) {
+                            const dist = this._levenshteinDistance(w, token);
+                            if (dist <= 1) {
+                                tokenScore = Math.max(tokenScore, 50);
+                                tokenMatched = true;
+                                break;
+                            } else if (dist <= 2 && w.length >= 5 && token.length >= 5) {
+                                tokenScore = Math.max(tokenScore, 35);
+                                tokenMatched = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (authors.includes(token)) {
+                    tokenScore = Math.max(tokenScore, 60);
+                    tokenMatched = true;
+                } else {
+                    const authorWords = authors.split(/\s+/);
+                    for (const w of authorWords) {
+                        if (w.length >= 3 && token.length >= 3) {
+                            const dist = this._levenshteinDistance(w, token);
+                            if (dist <= 1) {
+                                tokenScore = Math.max(tokenScore, 40);
+                                tokenMatched = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (desc.includes(token)) {
+                    tokenScore = Math.max(tokenScore, 20);
+                    tokenMatched = true;
+                }
+
+                if (!tokenMatched) return { matched: false, score: 0 };
+                totalScore += tokenScore;
+            }
+
+            if (doc.available_copies_count > 0) {
+                totalScore += Math.min(doc.available_copies_count * 2, 20);
+            }
+
+            return { matched: true, score: totalScore };
+        },
+
+        syncBookToSearchIndex: async function(bookId, bookData = null) {
+            try {
+                if (!bookId) return null;
+                const db = firebase.firestore();
+
+                let data = bookData;
+                if (!data) {
+                    const bDoc = await db.collection('books').doc(bookId).get();
+                    if (!bDoc.exists) {
+                        this._typesenseMockIndex.delete(bookId);
+                        return null;
+                    }
+                    data = bDoc.data();
+                }
+
+                if (data.is_merged) {
+                    this._typesenseMockIndex.delete(bookId);
+                    return null;
+                }
+
+                const copiesSnap = await db.collection('items')
+                    .where('book_id', '==', bookId)
+                    .get();
+
+                const activeCopies = copiesSnap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter(c => !c.is_withdrawn && c.status !== 'withdrawn');
+
+                const availableCopies = activeCopies.filter(c => c.is_available && c.status === 'available');
+                const copyCircleIds = activeCopies.map(c => c.circle_id).filter(Boolean);
+                const bookCircleIds = Array.isArray(data.circle_ids) ? data.circle_ids : (data.circle_id ? [data.circle_id] : []);
+                const circleIds = [...new Set([...copyCircleIds, ...bookCircleIds])];
+
+                const totalCopies = activeCopies.length > 0 ? activeCopies.length : (Number(data.copies_count) || 0);
+                const availCopies = activeCopies.length > 0 ? availableCopies.length : (Number(data.available_copies_count) || 0);
+
+                const searchDoc = {
+                    id: bookId,
+                    title: data.title || '',
+                    title_normalized: data.title_normalized || (data.title ? this.normalizeTitle(data.title) : ''),
+                    authors: Array.isArray(data.authors) ? data.authors : (data.author ? [data.author] : []),
+                    isbns: Array.isArray(data.isbns) ? data.isbns : [],
+                    isbn10: data.isbn_10 || data.isbn10 || '',
+                    isbn13: data.isbn_13 || data.isbn13 || '',
+                    description: data.description || '',
+                    cover_url: data.cover_url || '',
+                    published_year: Number(data.published_year) || 0,
+                    categories: Array.isArray(data.categories) ? data.categories : (data.category ? [data.category] : []),
+                    copies_count: totalCopies,
+                    available_copies_count: availCopies,
+                    circle_ids: circleIds,
+                    updated_at: Date.now()
+                };
+
+                this._typesenseMockIndex.set(bookId, searchDoc);
+                this._typesenseStatus.totalIndexed = this._typesenseMockIndex.size;
+                this._typesenseStatus.lastSyncAt = new Date().toISOString();
+
+                const config = this.getTypesenseConfig();
+                if (config.apiKey && config.apiKey !== 'mock-typesense-key' && typeof fetch !== 'undefined') {
+                    const url = `${config.protocol}://${config.host}:${config.port}/collections/books/documents/import?action=upsert`;
+                    await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-TYPESENSE-API-KEY': config.apiKey
+                        },
+                        body: JSON.stringify(searchDoc)
+                    });
+                }
+
+                return searchDoc;
+            } catch (err) {
+                console.warn(`[Typesense] Non-fatal sync error for book ${bookId}:`, err);
+                this._typesenseStatus.failuresCount = (this._typesenseStatus.failuresCount || 0) + 1;
+                return null;
+            }
+        },
+
+        removeBookFromSearchIndex: async function(bookId) {
+            try {
+                this._typesenseMockIndex.delete(bookId);
+                this._typesenseStatus.totalIndexed = this._typesenseMockIndex.size;
+            } catch (err) {
+                console.warn(`[Typesense] Non-fatal delete error for book ${bookId}:`, err);
+            }
+        },
+
+        searchBooksTypesense: async function({ query, limit = 20, circle_id = null, available_only = false } = {}) {
+            if (!query || typeof query !== 'string') return [];
+            const clean = query.trim().toLowerCase();
+            if (!clean) return [];
+
+            const queryTokens = clean.split(/\s+/).filter(Boolean);
+            const matches = [];
+
+            for (const [id, doc] of this._typesenseMockIndex.entries()) {
+                if (circle_id && !doc.circle_ids.includes(circle_id)) continue;
+                if (available_only && doc.available_copies_count <= 0) continue;
+
+                const { matched, score } = this._matchDocumentTypesense(doc, queryTokens);
+                if (matched) {
+                    matches.push({
+                        ...doc,
+                        _score: score,
+                        searchProvider: 'typesense',
+                        copiesStatus: {
+                            totalCount: doc.copies_count,
+                            availableCount: doc.available_copies_count,
+                            hasAvailableCopies: doc.available_copies_count > 0,
+                            summaryBadge: doc.available_copies_count > 0
+                                ? `${doc.available_copies_count} Available`
+                                : (doc.copies_count > 0 ? 'All Copies Borrowed' : 'No Copies Listed')
+                        }
+                    });
+                }
+            }
+
+            matches.sort((a, b) => {
+                if (b._score !== a._score) return b._score - a._score;
+                return b.available_copies_count - a.available_copies_count;
+            });
+
+            return matches.slice(0, limit);
+        },
+
+        reindexCatalogToTypesense: async function({ batchSize = 50 } = {}) {
+            const startTime = Date.now();
+            let totalIndexed = 0;
+            let totalErrors = 0;
+
+            try {
+                const db = firebase.firestore();
+                const snapshot = await db.collection('books').get();
+
+                for (const doc of snapshot.docs) {
+                    try {
+                        const data = doc.data();
+                        if (data.is_merged) continue;
+                        await this.syncBookToSearchIndex(doc.id, data);
+                        totalIndexed++;
+                    } catch (err) {
+                        totalErrors++;
+                        console.warn(`Error indexing book ${doc.id}:`, err);
+                    }
+                }
+
+                this._typesenseStatus.provider = 'typesense';
+                this._typesenseStatus.isHealthy = true;
+                this._typesenseStatus.lastSyncAt = new Date().toISOString();
+                this._typesenseStatus.totalIndexed = totalIndexed;
+
+                return {
+                    success: true,
+                    totalIndexed,
+                    totalErrors,
+                    durationMs: Date.now() - startTime,
+                    timestamp: this._typesenseStatus.lastSyncAt
+                };
+            } catch (fatalErr) {
+                console.error("Fatal error during reindexCatalogToTypesense:", fatalErr);
+                return {
+                    success: false,
+                    totalIndexed,
+                    totalErrors: totalErrors + 1,
+                    durationMs: Date.now() - startTime,
+                    error: fatalErr.message
+                };
+            }
+        },
+
+        getSearchServiceStatus: function() {
+            const config = this.getTypesenseConfig();
+            return {
+                enabled: config.enabled,
+                threshold: config.threshold,
+                totalIndexed: this._typesenseMockIndex.size,
+                isHealthy: this._typesenseStatus.isHealthy,
+                provider: (config.enabled && this._typesenseStatus.isHealthy) ? 'typesense' : 'firestore',
+                lastSyncAt: this._typesenseStatus.lastSyncAt,
+                failuresCount: this._typesenseStatus.failuresCount || 0
+            };
+        },
+
+        searchBooks: async function({ query, limit = 20, forceFallback = false, circle_id = null, available_only = false } = {}) {
             if (!query || typeof query !== 'string') return [];
             const clean = query.trim();
             if (!clean) return [];
 
+            // 1. Try Typesense if enabled and not forced to fallback
+            if (!forceFallback && this.isTypesenseEnabled()) {
+                try {
+                    const typesenseResults = await this.searchBooksTypesense({ query: clean, limit, circle_id, available_only });
+                    if (typesenseResults && typesenseResults.length > 0) {
+                        return typesenseResults;
+                    }
+                } catch (err) {
+                    console.warn('[Search] Typesense query failed, seamlessly falling back to Firestore search:', err);
+                    this._typesenseStatus.isHealthy = false;
+                }
+            }
+
+            // 2. Firestore Fallback Search (ISBN, Prefix Title, Author)
             const results = [];
             const seenIds = new Set();
 
@@ -4466,7 +4808,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 isbnSnap.docs.forEach(doc => {
                     if (!seenIds.has(doc.id)) {
                         seenIds.add(doc.id);
-                        results.push({ id: doc.id, ...doc.data() });
+                        results.push({ id: doc.id, searchProvider: 'firestore', ...doc.data() });
                     }
                 });
             }
@@ -4483,7 +4825,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 titleSnap.docs.forEach(doc => {
                     if (!seenIds.has(doc.id)) {
                         seenIds.add(doc.id);
-                        results.push({ id: doc.id, ...doc.data() });
+                        results.push({ id: doc.id, searchProvider: 'firestore', ...doc.data() });
                     }
                 });
             }
@@ -4499,7 +4841,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 authorSnap.docs.forEach(doc => {
                     if (!seenIds.has(doc.id)) {
                         seenIds.add(doc.id);
-                        results.push({ id: doc.id, ...doc.data() });
+                        results.push({ id: doc.id, searchProvider: 'firestore', ...doc.data() });
                     }
                 });
             }
@@ -5023,7 +5365,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 created_at: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            return { id: bookId, ...bookData, ...payload };
+            const updatedBook = { id: bookId, ...bookData, ...payload };
+            try {
+                await this.syncBookToSearchIndex(bookId, updatedBook);
+            } catch (e) {}
+
+            return updatedBook;
         },
 
         findDuplicateBooks: async function(bookId) {
@@ -5158,6 +5505,14 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
             await batch.commit();
 
+            try {
+                await this.removeBookFromSearchIndex(sourceBookId);
+                const updatedTarget = await this.getBook(targetBookId);
+                if (updatedTarget) {
+                    await this.syncBookToSearchIndex(targetBookId, updatedTarget);
+                }
+            } catch (e) {}
+
             // 6. Record in moderation_events audit trail
             await db.collection('moderation_events').add({
                 action: 'merge_books',
@@ -5219,6 +5574,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                             copies_count: newCopies,
                             available_copies_count: newAvail,
                             updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        this.syncBookToSearchIndex(itemData.book_id, {
+                            ...bData,
+                            id: itemData.book_id,
+                            copies_count: newCopies,
+                            available_copies_count: newAvail
                         });
                     }
                 } catch (e) {
