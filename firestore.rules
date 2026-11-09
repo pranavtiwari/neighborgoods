@@ -39,6 +39,17 @@ service cloud.firestore {
              in ['pending', 'approved', 'borrowed', 'returned', 'shipped', 'delivered'];
     }
 
+    function isApprovedRequestParticipant(activeRequestId) {
+      return exists(/databases/$(database)/documents/requests/$(activeRequestId))
+        && (
+          get(/databases/$(database)/documents/requests/$(activeRequestId)).data.borrower_id == request.auth.uid
+          || ('participant_ids' in get(/databases/$(database)/documents/requests/$(activeRequestId)).data
+              && request.auth.uid in get(/databases/$(database)/documents/requests/$(activeRequestId)).data.participant_ids)
+        )
+        && get(/databases/$(database)/documents/requests/$(activeRequestId)).data.status
+             in ['approved', 'borrowed', 'shipped', 'delivered', 'returned', 'completed'];
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Item Visibility & Request Policy Helpers (Issue #18)
     // ─────────────────────────────────────────────────────────────────────────
@@ -349,12 +360,8 @@ service cloud.firestore {
           get(/databases/$(database)/documents/items/$(itemId)).data.owner_id == request.auth.uid
           || (
             get(/databases/$(database)/documents/items/$(itemId)).data.keys().hasAny(['active_request_id'])
-            && exists(/databases/$(database)/documents/requests/$(get(/databases/$(database)/documents/items/$(itemId)).data.active_request_id))
-            && ((get(/databases/$(database)/documents/requests/$(get(/databases/$(database)/documents/items/$(itemId)).data.active_request_id)).data.borrower_id == request.auth.uid
-                || ('participant_ids' in get(/databases/$(database)/documents/requests/$(get(/databases/$(database)/documents/items/$(itemId)).data.active_request_id)).data
-                    && request.auth.uid in get(/databases/$(database)/documents/requests/$(get(/databases/$(database)/documents/items/$(itemId)).data.active_request_id)).data.participant_ids))
-            && get(/databases/$(database)/documents/requests/$(get(/databases/$(database)/documents/items/$(itemId)).data.active_request_id)).data.status
-                 in ['approved', 'borrowed', 'shipped', 'delivered', 'returned', 'completed']
+            && get(/databases/$(database)/documents/items/$(itemId)).data.active_request_id is string
+            && isApprovedRequestParticipant(get(/databases/$(database)/documents/items/$(itemId)).data.active_request_id)
           )
         );
 
