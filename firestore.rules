@@ -247,13 +247,21 @@ service cloud.firestore {
 
       allow delete: if request.auth != null && (
         resource.data.profile_id == request.auth.uid ||
-        get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid
+        get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid ||
+        (exists(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid))
+         && get(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid)).data.role == 'admin'
+         && resource.data.profile_id != get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by)
       );
 
-      // Only circle creator may update memberships (e.g. change role)
+      // Circle creator and admins may update memberships (e.g. change role)
       // Identity fields (circle_id, profile_id) are immutable after creation
       allow update: if request.auth != null
-        && get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid
+        && (
+          get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid
+          || (exists(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid))
+              && get(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid)).data.role == 'admin'
+              && resource.data.profile_id != get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by)
+        )
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['circle_id', 'profile_id'])
         && (!('role' in request.resource.data) || request.resource.data.role in ['member', 'librarian', 'admin']);
     }

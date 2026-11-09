@@ -61,13 +61,24 @@
             <!-- Circle Name -->
             <div>
                 <label class="block text-sm font-bold mb-2">Circle Name</label>
-                <input type="text" id="circle-name" required placeholder="e.g. Oak Street Gardeners" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
+                <input type="text" id="circle-name" required placeholder="e.g. Palm Meadows Commons, Oak Street Tool Library, Elmwood Bookshelf" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
+            </div>
+
+            <!-- Circle Type -->
+            <div>
+                <label class="block text-sm font-bold mb-2">Circle Focus</label>
+                <select id="circle-type" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base">
+                    <option value="neighborhood" selected>Neighborhood Commons (Share anything: tools, appliances, gear, household goods, books)</option>
+                    <option value="library">Community Bookshelf & Library (Books, catalog matching & literature)</option>
+                    <option value="specialized">Specialized Group (Gardening, toys, maker tools, hobbyists)</option>
+                </select>
+                <p class="text-xs text-stone-500 mt-1.5 px-1">Neighborhood circles allow sharing any item category with your neighbors.</p>
             </div>
 
             <!-- Description -->
             <div>
                 <label class="block text-sm font-bold mb-2">Description</label>
-                <textarea id="circle-description" rows="4" placeholder="What is this circle about? Who is it for?" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base resize-none"></textarea>
+                <textarea id="circle-description" rows="4" placeholder="What is this circle about? Who is it for? (e.g. A neighborhood sharing hub for tools, household items, camping gear, and books)" class="w-full bg-surface-container rounded-xl border-none focus:ring-2 focus:ring-primary py-4 px-4 shadow-inner text-base resize-none"></textarea>
             </div>
 
             <!-- Privacy -->
@@ -136,6 +147,7 @@
                 if (!session) return;
 
                 const name = document.getElementById('circle-name').value;
+                const circleType = document.getElementById('circle-type').value;
                 const description = document.getElementById('circle-description').value;
                 const isPrivate = document.getElementById('circle-private').checked;
 
@@ -153,6 +165,8 @@
                 // 2. Create Circle (this also adds the creator as admin)
                 const circle = await window.db.createCircle({
                     name: name,
+                    circle_type: circleType,
+                    category: circleType === 'library' ? 'books' : (circleType === 'neighborhood' ? 'all' : 'specialized'),
                     description: description,
                     image_url: imageUrl,
                     is_private: isPrivate

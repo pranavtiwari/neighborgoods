@@ -50,11 +50,14 @@ function enforceDelete(collectionName, docId, data, uid, firestore) {
             DENY('ratings are immutable once created');
 
         case 'circle_members': {
-            // firestore.rules:75-78
+            // firestore.rules:237-240
             const circleDoc = firestore._getData('circles', data.circle_id);
             const isCreator = circleDoc && circleDoc.created_by === uid;
-            if (data.profile_id !== uid && !isCreator) {
-                DENY('only the member or the circle creator may remove a membership');
+            const callerMem = firestore._getData('circle_members', `${data.circle_id}_${uid}`);
+            const isCallerAdmin = callerMem && callerMem.role === 'admin';
+            const isTargetCreator = circleDoc && circleDoc.created_by === data.profile_id;
+            if (data.profile_id !== uid && !isCreator && !(isCallerAdmin && !isTargetCreator)) {
+                DENY('only the member, circle creator, or circle admin may remove a membership');
             }
             return;
         }
@@ -308,8 +311,12 @@ function buildRulesEngine(firestore) {
                 } else {
                     const circleDoc = firestore._getData('circles', prior.circle_id);
                     const isCreator = circleDoc && circleDoc.created_by === uid;
-                    const isSelf = prior.profile_id === uid;
-                    if (!isCreator) DENY('only the circle creator may update memberships');
+                    const callerMem = firestore._getData('circle_members', `${prior.circle_id}_${uid}`);
+                    const isCallerAdmin = callerMem && callerMem.role === 'admin';
+                    const isTargetCreator = circleDoc && circleDoc.created_by === prior.profile_id;
+                    if (!isCreator && !(isCallerAdmin && !isTargetCreator)) {
+                        DENY('only circle creator or circle admins may update memberships');
+                    }
                     if (data.circle_id !== prior.circle_id || data.profile_id !== prior.profile_id) {
                         DENY('circle_id / profile_id are immutable');
                     }

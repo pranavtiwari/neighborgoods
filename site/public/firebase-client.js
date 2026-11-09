@@ -5452,6 +5452,87 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             }
         },
 
+        setCircleMemberRole: async function(circleId, targetUserId, newRole, callerUid = null) {
+            const currentUid = callerUid || firebase.auth().currentUser?.uid;
+            if (!currentUid) throw new Error('Authentication required to manage circle roles');
+            if (!circleId) throw new Error('Circle ID required');
+            if (!targetUserId) throw new Error('Target user ID required');
+            const validRoles = ['admin', 'librarian', 'member'];
+            if (!validRoles.includes(newRole)) {
+                throw new Error(`Invalid role: ${newRole}. Must be one of: ${validRoles.join(', ')}`);
+            }
+
+            try {
+                const circleDoc = await firebase.firestore().collection('circles').doc(circleId).get();
+                if (!circleDoc.exists) throw new Error('Circle not found');
+                const circleData = circleDoc.data();
+                const isCreator = circleData.created_by === currentUid;
+
+                let isCallerAdmin = isCreator;
+                if (!isCallerAdmin) {
+                    const callerMembership = await firebase.firestore().collection('circle_members').doc(`${circleId}_${currentUid}`).get();
+                    if (callerMembership.exists && callerMembership.data().role === 'admin') {
+                        isCallerAdmin = true;
+                    }
+                }
+
+                if (!isCallerAdmin) {
+                    throw new Error('Only circle creator or circle admins can manage member roles in this circle');
+                }
+
+                if (targetUserId === circleData.created_by && newRole !== 'admin') {
+                    throw new Error('Circle creator role cannot be modified');
+                }
+
+                const memRef = firebase.firestore().collection('circle_members').doc(`${circleId}_${targetUserId}`);
+                const memDoc = await memRef.get();
+                if (!memDoc.exists) {
+                    throw new Error('Member not found in this circle');
+                }
+
+                const previousRole = memDoc.data().role || 'member';
+
+                await memRef.set({
+                    circle_id: circleId,
+                    profile_id: targetUserId,
+                    role: newRole,
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+
+                if (newRole === 'librarian') {
+                    await firebase.firestore().collection('librarians').doc(targetUserId).set({
+                        profile_id: targetUserId,
+                        circle_id: circleId,
+                        appointed_by: currentUid,
+                        is_active: true,
+                        appointed_at: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                } else if (previousRole === 'librarian' && newRole !== 'librarian') {
+                    await firebase.firestore().collection('librarians').doc(targetUserId).set({
+                        is_active: false,
+                        removed_by: currentUid,
+                        removed_at: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                }
+
+                await firebase.firestore().collection('moderation_events').add({
+                    action: `set_member_role_${newRole}`,
+                    actor_id: currentUid,
+                    target_type: 'user',
+                    target_id: targetUserId,
+                    circle_id: circleId,
+                    previous_role: previousRole,
+                    new_role: newRole,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                return { success: true, circleId, targetUserId, role: newRole, previousRole };
+            } catch (err) {
+                console.error('Error setting circle member role:', err);
+                throw err;
+            }
+        },
+
         updateBookMetadata: async function(bookId, updates, editorUserId = null) {
             const currentUid = editorUserId || firebase.auth().currentUser?.uid;
             if (!currentUid) throw new Error('Authentication required to update book metadata');

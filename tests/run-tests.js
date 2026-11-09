@@ -4196,6 +4196,100 @@ await test('Flow 25: Public rollout: synthetic load test, privacy audit, and glo
     assert.strictEqual(window.db.isPublicCatalogEnabled(), true, 'Catalog is live for launch');
 });
 
+await test('Flow 26: General circle role management (Make Admin, Remove Admin, Librarian, Creator protection)', async () => {
+    const creatorUid = 'circle_creator_' + Date.now();
+    const memberUid = 'circle_member_' + Date.now();
+    const neighborUid = 'circle_neighbor_' + Date.now();
+    const strangerUid = 'circle_stranger_' + Date.now();
+
+    // 1. Create a neighborhood circle (e.g. Palm Meadows)
+    firebase.auth().currentUser = { uid: creatorUid };
+    const circle = await window.db.createCircle({
+        name: 'Palm Meadows Community Hub',
+        circle_type: 'neighborhood',
+        category: 'all',
+        description: 'Neighborhood sharing hub for all household items, tools, lawnmowers, and books'
+    }, creatorUid);
+
+    // Verify creator is automatically admin
+    const creatorMem = await window.db.getCircleMembership(circle.id, creatorUid);
+    assert.strictEqual(creatorMem.role, 'admin', 'Creator has admin role');
+
+    // 2. Members join the circle
+    firebase.auth().currentUser = { uid: memberUid };
+    await window.db.joinCircle(circle.id, memberUid);
+    const initialMember = await window.db.getCircleMembership(circle.id, memberUid);
+    assert.strictEqual(initialMember.role, 'member', 'New member defaults to member role');
+
+    firebase.auth().currentUser = { uid: neighborUid };
+    await window.db.joinCircle(circle.id, neighborUid);
+
+    // 3. Unauthorized stranger cannot manage roles
+    firebase.auth().currentUser = { uid: strangerUid };
+    await assert.rejects(async () => {
+        await window.db.setCircleMemberRole(circle.id, memberUid, 'admin', strangerUid);
+    }, /Only circle creator or circle admins/);
+
+    // 4. Circle creator promotes member to Admin ("Make Admin")
+    firebase.auth().currentUser = { uid: creatorUid };
+    const promoteRes = await window.db.setCircleMemberRole(circle.id, memberUid, 'admin', creatorUid);
+    assert.strictEqual(promoteRes.success, true);
+    assert.strictEqual(promoteRes.role, 'admin');
+
+    const updatedMember = await window.db.getCircleMembership(circle.id, memberUid);
+    assert.strictEqual(updatedMember.role, 'admin', 'Member successfully promoted to Admin');
+
+    // 5. Appointed admin can promote another member to Admin
+    firebase.auth().currentUser = { uid: memberUid };
+    await window.db.setCircleMemberRole(circle.id, neighborUid, 'admin', memberUid);
+    const updatedNeighbor = await window.db.getCircleMembership(circle.id, neighborUid);
+    assert.strictEqual(updatedNeighbor.role, 'admin', 'Appointed admin can promote neighbor to Admin');
+
+    // 6. Creator protection: non-creator admin cannot modify creator's role
+    firebase.auth().currentUser = { uid: memberUid };
+    await assert.rejects(async () => {
+        await window.db.setCircleMemberRole(circle.id, creatorUid, 'member', memberUid);
+    }, /Circle creator role cannot be modified/);
+
+    // 7. Creator demotes appointed admin back to Member ("Remove Admin")
+    firebase.auth().currentUser = { uid: creatorUid };
+    const demoteRes = await window.db.setCircleMemberRole(circle.id, memberUid, 'member', creatorUid);
+    assert.strictEqual(demoteRes.success, true);
+    assert.strictEqual(demoteRes.role, 'member');
+
+    const demotedMember = await window.db.getCircleMembership(circle.id, memberUid);
+    assert.strictEqual(demotedMember.role, 'member', 'Admin demoted back to Member');
+
+    // 8. Librarian promotion and removal in book/library circles
+    const bookCircle = await window.db.createCircle({
+        name: 'Book Shelf Universal Commons',
+        circle_type: 'library',
+        category: 'books',
+        description: 'Universal community library circle'
+    }, creatorUid);
+
+    firebase.auth().currentUser = { uid: memberUid };
+    await window.db.joinCircle(bookCircle.id, memberUid);
+
+    // Creator appoints librarian
+    firebase.auth().currentUser = { uid: creatorUid };
+    await window.db.setCircleMemberRole(bookCircle.id, memberUid, 'librarian', creatorUid);
+    const libMem = await window.db.getCircleMembership(bookCircle.id, memberUid);
+    assert.strictEqual(libMem.role, 'librarian', 'Member appointed as Librarian');
+    assert.strictEqual(await window.db.isLibrarian(memberUid, bookCircle.id), true, 'Librarian status verified');
+
+    // Remove librarian
+    await window.db.setCircleMemberRole(bookCircle.id, memberUid, 'member', creatorUid);
+    const revertedMem = await window.db.getCircleMembership(bookCircle.id, memberUid);
+    assert.strictEqual(revertedMem.role, 'member', 'Librarian demoted back to Member');
+    assert.strictEqual(await window.db.isLibrarian(memberUid, bookCircle.id), false, 'Librarian status deactivated');
+
+    // 9. Invalid role validation
+    await assert.rejects(async () => {
+        await window.db.setCircleMemberRole(bookCircle.id, memberUid, 'super_user', creatorUid);
+    }, /Invalid role/);
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================
