@@ -1110,9 +1110,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 return 'giveaway';
             }
             if (raw === 'rental' || raw === 'free' || raw === 'lend' || raw === 'loan') return 'borrow';
-            if (raw === 'donate' || raw === 'donation') return 'giveaway';
+            if (raw === 'donate' || raw === 'donation' || raw === 'give' || raw === 'gift' || raw === 'giveaway') return 'giveaway';
             if (raw === 'swap' || raw === 'trade') return 'swap';
-            if (raw === 'giveaway') return 'giveaway';
             return 'borrow';
         },
 
@@ -1282,6 +1281,14 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
 
                 if (doc.book_id) {
                     await this.syncBookCopyCounts(doc.book_id);
+                }
+
+                if (doc.kind === 'book' || doc.book_id) {
+                    try {
+                        await this.checkAndNotifyWantListMatches({ id: ref.id, ...doc });
+                    } catch (wantErr) {
+                        console.warn('[WantList] Non-blocking match check error:', wantErr);
+                    }
                 }
 
                 await this.logAnalyticsEvent('listing_created', {
@@ -3475,6 +3482,20 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     }
                 } catch (notifErr) {
                     console.warn('[Notifications] Non-fatal notification error on transaction_completed:', notifErr);
+                }
+
+                if (completedItemId) {
+                    try {
+                        const itemDocSnap = await firebase.firestore().collection('items').doc(completedItemId).get();
+                        if (itemDocSnap.exists) {
+                            const retData = itemDocSnap.data();
+                            if ((retData.kind === 'book' || retData.book_id) && retData.is_available !== false && retData.status === 'available') {
+                                await this.checkAndNotifyWantListMatches({ id: completedItemId, ...retData });
+                            }
+                        }
+                    } catch (wantErr) {
+                        console.warn('[WantList] Non-blocking return match check error:', wantErr);
+                    }
                 }
 
                 return { credited: beneficiaries.length };
@@ -6526,6 +6547,504 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     remindersSent,
                     error: err.message
                 };
+            }
+        },
+
+        // ==========================================
+        // Supply-Growth Tools (Issue #25)
+        // ==========================================
+
+        cleanIsbn: function(raw) {
+            if (!raw) return '';
+            let s = String(raw).trim();
+            if (s.startsWith('=')) {
+                s = s.substring(1).trim();
+            }
+            if (s.startsWith('"') && s.endsWith('"')) {
+                s = s.substring(1, s.length - 1).trim();
+            }
+            return s.replace(/[^0-9Xx]/g, '').toUpperCase();
+        },
+
+        parseCsvRows: function(csvText) {
+            const rows = [];
+            let currentRow = [];
+            let currentField = '';
+            let inQuotes = false;
+            let i = 0;
+            const text = String(csvText || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            while (i < text.length) {
+                const char = text[i];
+                if (char === '"') {
+                    if (inQuotes && text[i + 1] === '"') {
+                        currentField += '"';
+                        i += 2;
+                        continue;
+                    }
+                    inQuotes = !inQuotes;
+                    i++;
+                } else if (char === ',' && !inQuotes) {
+                    currentRow.push(currentField);
+                    currentField = '';
+                    i++;
+                } else if (char === '\n' && !inQuotes) {
+                    currentRow.push(currentField);
+                    rows.push(currentRow);
+                    currentRow = [];
+                    currentField = '';
+                    i++;
+                } else {
+                    currentField += char;
+                    i++;
+                }
+            }
+            if (currentField.length > 0 || currentRow.length > 0) {
+                currentRow.push(currentField);
+                rows.push(currentRow);
+            }
+            return rows;
+        },
+
+        parseShelfCsv: function(csvText) {
+            const rows = this.parseCsvRows(csvText);
+            if (!rows || rows.length < 2) {
+                return {
+                    success: false,
+                    candidates: [],
+                    totalParsed: 0,
+                    skippedDuplicates: 0,
+                    isGoodreads: false,
+                    error: 'CSV contains no data rows'
+                };
+            }
+
+            const headerRow = rows[0].map(h => (h || '').trim().toLowerCase());
+            const isGoodreads = headerRow.includes('book id') || (headerRow.includes('title') && headerRow.includes('author l-f'));
+
+            const colIndex = (names) => {
+                for (const name of names) {
+                    const idx = headerRow.indexOf(name.toLowerCase());
+                    if (idx !== -1) return idx;
+                }
+                return -1;
+            };
+
+            const idxTitle = colIndex(['title', 'book title', 'name']);
+            const idxAuthor = colIndex(['author', 'author l-f', 'authors', 'creator']);
+            const idxIsbn13 = colIndex(['isbn13', 'isbn-13']);
+            const idxIsbn = colIndex(['isbn', 'isbn10', 'isbn-10']);
+            const idxPublisher = colIndex(['publisher']);
+            const idxYear = colIndex(['year published', 'original publication year', 'year', 'publication year']);
+            const idxShelf = colIndex(['exclusive shelf', 'bookshelves', 'shelf']);
+            const idxCondition = colIndex(['condition', 'condition_grade']);
+            const idxListingType = colIndex(['listing_type', 'type', 'intent']);
+
+            if (idxTitle === -1) {
+                return {
+                    success: false,
+                    candidates: [],
+                    totalParsed: 0,
+                    skippedDuplicates: 0,
+                    isGoodreads,
+                    error: 'Missing required "Title" column in CSV'
+                };
+            }
+
+            const candidates = [];
+            const seenKeys = new Set();
+            let skippedDuplicates = 0;
+
+            for (let r = 1; r < rows.length; r++) {
+                const row = rows[r];
+                if (!row || row.every(cell => !cell.trim())) continue;
+
+                const rawTitle = idxTitle !== -1 ? (row[idxTitle] || '').trim() : '';
+                if (!rawTitle) continue;
+
+                const rawAuthor = idxAuthor !== -1 ? (row[idxAuthor] || '').trim() : '';
+                const rawIsbn13 = idxIsbn13 !== -1 ? this.cleanIsbn(row[idxIsbn13]) : '';
+                const rawIsbn = idxIsbn !== -1 ? this.cleanIsbn(row[idxIsbn]) : '';
+                const cleanIsbnVal = rawIsbn13 || rawIsbn || '';
+
+                const publisher = idxPublisher !== -1 ? (row[idxPublisher] || '').trim() : '';
+                const year = idxYear !== -1 ? (row[idxYear] || '').trim() : '';
+                const shelf = idxShelf !== -1 ? (row[idxShelf] || '').trim() : '';
+                const rawCondition = idxCondition !== -1 ? (row[idxCondition] || '').trim().toLowerCase() : '';
+                const rawListingType = idxListingType !== -1 ? (row[idxListingType] || '').trim().toLowerCase() : '';
+
+                const dedupKey = cleanIsbnVal
+                    ? `isbn:${cleanIsbnVal}`
+                    : `title:${rawTitle.toLowerCase()}|author:${rawAuthor.toLowerCase()}`;
+
+                if (seenKeys.has(dedupKey)) {
+                    skippedDuplicates++;
+                    continue;
+                }
+                seenKeys.add(dedupKey);
+
+                let condition = null;
+                if (['like_new', 'very_good', 'good', 'fair', 'poor'].includes(rawCondition)) {
+                    condition = rawCondition;
+                } else if (rawCondition.includes('like new') || rawCondition.includes('mint')) {
+                    condition = 'like_new';
+                } else if (rawCondition.includes('very good')) {
+                    condition = 'very_good';
+                } else if (rawCondition.includes('fair')) {
+                    condition = 'fair';
+                } else if (rawCondition.includes('poor')) {
+                    condition = 'poor';
+                }
+
+                let listingType = null;
+                if (['lend', 'give', 'giveaway'].includes(rawListingType)) {
+                    listingType = (rawListingType === 'giveaway') ? 'give' : rawListingType;
+                }
+
+                candidates.push({
+                    title: rawTitle,
+                    author: rawAuthor,
+                    authors: rawAuthor ? [rawAuthor] : [],
+                    isbn: cleanIsbnVal,
+                    isbn10: rawIsbn.length === 10 ? rawIsbn : '',
+                    isbn13: rawIsbn13.length === 13 ? rawIsbn13 : (rawIsbn.length === 13 ? rawIsbn : ''),
+                    publisher,
+                    year: year ? parseInt(year, 10) || year : '',
+                    condition,
+                    listing_type: listingType,
+                    shelf,
+                    source: isGoodreads ? 'goodreads' : 'standard_csv'
+                });
+
+                if (candidates.length >= 100) {
+                    break;
+                }
+            }
+
+            return {
+                success: true,
+                candidates,
+                totalParsed: candidates.length,
+                skippedDuplicates,
+                isGoodreads
+            };
+        },
+
+        bulkImportShelfCopies: async function(candidates, options = {}) {
+            const {
+                circle_id = null,
+                defaultListingType = 'lend',
+                defaultCondition = 'good',
+                ownerId: customOwnerId = null
+            } = options;
+
+            const currentUser = firebase.auth().currentUser;
+            const ownerId = customOwnerId || (currentUser ? currentUser.uid : null);
+            if (!ownerId) {
+                throw new Error('User must be authenticated to import book copies.');
+            }
+
+            const copyIds = [];
+            const errors = [];
+            let skippedCount = 0;
+
+            const toImport = (candidates || []).slice(0, 100);
+
+            for (const item of toImport) {
+                try {
+                    const isbns = [item.isbn13, item.isbn10, item.isbn].filter(Boolean);
+                    const authors = Array.isArray(item.authors) && item.authors.length > 0
+                        ? item.authors
+                        : (item.author ? [item.author] : []);
+
+                    const canonicalResult = await this.findOrCreateBook({
+                        title: item.title,
+                        authors: authors,
+                        isbns: isbns,
+                        publisher: item.publisher || '',
+                        published_date: item.year ? String(item.year) : '',
+                        circle_id: circle_id || null
+                    });
+
+                    const book = canonicalResult.book;
+                    if (!book || !book.id) {
+                        throw new Error(`Failed to resolve canonical book for "${item.title}"`);
+                    }
+
+                    const itemPayload = {
+                        kind: 'book',
+                        book_id: book.id,
+                        name: item.title,
+                        author: authors.join(', '),
+                        isbn13: isbns[0] || '',
+                        condition: item.condition || defaultCondition || 'good',
+                        condition_grade: item.condition || defaultCondition || 'good',
+                        listing_type: item.listing_type || defaultListingType || 'lend',
+                        owner_id: ownerId,
+                        circle_id: circle_id || null,
+                        circle_ids: circle_id ? [circle_id] : [],
+                        visibility: circle_id ? 'circles' : 'public',
+                        visibility_scope: circle_id ? 'circles' : 'world_of_books',
+                        request_policy: 'anyone',
+                        status: 'available',
+                        is_available: true
+                    };
+
+                    const added = await this.addItem(itemPayload);
+                    copyIds.push(added.id);
+                } catch (err) {
+                    console.warn(`Failed to import book copy "${item.title}":`, err);
+                    errors.push({ title: item.title, error: err.message });
+                    skippedCount++;
+                }
+            }
+
+            return {
+                importedCount: copyIds.length,
+                skippedCount,
+                copyIds,
+                errors
+            };
+        },
+
+        createBookCopyFromScannedIsbn: async function(rawIsbn, options = {}) {
+            const {
+                circle_id = null,
+                condition = 'good',
+                listing_type = 'lend',
+                ownerId: customOwnerId = null
+            } = options;
+
+            const currentUser = firebase.auth().currentUser;
+            const ownerId = customOwnerId || (currentUser ? currentUser.uid : null);
+            if (!ownerId) {
+                throw new Error('User must be authenticated to scan and list a book.');
+            }
+
+            const cleanIsbn = this.cleanIsbn(rawIsbn);
+            if (!cleanIsbn) {
+                throw new Error('Valid ISBN is required');
+            }
+
+            let bookData = null;
+            try {
+                const existingBook = await this.findBook({ isbn: cleanIsbn });
+                if (existingBook) {
+                    bookData = existingBook;
+                }
+            } catch (findErr) {
+                console.warn('[Scanner] Existing book lookup failed:', findErr);
+            }
+
+            if (!bookData) {
+                try {
+                    const lookup = await this.lookupBookMetadata({ isbn: cleanIsbn });
+                    if (lookup && lookup.items && lookup.items.length > 0) {
+                        const meta = lookup.items[0];
+                        const res = await this.findOrCreateBook({
+                            title: meta.title,
+                            authors: meta.authors || (meta.author ? [meta.author] : []),
+                            isbns: [cleanIsbn, ...(meta.isbns || [])],
+                            cover_image_url: meta.cover_image_url || meta.thumbnail || '',
+                            description: meta.description || '',
+                            publisher: meta.publisher || '',
+                            published_date: meta.published_date || '',
+                            circle_id: circle_id || null
+                        });
+                        bookData = res.book;
+                    }
+                } catch (metaErr) {
+                    console.warn('[Scanner] Metadata lookup failed, using fallback:', metaErr);
+                }
+            }
+
+            if (!bookData) {
+                const res = await this.findOrCreateBook({
+                    title: `Book (ISBN: ${cleanIsbn})`,
+                    authors: ['Unknown Author'],
+                    isbns: [cleanIsbn],
+                    circle_id: circle_id || null
+                });
+                bookData = res.book;
+            }
+
+            const authorsStr = Array.isArray(bookData.authors)
+                ? bookData.authors.join(', ')
+                : (bookData.authors || 'Unknown Author');
+
+            const normalizedListingType = this.normalizeListingType(listing_type || 'lend');
+
+            const itemPayload = {
+                kind: 'book',
+                book_id: bookData.id,
+                name: bookData.title,
+                author: authorsStr,
+                isbn13: cleanIsbn,
+                condition: condition || 'good',
+                condition_grade: condition || 'good',
+                listing_type: normalizedListingType,
+                owner_id: ownerId,
+                circle_id: circle_id || null,
+                circle_ids: circle_id ? [circle_id] : [],
+                visibility: circle_id ? 'circles' : 'public',
+                visibility_scope: circle_id ? 'circles' : 'world_of_books',
+                request_policy: 'anyone',
+                status: 'available',
+                is_available: true
+            };
+
+            const added = await this.addItem(itemPayload);
+
+            return {
+                success: true,
+                item: { id: added.id, ...itemPayload },
+                book: bookData
+            };
+        },
+
+        addToWantList: async function({ bookId = null, isbn = null, title = '', author = '', circle_id = null, notifyOnAvailable = true } = {}) {
+            const user = firebase.auth().currentUser;
+            if (!user) {
+                throw new Error('User must be signed in to add to want list');
+            }
+
+            const cleanIsbnVal = isbn ? this.cleanIsbn(isbn) : null;
+            if (!bookId && !cleanIsbnVal && !title) {
+                throw new Error('Must provide at least a bookId, isbn, or title for the want list');
+            }
+
+            let profileName = 'Neighbor';
+            try {
+                const profile = await this.getProfile(user.uid);
+                if (profile && profile.full_name) {
+                    profileName = profile.full_name;
+                }
+            } catch (err) {
+                console.warn('Could not fetch profile for want list:', err);
+            }
+
+            const wantDoc = {
+                profile_id: user.uid,
+                profile_name: profileName,
+                book_id: bookId || null,
+                isbn: cleanIsbnVal || null,
+                title: (title || '').trim(),
+                author: (author || '').trim(),
+                circle_id: circle_id || null,
+                notify_on_available: notifyOnAvailable !== false,
+                created_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            const ref = firebase.firestore().collection('wishlists').doc();
+            await ref.set(wantDoc);
+
+            await this.logAnalyticsEvent('want_list_added', {
+                want_id: ref.id,
+                book_id: bookId || null,
+                isbn: cleanIsbnVal || null,
+                circle_id: circle_id || null
+            });
+
+            return {
+                id: ref.id,
+                ...wantDoc
+            };
+        },
+
+        getUserWantList: async function(userId = null) {
+            const uid = userId || (firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
+            if (!uid) return [];
+
+            const snapshot = await firebase.firestore().collection('wishlists')
+                .where('profile_id', '==', uid)
+                .get();
+
+            const results = [];
+            snapshot.forEach(doc => {
+                results.push({ id: doc.id, ...doc.data() });
+            });
+            return results;
+        },
+
+        removeFromWantList: async function(wantId) {
+            const user = firebase.auth().currentUser;
+            if (!user) {
+                throw new Error('User must be signed in to remove from want list');
+            }
+            if (!wantId) {
+                throw new Error('wantId is required');
+            }
+            await firebase.firestore().collection('wishlists').doc(wantId).delete();
+            return { success: true, id: wantId };
+        },
+
+        checkAndNotifyWantListMatches: async function(copyData, bookData = null) {
+            if (!copyData || copyData.is_available === false || copyData.status === 'borrowed' || copyData.status === 'completed') {
+                return { matchedCount: 0, notifiedCount: 0 };
+            }
+
+            try {
+                const snapshot = await firebase.firestore().collection('wishlists').get();
+                if (!snapshot || snapshot.empty) {
+                    return { matchedCount: 0, notifiedCount: 0 };
+                }
+
+                const matches = [];
+                const copyBookId = copyData.book_id || (bookData ? bookData.id : null);
+                const copyIsbn = copyData.isbn13 ? this.cleanIsbn(copyData.isbn13) : null;
+                const copyTitle = (copyData.name || (bookData ? bookData.title : '')).trim().toLowerCase();
+                const copyCircleId = copyData.circle_id || null;
+                const copyOwnerId = copyData.owner_id || null;
+
+                snapshot.forEach(doc => {
+                    const want = { id: doc.id, ...doc.data() };
+                    if (want.notify_on_available === false) return;
+                    if (want.profile_id === copyOwnerId) return;
+
+                    if (want.circle_id && copyCircleId && want.circle_id !== copyCircleId) {
+                        return;
+                    }
+
+                    let isMatch = false;
+                    if (want.book_id && copyBookId && want.book_id === copyBookId) {
+                        isMatch = true;
+                    } else if (want.isbn && copyIsbn && want.isbn === copyIsbn) {
+                        isMatch = true;
+                    } else if (want.isbn && bookData && Array.isArray(bookData.isbns) && bookData.isbns.some(isbn => this.cleanIsbn(isbn) === want.isbn)) {
+                        isMatch = true;
+                    } else if (want.title && copyTitle && want.title.trim().toLowerCase() === copyTitle) {
+                        isMatch = true;
+                    }
+
+                    if (isMatch) {
+                        matches.push(want);
+                    }
+                });
+
+                let notifiedCount = 0;
+                for (const match of matches) {
+                    try {
+                        await this.dispatchNotification({
+                            recipientId: match.profile_id,
+                            actorId: copyOwnerId || 'system',
+                            type: 'want_list_match',
+                            title: 'Book on your want list is now available!',
+                            body: `"${copyData.name || 'A book you were looking for'}" is now available to borrow.`,
+                            actionUrl: copyBookId ? `/book-detail.html?id=${copyBookId}` : `/item-details.html?id=${copyData.id}`,
+                            bookId: copyBookId || null,
+                            itemId: copyData.id || null,
+                            circleId: copyCircleId || null,
+                            dedupKey: `want_${match.profile_id}_${copyData.id || copyBookId}`
+                        });
+                        notifiedCount++;
+                    } catch (notifErr) {
+                        console.warn('[WantList] Error dispatching match notification:', notifErr);
+                    }
+                }
+
+                return { matchedCount: matches.length, notifiedCount };
+            } catch (err) {
+                console.warn('[WantList] Non-blocking checkAndNotifyWantListMatches error:', err);
+                return { matchedCount: 0, notifiedCount: 0, error: err.message };
             }
         }
     };

@@ -524,6 +524,19 @@ function buildRulesEngine(firestore) {
                 return;
             }
 
+            // ── wishlists / want lists (Issue #25) ─────────────────────────
+            case 'wishlists': {
+                if (!uid) DENY('not signed in');
+                if (isCreate) {
+                    if (data.profile_id !== uid) DENY('profile_id must match authenticated user');
+                } else {
+                    if (prior && prior.profile_id !== uid) {
+                        DENY('only creator may modify wishlist entry');
+                    }
+                }
+                return;
+            }
+
             default:
                 return;
         }

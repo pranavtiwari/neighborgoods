@@ -52,10 +52,18 @@
                         <span class="material-symbols-outlined text-primary text-xl">menu_book</span>
                         <span class="font-bold text-sm text-primary">Sharing a Book?</span>
                     </div>
-                    <span class="text-xs text-stone-500 font-medium">Quick Auto-fill</span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="scan-isbn-btn" onclick="openBarcodeScanner()" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1 cursor-pointer">
+                            <span class="material-symbols-outlined text-sm">barcode_scanner</span> Scan Barcode
+                        </button>
+                        <span class="text-stone-300 dark:text-stone-600">|</span>
+                        <button type="button" id="bulk-import-btn" onclick="openBulkImportModal()" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1 cursor-pointer">
+                            <span class="material-symbols-outlined text-sm">upload_file</span> Bulk Import
+                        </button>
+                    </div>
                 </div>
                 <p class="text-xs text-stone-600 dark:text-stone-400 mb-3">
-                    Enter an ISBN or title to auto-fill metadata, cover, author, and edition. Manual entry is always available below.
+                    Enter an ISBN or title to auto-fill metadata, cover, author, and edition. You can also scan a barcode or import your Goodreads shelf!
                 </p>
                 <div class="flex gap-2">
                     <div class="relative flex-1">
@@ -326,6 +334,71 @@
             <div class="px-6 py-4 border-t border-outline-variant/15 flex gap-4 shrink-0">
                 <button type="button" id="cancel-crop" class="flex-1 py-3 border border-outline/30 font-semibold rounded-xl active:scale-[0.98] transition-all">Cancel</button>
                 <button type="button" id="apply-crop" class="flex-1 py-3 bg-primary text-on-primary font-semibold rounded-xl active:scale-[0.98] transition-all">Apply Crop</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Import Modal (Issue #25) -->
+    <div id="bulk-import-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex flex-col items-center justify-center p-4">
+        <div class="bg-surface dark:bg-stone-900 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-outline-variant/15 flex justify-between items-center shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary text-2xl">upload_file</span>
+                    <h3 class="font-bold text-lg">Bulk Import Books (Goodreads / CSV)</h3>
+                </div>
+                <button type="button" onclick="closeBulkImportModal()" class="material-symbols-outlined hover:bg-stone-200 dark:hover:bg-stone-800 p-2 rounded-full cursor-pointer">close</button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4">
+                <p class="text-xs text-stone-600 dark:text-stone-400">
+                    Export your library from Goodreads (under <em>My Books &gt; Import and export</em>) or provide a CSV file with Title, Author, and ISBN columns. We will automatically create copies and canonical book entries!
+                </p>
+
+                <!-- File input or paste area -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-stone-500">Choose CSV File or Paste Below</label>
+                    <input type="file" id="bulk-csv-file" accept=".csv,text/csv" onchange="handleBulkCsvFile(event)"
+                        class="block w-full text-xs text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer">
+                    <textarea id="bulk-csv-text" rows="5" placeholder="Or paste CSV rows here with headers (e.g. Title, Author, ISBN)..."
+                        class="w-full bg-surface-container rounded-xl border border-outline-variant/30 p-3 text-xs font-mono focus:ring-2 focus:ring-primary"></textarea>
+                </div>
+
+                <!-- Import Options -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-outline-variant/15">
+                    <div>
+                        <label for="bulk-listing-type" class="block text-xs font-bold text-stone-500 mb-1">Default Sharing Option</label>
+                        <select id="bulk-listing-type" class="w-full bg-surface-container rounded-xl border border-outline-variant/30 py-2 px-3 text-xs font-semibold focus:ring-2 focus:ring-primary">
+                            <option value="lend">Lend (Borrow & Return)</option>
+                            <option value="give">Giveaway (Permanent gift)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="bulk-condition" class="block text-xs font-bold text-stone-500 mb-1">Default Condition</label>
+                        <select id="bulk-condition" class="w-full bg-surface-container rounded-xl border border-outline-variant/30 py-2 px-3 text-xs font-semibold focus:ring-2 focus:ring-primary">
+                            <option value="good" selected>Good</option>
+                            <option value="like_new">Like New / Mint</option>
+                            <option value="very_good">Very Good</option>
+                            <option value="fair">Fair</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Preview Box -->
+                <div id="bulk-preview-container" class="hidden bg-surface-container-low rounded-xl p-3 border border-outline-variant/20 space-y-2">
+                    <div class="flex items-center justify-between text-xs font-bold">
+                        <span id="bulk-preview-summary">Parsed 0 books</span>
+                        <span id="bulk-preview-dup-badge" class="text-stone-500 font-medium"></span>
+                    </div>
+                    <div id="bulk-preview-list" class="max-h-36 overflow-y-auto space-y-1 text-xs"></div>
+                </div>
+
+                <div id="bulk-import-status" class="hidden text-xs font-medium"></div>
+            </div>
+            <div class="px-6 py-4 border-t border-outline-variant/15 flex gap-4 shrink-0">
+                <button type="button" onclick="previewBulkImport()" id="bulk-preview-btn" class="flex-1 py-3 border border-outline/30 font-semibold rounded-xl text-xs hover:bg-surface-container active:scale-[0.98] transition-all cursor-pointer">Preview CSV</button>
+                <button type="button" onclick="executeBulkImport()" id="bulk-execute-btn" class="flex-1 py-3 bg-primary text-on-primary font-bold rounded-xl text-xs hover:bg-primary/90 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1">
+                    <span id="bulk-execute-text">Import Books</span>
+                    <span id="bulk-execute-spinner" class="hidden animate-spin material-symbols-outlined text-sm">progress_activity</span>
+                </button>
             </div>
         </div>
     </div>
@@ -611,6 +684,139 @@
             document.getElementById('book-lookup-input').value = '';
         }
         window.clearSelectedBook = clearSelectedBook;
+
+        // --- Barcode / ISBN Scanner (Issue #25) ---
+        async function openBarcodeScanner() {
+            const raw = prompt("Scan or type an ISBN barcode (10 or 13 digits):");
+            if (!raw) return;
+            const clean = window.db.cleanIsbn(raw);
+            if (!clean) {
+                alert("Please enter a valid ISBN barcode number.");
+                return;
+            }
+            const input = document.getElementById('book-lookup-input');
+            if (input) {
+                input.value = clean;
+                performBookLookup();
+            }
+        }
+        window.openBarcodeScanner = openBarcodeScanner;
+
+        // --- Bulk Import (CSV / Goodreads) (Issue #25) ---
+        let bulkParsedCandidates = [];
+
+        function openBulkImportModal() {
+            const modal = document.getElementById('bulk-import-modal');
+            if (modal) modal.classList.remove('hidden');
+        }
+        window.openBulkImportModal = openBulkImportModal;
+
+        function closeBulkImportModal() {
+            const modal = document.getElementById('bulk-import-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+        window.closeBulkImportModal = closeBulkImportModal;
+
+        function handleBulkCsvFile(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result;
+                document.getElementById('bulk-csv-text').value = text;
+                previewBulkImport();
+            };
+            reader.readAsText(file);
+        }
+        window.handleBulkCsvFile = handleBulkCsvFile;
+
+        function previewBulkImport() {
+            const csvText = document.getElementById('bulk-csv-text').value.trim();
+            const statusEl = document.getElementById('bulk-import-status');
+            const previewContainer = document.getElementById('bulk-preview-container');
+            const previewSummary = document.getElementById('bulk-preview-summary');
+            const dupBadge = document.getElementById('bulk-preview-dup-badge');
+            const listEl = document.getElementById('bulk-preview-list');
+
+            if (!csvText) {
+                statusEl.className = 'text-xs text-red-500 font-medium';
+                statusEl.textContent = 'Please choose a CSV file or paste CSV content first.';
+                statusEl.classList.remove('hidden');
+                previewContainer.classList.add('hidden');
+                return;
+            }
+
+            const parsed = window.db.parseShelfCsv(csvText);
+            if (!parsed.success) {
+                statusEl.className = 'text-xs text-red-500 font-medium';
+                statusEl.textContent = 'CSV Parsing Error: ' + parsed.error;
+                statusEl.classList.remove('hidden');
+                previewContainer.classList.add('hidden');
+                return;
+            }
+
+            bulkParsedCandidates = parsed.candidates;
+            statusEl.classList.add('hidden');
+            previewContainer.classList.remove('hidden');
+
+            previewSummary.textContent = `Found ${parsed.totalParsed} books to import (${parsed.isGoodreads ? 'Goodreads export' : 'Standard CSV'})`;
+            dupBadge.textContent = parsed.skippedDuplicates > 0 ? `${parsed.skippedDuplicates} duplicate(s) removed` : '';
+
+            listEl.innerHTML = parsed.candidates.slice(0, 10).map((c, i) => `
+                <div class="flex items-center justify-between py-1 border-b border-outline-variant/10">
+                    <span class="truncate font-semibold text-stone-800 dark:text-stone-200">${i + 1}. ${window.db.escapeAttr(c.title)}</span>
+                    <span class="text-[11px] text-stone-500 shrink-0 ml-2">${window.db.escapeAttr(c.author || (c.isbn ? 'ISBN: ' + c.isbn : ''))}</span>
+                </div>
+            `).join('') + (parsed.candidates.length > 10 ? `<div class="text-[11px] text-stone-400 pt-1">...and ${parsed.candidates.length - 10} more</div>` : '');
+        }
+        window.previewBulkImport = previewBulkImport;
+
+        async function executeBulkImport() {
+            const statusEl = document.getElementById('bulk-import-status');
+            const executeBtn = document.getElementById('bulk-execute-btn');
+            const executeText = document.getElementById('bulk-execute-text');
+            const executeSpinner = document.getElementById('bulk-execute-spinner');
+
+            if (!bulkParsedCandidates || bulkParsedCandidates.length === 0) {
+                previewBulkImport();
+            }
+            if (!bulkParsedCandidates || bulkParsedCandidates.length === 0) {
+                return;
+            }
+
+            const listingType = document.getElementById('bulk-listing-type').value;
+            const condition = document.getElementById('bulk-condition').value;
+            const circleId = document.getElementById('circle-select') ? document.getElementById('circle-select').value : null;
+
+            executeBtn.disabled = true;
+            executeText.textContent = 'Importing...';
+            executeSpinner.classList.remove('hidden');
+
+            try {
+                const res = await window.db.bulkImportShelfCopies(bulkParsedCandidates, {
+                    defaultListingType: listingType,
+                    defaultCondition: condition,
+                    circle_id: circleId || null
+                });
+
+                statusEl.className = 'text-xs text-emerald-600 font-bold';
+                statusEl.textContent = `Successfully imported ${res.importedCount} books! Redirecting to Explore...`;
+                statusEl.classList.remove('hidden');
+
+                setTimeout(() => {
+                    window.location.href = 'explore.html?shelf=library';
+                }, 1500);
+            } catch (err) {
+                console.error('Bulk import error:', err);
+                statusEl.className = 'text-xs text-red-500 font-bold';
+                statusEl.textContent = 'Import error: ' + err.message;
+                statusEl.classList.remove('hidden');
+                executeBtn.disabled = false;
+                executeText.textContent = 'Import Books';
+                executeSpinner.classList.add('hidden');
+            }
+        }
+        window.executeBulkImport = executeBulkImport;
 
         function renderCategoryChips() {
             const container = document.getElementById('selected-categories-chips');

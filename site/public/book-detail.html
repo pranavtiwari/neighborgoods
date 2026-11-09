@@ -819,10 +819,24 @@
                 const setupWantList = (btnId) => {
                     const btn = document.getElementById(btnId);
                     if (btn) {
-                        btn.onclick = () => {
-                            showToast(`"${book.title}" added to your Want List!`);
-                            const bIcon = document.getElementById('bookmark-icon');
-                            if (bIcon) bIcon.style.fontVariationSettings = "'FILL' 1";
+                        btn.onclick = async () => {
+                            if (!currentUser) {
+                                showToast('Please sign in to add this book to your want list.');
+                                return;
+                            }
+                            try {
+                                await window.db.addToWantList({
+                                    bookId: book.id,
+                                    isbn: (book.isbns && book.isbns[0]) || null,
+                                    title: book.title,
+                                    author: Array.isArray(book.authors) ? book.authors.join(', ') : (book.authors || '')
+                                });
+                                showToast(`"${book.title}" added to your Want List!`);
+                                const bIcon = document.getElementById('bookmark-icon');
+                                if (bIcon) bIcon.style.fontVariationSettings = "'FILL' 1";
+                            } catch (e) {
+                                showToast('Could not save to want list: ' + e.message);
+                            }
                         };
                     }
                 };

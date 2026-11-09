@@ -4012,6 +4012,147 @@ await test('Flow 23: Notifications model, transaction event dispatchers, due-dat
 });
 
 // ==========================================
+// FLOW 24: Supply-Growth Tools (CSV/Goodreads import, ISBN scanner, and want lists) - Issue #25
+// ==========================================
+await test('Flow 24: Supply-Growth Tools (CSV/Goodreads import, ISBN scanner, and want lists)', async () => {
+    const aliceUid = 'alice_supply_uid';
+    const bobUid = 'bob_supply_uid';
+
+    // 1. Setup Profiles
+    firebase.auth().currentUser = { uid: aliceUid };
+    await firebase.firestore().collection('profiles').doc(aliceUid).set({
+        full_name: 'Alice Reader',
+        role: 'user',
+        email: 'alice.reader@example.com'
+    });
+
+    firebase.auth().currentUser = { uid: bobUid };
+    await firebase.firestore().collection('profiles').doc(bobUid).set({
+        full_name: 'Bob Collector',
+        role: 'user',
+        email: 'bob.collector@example.com'
+    });
+
+    // 2. Goodreads CSV Parsing & Excel-quoted ISBN cleaning
+    const sampleGoodreadsCsv = [
+        'Book Id,Title,Author,Author l-f,Additional Authors,ISBN,ISBN13,My Rating,Average Rating,Publisher,Binding,Number of Pages,Year Published,Original Publication Year,Date Read,Date Added,Bookshelves,Bookshelves with positions,Exclusive Shelf,My Review,Spoiler,Private Notes,Read Count,Recommended For,Recommended By,Owned Copies',
+        '251,Dune Messiah,Frank Herbert,"Herbert, Frank",,="0143127748",="9780143127741",5,4.10,Chilton Books,Paperback,256,1969,1969,2026/01/10,2026/01/01,read,read (#1),read,,,1,,,0',
+        '252,Children of Dune,Frank Herbert,"Herbert, Frank",,="0441172717",="9780441172719",4,3.95,Putnam,Paperback,444,1976,1976,2026/02/10,2026/01/05,read,read (#2),read,,,1,,,0',
+        '253,Children of Dune,Frank Herbert,"Herbert, Frank",,="0441172717",="9780441172719",4,3.95,Putnam,Paperback,444,1976,1976,2026/02/10,2026/01/05,read,read (#2),read,,,1,,,0', // Duplicate in file
+        '18423,"The Left Hand of Darkness, 50th Anniversary",Ursula K. Le Guin,"Le Guin, Ursula K.",,="0441478123",="9780441478125",5,4.08,Ace,Paperback,304,1969,1969,2026/03/01,2026/02/01,favorites,favorites (#1),read,,,1,,,0'
+    ].join('\n');
+
+    const parsed = window.db.parseShelfCsv(sampleGoodreadsCsv);
+    assert.strictEqual(parsed.success, true, 'CSV parsed successfully');
+    assert.strictEqual(parsed.isGoodreads, true, 'Identified as Goodreads export');
+    assert.strictEqual(parsed.skippedDuplicates, 1, 'Deduplicated repeated entry within file');
+    assert.strictEqual(parsed.candidates.length, 3, 'Extracted 3 unique books');
+
+    // Verify cleaned ISBNs and metadata
+    const duneMessiah = parsed.candidates[0];
+    assert.strictEqual(duneMessiah.title, 'Dune Messiah');
+    assert.strictEqual(duneMessiah.author, 'Frank Herbert');
+    assert.strictEqual(duneMessiah.isbn13, '9780143127741', 'Cleaned Excel-quoted formula ISBN');
+    assert.strictEqual(duneMessiah.isbn10, '0143127748');
+
+    // Verify comma-handling in quoted titles
+    const leftHand = parsed.candidates[2];
+    assert.strictEqual(leftHand.title, 'The Left Hand of Darkness, 50th Anniversary');
+    assert.strictEqual(leftHand.author, 'Ursula K. Le Guin');
+
+    // 3. Bulk Shelf Import
+    firebase.auth().currentUser = { uid: bobUid };
+    const importRes = await window.db.bulkImportShelfCopies(parsed.candidates, {
+        defaultListingType: 'lend',
+        defaultCondition: 'very_good'
+    });
+
+    assert.strictEqual(importRes.importedCount, 3, 'Imported all 3 candidate books');
+    assert.strictEqual(importRes.copyIds.length, 3, '3 physical copies created');
+    assert.strictEqual(importRes.errors.length, 0, 'Zero errors during bulk import');
+
+    // Verify created items
+    const firstCopyDoc = await firebase.firestore().collection('items').doc(importRes.copyIds[0]).get();
+    const firstCopy = firstCopyDoc.data();
+    assert.strictEqual(firstCopy.name, 'Dune Messiah');
+    assert.strictEqual(firstCopy.kind, 'book');
+    assert.strictEqual(firstCopy.listing_type, 'borrow', 'Normalized V1 listing type for lend is borrow');
+    assert.strictEqual(firstCopy.condition, 'very_good');
+    assert.strictEqual(firstCopy.owner_id, bobUid);
+    assert.strictEqual(firstCopy.is_available, true);
+    assert.ok(firstCopy.book_id, 'Linked to canonical book');
+
+    // Verify canonical book record was created and copy count synced
+    const canonDoc = await firebase.firestore().collection('books').doc(firstCopy.book_id).get();
+    assert.ok(canonDoc.exists, 'Canonical book exists');
+    assert.strictEqual(canonDoc.data().title, 'Dune Messiah');
+    assert.strictEqual(canonDoc.data().copies_count, 1);
+
+    // 4. Barcode / ISBN Scanner helper
+    firebase.auth().currentUser = { uid: aliceUid };
+    const scanRes = await window.db.createBookCopyFromScannedIsbn('978-0-380-00293-1', {
+        condition: 'good',
+        listing_type: 'give'
+    });
+
+    assert.strictEqual(scanRes.success, true, 'Scanned ISBN created item copy');
+    assert.strictEqual(scanRes.item.kind, 'book');
+    assert.strictEqual(scanRes.item.owner_id, aliceUid);
+    assert.strictEqual(scanRes.item.listing_type, 'giveaway', 'Normalized V1 listing type for give is giveaway');
+    assert.strictEqual(scanRes.item.isbn13, '9780380002931', 'Cleaned dashed ISBN');
+    assert.ok(scanRes.item.book_id, 'Canonical book attached');
+
+    // 5. Want Lists ("Wishlists") & Match Notifications
+    firebase.auth().currentUser = { uid: aliceUid };
+    const wantEntry = await window.db.addToWantList({
+        title: 'God Emperor of Dune',
+        author: 'Frank Herbert',
+        isbn: '9780441294671',
+        notifyOnAvailable: true
+    });
+
+    assert.ok(wantEntry.id, 'Want list item created with id');
+    assert.strictEqual(wantEntry.profile_id, aliceUid);
+    assert.strictEqual(wantEntry.isbn, '9780441294671');
+
+    // Verify getUserWantList
+    const aliceWants = await window.db.getUserWantList(aliceUid);
+    assert.strictEqual(aliceWants.length, 1);
+    assert.strictEqual(aliceWants[0].title, 'God Emperor of Dune');
+
+    // Now Bob lists the wanted book
+    firebase.auth().currentUser = { uid: bobUid };
+    const newCanon = await window.db.createBook({
+        title: 'God Emperor of Dune',
+        authors: ['Frank Herbert'],
+        isbns: ['9780441294671']
+    });
+
+    const bobAddedCopy = await window.db.addItem({
+        kind: 'book',
+        book_id: newCanon.id,
+        name: 'God Emperor of Dune',
+        author: 'Frank Herbert',
+        isbn13: '9780441294671',
+        condition: 'good',
+        listing_type: 'lend'
+    });
+
+    // Check Alice's notifications for want_list_match
+    firebase.auth().currentUser = { uid: aliceUid };
+    const aliceNotifs = await window.db.getUserNotifications(aliceUid);
+    const matchNotif = aliceNotifs.find(n => n.type === 'want_list_match');
+    assert.ok(matchNotif, 'Alice received want_list_match notification');
+    assert.strictEqual(matchNotif.book_id, newCanon.id);
+    assert.ok(matchNotif.body.includes('God Emperor of Dune'));
+
+    // Remove from want list
+    await window.db.removeFromWantList(wantEntry.id);
+    const aliceWantsAfterRemove = await window.db.getUserWantList(aliceUid);
+    assert.strictEqual(aliceWantsAfterRemove.length, 0, 'Want list item removed');
+});
+
+// ==========================================
 // RESULTS REPORT
 // ==========================================
 console.log('\n==========================================');

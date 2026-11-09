@@ -653,6 +653,19 @@ service cloud.firestore {
       allow update: if request.auth != null && resource.data.recipient_id == request.auth.uid;
       allow delete: if request.auth != null && resource.data.recipient_id == request.auth.uid;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Wishlists / Want Lists (Issue #25: Supply-growth tools)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /wishlists/{wishlistId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.profile_id == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.profile_id == request.auth.uid;
+      allow delete: if request.auth != null
+        && resource.data.profile_id == request.auth.uid;
+    }
   }
 }
 
