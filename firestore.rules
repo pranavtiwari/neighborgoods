@@ -435,7 +435,9 @@ service cloud.firestore {
     //              cannot change identity fields (profile_id, circle_id).
     // ─────────────────────────────────────────────────────────────────────────
     match /circle_posts/{postId} {
-      allow read: if true;
+      allow read: if !('circle_id' in resource.data)
+        || !get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.is_private
+        || (request.auth != null && exists(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid)));
 
       // Only circle members may post
       allow create: if request.auth != null

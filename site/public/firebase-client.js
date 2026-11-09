@@ -106,12 +106,48 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     // Allowed post-auth redirect targets (VULN-19: open redirect prevention)
     const ALLOWED_REDIRECTS = new Set([
         'explore.html', 'index.html', 'circles.html', 'profile.html',
-        'messages.html', 'activity.html', 'edit-profile.html', 'add-item.html'
+        'messages.html', 'activity.html', 'edit-profile.html', 'add-item.html',
+        'circle-detail.html', 'item-details.html', 'book-detail.html'
     ]);
     function safeRedirect(redirectTo, fallback = 'explore.html') {
-        const target = (redirectTo || fallback).split('?')[0].split('#')[0];
-        return ALLOWED_REDIRECTS.has(target) ? redirectTo : fallback;
+        if (!redirectTo || typeof redirectTo !== 'string') return fallback;
+        const trimmed = redirectTo.trim();
+        // Reject protocol-relative or absolute URLs or javascript: URIs (open redirect defence)
+        if (trimmed.startsWith('//') || trimmed.includes('://') || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+            return fallback;
+        }
+        // Strip leading slash if any
+        const clean = trimmed.replace(/^\/+/, '');
+        const [pagePart, queryPart] = clean.split('?');
+        const basePage = pagePart.split('#')[0];
+        if (!ALLOWED_REDIRECTS.has(basePage)) return fallback;
+
+        // Preserve safe query string parameters (e.g. circle-detail.html?id=...)
+        if (queryPart) {
+            const rawQuery = queryPart.split('#')[0];
+            const params = new URLSearchParams(rawQuery);
+            const id = params.get('id');
+            const circleId = params.get('circleId');
+            const safeIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
+
+            if (basePage === 'circle-detail.html') {
+                if (id && safeIdPattern.test(id)) {
+                    return `circle-detail.html?id=${encodeURIComponent(id)}`;
+                }
+                return 'circle-detail.html';
+            }
+
+            if (id && safeIdPattern.test(id)) {
+                return `${basePage}?id=${encodeURIComponent(id)}`;
+            }
+            if (circleId && safeIdPattern.test(circleId)) {
+                return `${basePage}?circleId=${encodeURIComponent(circleId)}`;
+            }
+        }
+
+        return basePage;
     }
+    window.safeRedirect = safeRedirect;
 
     window.loginWithEmail = async function(email, password, redirectTo = 'explore.html') {
         try {
@@ -184,13 +220,27 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     };
 
     // Helper function to protect routes
-    window.requireAuth = async function(redirectUrl = 'join-community.html') {
+    window.requireAuth = async function(redirectUrl = null) {
         return new Promise((resolve) => {
             const unsubscribe = firebase.auth().onAuthStateChanged((user) => {
                 unsubscribe();
                 if (!user) {
                     console.warn('Unauthorized access. Redirecting to login.');
-                    window.location.href = redirectUrl;
+                    if (redirectUrl) {
+                        window.location.href = redirectUrl;
+                    } else {
+                        let currentTarget = '';
+                        if (typeof window !== 'undefined' && window.location) {
+                            const page = window.location.pathname.split('/').pop() || 'explore.html';
+                            const search = window.location.search || '';
+                            currentTarget = page + search;
+                        }
+                        if (currentTarget && currentTarget !== 'join-community.html') {
+                            window.location.href = `join-community.html?redirect=${encodeURIComponent(currentTarget)}`;
+                        } else {
+                            window.location.href = 'join-community.html';
+                        }
+                    }
                     resolve(null);
                 } else {
                     user.id = user.uid; // Add compatibility mapping
@@ -200,13 +250,43 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         });
     };
 
+    // Helper to generate canonical share URLs and handle Web Share API / clipboard
+    window.getCircleShareUrl = function(circleId) {
+        if (!circleId) return '';
+        const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+        return `${origin}/circle-detail.html?id=${encodeURIComponent(circleId)}`;
+    };
+
+    window.shareCircle = async function({ circleId, name, description } = {}) {
+        const url = window.getCircleShareUrl(circleId);
+        const title = name ? `${name} - Share, Instead.` : 'Join my circle on Share, Instead.';
+        const text = description || (name ? `Check out the ${name} community circle on Share, Instead.` : 'Join our neighborhood sharing circle.');
+        if (typeof navigator !== 'undefined' && navigator.share) {
+            try {
+                await navigator.share({ title, text, url });
+                return { shared: true, method: 'navigator.share', url };
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    return { shared: false, method: 'aborted', url };
+                }
+            }
+        }
+        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(url);
+            return { shared: true, method: 'clipboard', url };
+        }
+        return { shared: false, method: 'unsupported', url };
+    };
+
     // Listen to auth changes globally (to handle sign outs)
     firebase.auth().onAuthStateChanged((user) => {
         const path = window.location.pathname;
         if (!user && 
             !path.includes('join-community') && 
             path !== '/' && 
-            !path.includes('index')) {
+            !path.includes('index') &&
+            !path.includes('circle-detail') &&
+            !path.includes('book-detail')) {
             window.location.href = 'join-community.html';
         } else if (user) {
             const updateBadges = async () => {

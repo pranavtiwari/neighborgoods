@@ -406,7 +406,12 @@
                             <img alt="${escapeHtml(circle.name)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="${db.sanitizeUrl(circle.image_url) || 'https://placehold.co/400x250?text=Circle'}"/>
                         </div>
                         <div class="flex-1">
-                            <h3 class="text-lg font-bold text-on-surface mb-2 group-hover:text-primary transition-colors">${escapeHtml(circle.name)}</h3>
+                            <div class="flex items-start justify-between gap-2">
+                                <h3 class="text-lg font-bold text-on-surface mb-2 group-hover:text-primary transition-colors">${escapeHtml(circle.name)}</h3>
+                                <button onclick="event.stopPropagation(); shareCircleCard(this, '${db.escapeAttr(circle.id)}', '${db.escapeAttr(circle.name)}')" class="p-2 text-stone-400 hover:text-primary rounded-lg hover:bg-surface-container transition-colors" title="Share Circle">
+                                    <span class="material-symbols-outlined text-base">share</span>
+                                </button>
+                            </div>
                             <p class="text-on-surface-variant text-sm line-clamp-2 mb-4">${escapeHtml(circle.description || 'No description provided.')}</p>
                             <div class="flex items-center gap-4 text-xs text-outline mb-2">
                                 <span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">groups</span> ${circle.memberCount || 0} Member${(circle.memberCount || 0) !== 1 ? 's' : ''}</span>
@@ -435,7 +440,12 @@
                             ${isPrivate ? '<span class="absolute top-2 right-2 bg-black/50 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1"><span class="material-symbols-outlined" style="font-size:12px">lock</span>Private</span>' : ''}
                         </div>
                         <div class="p-5">
-                            <h3 class="text-lg font-bold text-on-surface mb-1">${escapeHtml(circle.name)}</h3>
+                            <div class="flex items-start justify-between gap-2">
+                                <h3 class="text-lg font-bold text-on-surface mb-1">${escapeHtml(circle.name)}</h3>
+                                <button onclick="event.stopPropagation(); shareCircleCard(this, '${db.escapeAttr(circle.id)}', '${db.escapeAttr(circle.name)}')" class="p-1.5 text-stone-400 hover:text-primary rounded-lg hover:bg-surface-container transition-colors" title="Share Circle">
+                                    <span class="material-symbols-outlined text-base">share</span>
+                                </button>
+                            </div>
                             <p class="text-stone-500 text-sm line-clamp-2 mb-4">${escapeHtml(circle.description || 'A local neighbourhood circle.')}</p>
                             <div class="mb-4">
                                 <div class="flex items-center gap-1 text-xs text-stone-400">
@@ -526,9 +536,20 @@
         openJoinRequestModal(circleId, btn);
     }
 
+    async function shareCircleCard(btn, circleId, circleName) {
+        if (!circleId) return;
+        const res = await window.shareCircle({ circleId, name: circleName });
+        if (res && res.shared && res.method === 'clipboard') {
+            const orig = btn.innerHTML;
+            btn.innerHTML = `<span class="material-symbols-outlined text-base text-primary">check</span>`;
+            setTimeout(() => { btn.innerHTML = orig; }, 2000);
+        }
+    }
+
     window.closeJoinRequestModal = closeJoinRequestModal;
     window.submitJoinRequest = submitJoinRequest;
     window.requestJoinCircle = requestJoinCircle;
+    window.shareCircleCard = shareCircleCard;
 
     async function updateHeaderAvatar(user) {
         if (user) {

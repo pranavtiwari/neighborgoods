@@ -3571,6 +3571,164 @@ await test('Flow 20: Instrument and run soft launch with existing circles (Issue
     assert.ok(noGoDecision.blockers.length > 0, 'Blockers list explains why NO_GO');
 });
 
+await test('Flow 21: Make circles shareable: invite links, view-only landing, and join after signup (Issue #33)', async () => {
+    // 1. safeRedirect open-redirect protection and deep-link preservation
+    assert.strictEqual(
+        window.safeRedirect('circle-detail.html?id=a-world-of-books'),
+        'circle-detail.html?id=a-world-of-books',
+        'Preserves circle-detail.html with valid id'
+    );
+    assert.strictEqual(
+        window.safeRedirect('/circle-detail.html?id=sf_book_club-123'),
+        'circle-detail.html?id=sf_book_club-123',
+        'Handles leading slash and preserves valid slug/id'
+    );
+    assert.strictEqual(
+        window.safeRedirect('item-details.html?id=item-789'),
+        'item-details.html?id=item-789',
+        'Preserves item-details.html with valid id'
+    );
+    assert.strictEqual(
+        window.safeRedirect('explore.html'),
+        'explore.html',
+        'Preserves plain explore.html'
+    );
+
+    // Malicious open-redirect attacks must be neutralized
+    assert.strictEqual(
+        window.safeRedirect('//evil.com/phishing'),
+        'explore.html',
+        'Rejects protocol-relative open redirects'
+    );
+    assert.strictEqual(
+        window.safeRedirect('https://evil.com/circle-detail.html?id=test'),
+        'explore.html',
+        'Rejects absolute foreign URLs'
+    );
+    assert.strictEqual(
+        window.safeRedirect('javascript:alert(1)'),
+        'explore.html',
+        'Rejects javascript: URIs'
+    );
+    assert.strictEqual(
+        window.safeRedirect('not-allowed-page.html'),
+        'explore.html',
+        'Rejects non-allowlisted pages'
+    );
+    assert.strictEqual(
+        window.safeRedirect('circle-detail.html?id=bad%20id<script>'),
+        'circle-detail.html',
+        'Strips dangerous or invalid characters from id query param'
+    );
+
+    // 2. Share URL generation and sharing helpers
+    const shareUrl = window.getCircleShareUrl('sf-gardeners');
+    assert.ok(shareUrl.endsWith('/circle-detail.html?id=sf-gardeners'), 'Canonical share link generated');
+    assert.strictEqual(window.getCircleShareUrl(''), '', 'Empty circleId returns empty string');
+
+    // Test shareCircle with clipboard fallback in Node/jsdom mock
+    let clipboardContent = '';
+    try {
+        Object.defineProperty(navigator, 'clipboard', {
+            value: {
+                writeText: async (text) => {
+                    clipboardContent = text;
+                    return Promise.resolve();
+                }
+            },
+            configurable: true,
+            writable: true
+        });
+    } catch (_) {
+        navigator.clipboard = {
+            writeText: async (text) => {
+                clipboardContent = text;
+                return Promise.resolve();
+            }
+        };
+    }
+    const shareRes = await window.shareCircle({
+        circleId: 'sf-gardeners',
+        name: 'SF Gardeners',
+        description: 'Neighborhood plant and produce sharing'
+    });
+    assert.strictEqual(shareRes.shared, true);
+    assert.strictEqual(shareRes.method, 'clipboard');
+    assert.ok(clipboardContent.includes('circle-detail.html?id=sf-gardeners'), 'Copied canonical circle link to clipboard');
+
+    // 3. View-Only Spectator Landing & Privacy Enforcement
+    const publicCircleId = 'pub-circle-' + Math.random().toString(36).substring(2, 7);
+    const privateCircleId = 'priv-circle-' + Math.random().toString(36).substring(2, 7);
+    const creatorUid = 'creator-' + Math.random().toString(36).substring(2, 7);
+
+    // Seed circles
+    firebase.auth().currentUser = { uid: creatorUid };
+    await firebase.firestore().collection('circles').doc(publicCircleId).set({
+        name: 'Public Book Exchange',
+        description: 'Open to everyone in the neighborhood',
+        category: 'books',
+        is_private: false,
+        member_count: 5,
+        created_by: creatorUid,
+        created_at: new Date().toISOString()
+    });
+    await firebase.firestore().collection('circles').doc(privateCircleId).set({
+        name: 'Secret Rare Book Club',
+        description: 'Private collection; approval required',
+        category: 'books',
+        is_private: true,
+        member_count: 2,
+        created_by: creatorUid,
+        created_at: new Date().toISOString()
+    });
+
+    // Unauthenticated spectator access:
+    firebase.auth().currentUser = null;
+
+    // A spectator can read public circle details and member count
+    const pubCircleDoc = await window.db.getCircle(publicCircleId);
+    assert.strictEqual(pubCircleDoc.name, 'Public Book Exchange');
+    const pubCount = await window.db.getCircleMemberCount(publicCircleId);
+    assert.strictEqual(pubCount, 5, 'Spectator reads aggregate member count without profile reads');
+
+    // Private circle metadata is visible for invitation/landing preview
+    const privCircleDoc = await window.db.getCircle(privateCircleId);
+    assert.strictEqual(privCircleDoc.name, 'Secret Rare Book Club');
+    assert.strictEqual(privCircleDoc.is_private, true);
+    const privCount = await window.db.getCircleMemberCount(privateCircleId);
+    assert.strictEqual(privCount, 2);
+
+    // 4. Auth bounce preservation in requireAuth
+    let navigatedUrl = '';
+    const originalLocation = global.window.location;
+    global.window.location = {
+        pathname: '/circle-detail.html',
+        search: `?id=${publicCircleId}`,
+        set href(val) { navigatedUrl = val; },
+        get href() { return navigatedUrl; }
+    };
+
+    firebase.auth().currentUser = null;
+    await window.requireAuth();
+    assert.ok(
+        navigatedUrl.startsWith('join-community.html?redirect='),
+        'requireAuth routes unauthenticated user to join-community with redirect param'
+    );
+    const capturedRedirect = decodeURIComponent(navigatedUrl.split('redirect=')[1]);
+    assert.strictEqual(
+        capturedRedirect,
+        `circle-detail.html?id=${publicCircleId}`,
+        'Deep link was preserved through requireAuth'
+    );
+
+    // Post-auth redirect sanitization
+    const safeTarget = window.safeRedirect(capturedRedirect);
+    assert.strictEqual(safeTarget, `circle-detail.html?id=${publicCircleId}`, 'Post-auth landing target is verified safe');
+
+    // Restore window.location
+    global.window.location = originalLocation;
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================

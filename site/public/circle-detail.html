@@ -10,7 +10,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="firebase-client.js"></script>
-    <script>requireAuth();</script>
     
     <!-- Fuzzy Search -->
     <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
@@ -120,35 +119,42 @@
                         <div id="member-avatars" class="flex -space-x-3"><!-- Avatars --></div>
                         <span id="member-count-text" class="label-md text-on-surface-variant hover:underline">Neighbors</span>
                     </div>
-                    <!-- Member action buttons (shown when user is a member) -->
-                    <div id="member-actions" class="hidden flex gap-3 w-full md:w-auto">
-                        <button onclick="openSeedFeedbackModal()" class="flex-1 md:flex-none px-4 py-4 rounded-lg bg-surface-container-high text-on-surface text-xs font-bold shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5" title="Give Feedback on this Circle Soft Launch">
-                            <span class="material-symbols-outlined text-[16px] text-amber-500">rate_review</span>
-                            Feedback
+                    <!-- Action buttons area -->
+                    <div class="flex items-center gap-3 w-full md:w-auto flex-wrap justify-start md:justify-end">
+                        <button id="share-circle-btn" onclick="handleShareCircle()" class="px-5 py-4 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-bold shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5" title="Share this Circle">
+                            <span class="material-symbols-outlined text-[16px] text-primary">share</span>
+                            <span id="share-btn-text">Share Circle</span>
                         </button>
-                        <button onclick="openPostModal()" class="flex-1 md:flex-none px-6 py-4 rounded-lg bg-surface-container-lowest text-primary font-bold shadow-sm hover:shadow-md transition-all active:scale-95">
-                            Post Update
-                        </button>
-                        <button id="share-item-btn" class="flex-1 md:flex-none px-6 py-4 rounded-lg bg-forest-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all active:scale-95">
-                            Share Item
-                        </button>
-                    </div>
-                    <!-- Non-member: public join -->
-                    <button id="join-btn" class="hidden px-8 py-4 rounded-lg bg-forest-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all active:scale-95 w-full md:w-auto" onclick="handleJoin()">
-                        Join Circle
-                    </button>
-                    <!-- Non-member: private request to join -->
-                    <button id="request-join-btn" class="hidden px-8 py-4 rounded-lg bg-primary/10 border-2 border-primary text-primary font-bold hover:bg-primary/20 transition-all active:scale-95 w-full md:w-auto" onclick="handleRequestJoin()">
-                        <span class="material-symbols-outlined text-base align-middle mr-1">person_add</span>
-                        Request to Join
-                    </button>
-                    <!-- Non-member: request pending -->
-                    <div id="request-pending-ui" class="hidden flex-col items-end gap-2 w-full md:w-auto">
-                        <div class="px-8 py-4 rounded-lg bg-stone-100 text-stone-500 font-bold text-center w-full md:w-auto">
-                            <span class="material-symbols-outlined text-base align-middle mr-1" style="font-variation-settings:'FILL' 1">schedule</span>
-                            Request Pending
+                        <!-- Member action buttons (shown when user is a member) -->
+                        <div id="member-actions" class="hidden flex gap-3 w-full md:w-auto">
+                            <button onclick="openSeedFeedbackModal()" class="flex-1 md:flex-none px-4 py-4 rounded-lg bg-surface-container-high text-on-surface text-xs font-bold shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5" title="Give Feedback on this Circle Soft Launch">
+                                <span class="material-symbols-outlined text-[16px] text-amber-500">rate_review</span>
+                                Feedback
+                            </button>
+                            <button onclick="openPostModal()" class="flex-1 md:flex-none px-6 py-4 rounded-lg bg-surface-container-lowest text-primary font-bold shadow-sm hover:shadow-md transition-all active:scale-95">
+                                Post Update
+                            </button>
+                            <button id="share-item-btn" class="flex-1 md:flex-none px-6 py-4 rounded-lg bg-forest-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all active:scale-95">
+                                Share Item
+                            </button>
                         </div>
-                        <button onclick="handleCancelRequest()" class="text-xs text-error hover:underline font-medium">Cancel request</button>
+                        <!-- Non-member: public join -->
+                        <button id="join-btn" class="hidden px-8 py-4 rounded-lg bg-forest-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all active:scale-95 w-full md:w-auto" onclick="handleJoin()">
+                            Join Circle
+                        </button>
+                        <!-- Non-member: private request to join -->
+                        <button id="request-join-btn" class="hidden px-8 py-4 rounded-lg bg-primary/10 border-2 border-primary text-primary font-bold hover:bg-primary/20 transition-all active:scale-95 w-full md:w-auto" onclick="handleRequestJoin()">
+                            <span class="material-symbols-outlined text-base align-middle mr-1">person_add</span>
+                            Request to Join
+                        </button>
+                        <!-- Non-member: request pending -->
+                        <div id="request-pending-ui" class="hidden flex-col items-end gap-2 w-full md:w-auto">
+                            <div class="px-8 py-4 rounded-lg bg-stone-100 text-stone-500 font-bold text-center w-full md:w-auto">
+                                <span class="material-symbols-outlined text-base align-middle mr-1" style="font-variation-settings:'FILL' 1">schedule</span>
+                                Request Pending
+                            </div>
+                            <button onclick="handleCancelRequest()" class="text-xs text-error hover:underline font-medium">Cancel request</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -177,6 +183,22 @@
             <div id="circle-admin-ledger-list" class="space-y-3">
                 <div class="text-center py-4 text-stone-500 animate-pulse">Loading circle ledger...</div>
             </div>
+        </div>
+
+        <!-- View-Only Landing Banner (Shown when visitor is not signed in) -->
+        <div id="view-only-banner" class="hidden bg-primary/10 border border-primary/20 rounded-2xl p-5 mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+            <div class="flex items-center gap-3.5">
+                <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary flex-shrink-0">
+                    <span class="material-symbols-outlined text-2xl">visibility</span>
+                </div>
+                <div>
+                    <h4 class="font-bold text-sm text-on-surface">Previewing this circle in view-only mode</h4>
+                    <p class="text-xs text-on-surface-variant">Sign up or log in to borrow items, post updates, and connect with neighbors.</p>
+                </div>
+            </div>
+            <button onclick="handleJoin()" class="px-6 py-3 rounded-xl bg-forest-gradient text-white font-bold text-xs shadow-md hover:scale-[1.02] active:scale-95 transition-all whitespace-nowrap">
+                Join Circle
+            </button>
         </div>
 
         <!-- Asymmetric Content Grid -->
@@ -898,6 +920,35 @@
                 document.getElementById('circle-name').textContent = currentCircle.name;
                 document.getElementById('circle-description').textContent = currentCircle.description || 'A neighborhood community circle.';
 
+                // Update Meta / OG tags for link unfurls
+                try {
+                    let descMeta = document.querySelector('meta[name="description"]');
+                    if (!descMeta) {
+                        descMeta = document.createElement('meta');
+                        descMeta.name = 'description';
+                        document.head.appendChild(descMeta);
+                    }
+                    descMeta.content = currentCircle.description || `Join ${currentCircle.name} on Share, Instead.`;
+
+                    let ogTitle = document.querySelector('meta[property="og:title"]');
+                    if (!ogTitle) {
+                        ogTitle = document.createElement('meta');
+                        ogTitle.setAttribute('property', 'og:title');
+                        document.head.appendChild(ogTitle);
+                    }
+                    ogTitle.content = `${currentCircle.name} - Share, Instead.`;
+
+                    let ogDesc = document.querySelector('meta[property="og:description"]');
+                    if (!ogDesc) {
+                        ogDesc = document.createElement('meta');
+                        ogDesc.setAttribute('property', 'og:description');
+                        document.head.appendChild(ogDesc);
+                    }
+                    ogDesc.content = currentCircle.description || `Join ${currentCircle.name} on Share, Instead.`;
+                } catch (metaErr) {
+                    console.warn('Could not update meta tags:', metaErr);
+                }
+
                 // Show privacy badge
                 if (currentCircle.is_private) {
                     document.getElementById('privacy-badge').classList.remove('hidden');
@@ -905,17 +956,35 @@
                 }
 
                 // 2. Fetch aggregate count, preview members & determine current user role in O(1)
-                const totalMemberCount = await window.db.getCircleMemberCount(currentCircleId);
-                const previewResult = await window.db.getCircleMembers(currentCircleId, { pageSize: 5, paginated: true });
-                const previewMembers = (previewResult && previewResult.members) || [];
+                let totalMemberCount = 0;
+                try {
+                    totalMemberCount = await window.db.getCircleMemberCount(currentCircleId);
+                } catch (e) {
+                    totalMemberCount = currentCircle.member_count || 0;
+                }
 
-                const displayMembers = previewMembers.slice(0, 4);
+                let previewMembers = [];
+                // Only authed users can read circle_members profiles; unauthed spectators only see count
+                if (user) {
+                    try {
+                        const previewResult = await window.db.getCircleMembers(currentCircleId, { pageSize: 5, paginated: true });
+                        previewMembers = (previewResult && previewResult.members) || [];
+                    } catch (memberErr) {
+                        console.warn('Could not load member avatars:', memberErr);
+                    }
+                }
+
                 const avatarContainer = document.getElementById('member-avatars');
-                avatarContainer.innerHTML = displayMembers.map(m =>
-                    `<img class="h-10 w-10 rounded-full ring-4 ring-surface object-cover" src="${db.sanitizeUrl(m.avatar_url) || 'https://i.pravatar.cc/150?u=' + m.id}" />`
-                ).join('');
-                if (totalMemberCount > 4) {
-                    avatarContainer.innerHTML += `<div class="h-10 w-10 rounded-full bg-surface-container ring-4 ring-surface flex items-center justify-center text-[10px] font-black text-primary">+${totalMemberCount - 4}</div>`;
+                if (previewMembers.length > 0) {
+                    const displayMembers = previewMembers.slice(0, 4);
+                    avatarContainer.innerHTML = displayMembers.map(m =>
+                        `<img class="h-10 w-10 rounded-full ring-4 ring-surface object-cover" src="${db.sanitizeUrl(m.avatar_url) || 'https://i.pravatar.cc/150?u=' + m.id}" />`
+                    ).join('');
+                    if (totalMemberCount > 4) {
+                        avatarContainer.innerHTML += `<div class="h-10 w-10 rounded-full bg-surface-container ring-4 ring-surface flex items-center justify-center text-[10px] font-black text-primary">+${totalMemberCount - 4}</div>`;
+                    }
+                } else {
+                    avatarContainer.innerHTML = `<div class="h-10 w-10 rounded-full bg-surface-container ring-4 ring-surface flex items-center justify-center text-xs font-bold text-primary"><span class="material-symbols-outlined text-sm">groups</span></div>`;
                 }
                 document.getElementById('member-count-text').textContent = `${totalMemberCount} Neighbors Active`;
 
@@ -931,30 +1000,34 @@
                 // 3. Render role-appropriate UI
                 await renderRoleUI();
 
-                // 4. Fetch Circle Inventory (sidebar)
-                allInventoryItems = await window.db.getCircleItems(currentCircleId);
-                
-                // Initialize Fuse
-                if (window.Fuse) {
-                    const mappedItems = allInventoryItems.map(item => ({
-                        ...item,
-                        semantic_tags: window.db.getSemanticTerms(item)
-                    }));
-                    fuseIndex = new Fuse(mappedItems, {
-                        keys: ['name', 'description', 'semantic_tags'],
-                        threshold: 0.4,
-                        includeScore: true
+                // 4. Fetch Circle Inventory (sidebar) - only if member or public circle
+                if (currentUserIsMember || !currentCircle.is_private) {
+                    allInventoryItems = await window.db.getCircleItems(currentCircleId);
+                    
+                    // Initialize Fuse
+                    if (window.Fuse) {
+                        const mappedItems = allInventoryItems.map(item => ({
+                            ...item,
+                            semantic_tags: window.db.getSemanticTerms(item)
+                        }));
+                        fuseIndex = new Fuse(mappedItems, {
+                            keys: ['name', 'description', 'semantic_tags'],
+                            threshold: 0.4,
+                            includeScore: true
+                        });
+                    }
+                    
+                    // Bind search listener
+                    document.getElementById('inventory-search').addEventListener('input', () => {
+                        handleInventorySearch();
                     });
-                }
-                
-                // Bind search listener
-                document.getElementById('inventory-search').addEventListener('input', () => {
-                    handleInventorySearch();
-                });
 
-                renderInventory(allInventoryItems);
-                renderCategoryChips();
-                loadCircleStats(currentCircleId);
+                    renderInventory(allInventoryItems);
+                    renderCategoryChips();
+                    loadCircleStats(currentCircleId);
+                } else {
+                    allInventoryItems = [];
+                }
 
                 // 5. Update header avatar
                 if (user) {
@@ -994,10 +1067,19 @@
 
         async function renderRoleUI() {
             const shareItemBtn = document.getElementById('share-item-btn');
-            shareItemBtn.onclick = () => {
-                const addUrl = window.location.pathname.endsWith('.html') ? 'add-item.html' : 'add-item';
-                window.location.href = `${addUrl}?circleId=${currentCircleId}`;
-            };
+            if (shareItemBtn) {
+                shareItemBtn.onclick = () => {
+                    const addUrl = window.location.pathname.endsWith('.html') ? 'add-item.html' : 'add-item';
+                    window.location.href = `${addUrl}?circleId=${currentCircleId}`;
+                };
+            }
+
+            const viewOnlyBanner = document.getElementById('view-only-banner');
+            if (!currentUser) {
+                if (viewOnlyBanner) viewOnlyBanner.classList.remove('hidden');
+            } else {
+                if (viewOnlyBanner) viewOnlyBanner.classList.add('hidden');
+            }
 
             if (currentUserIsMember) {
                 // Show member actions (Post + Share Item)
@@ -1020,13 +1102,17 @@
                 document.getElementById('inventory-section-wrapper').classList.remove('hidden');
 
             } else {
-                // Non-member: hide feed for private circles
+                // Non-member or unauthenticated visitor
+                document.getElementById('member-actions').classList.add('hidden');
+                document.getElementById('member-actions').classList.remove('flex');
+                document.getElementById('leave-circle-btn').classList.add('hidden');
+                document.getElementById('leave-circle-btn').classList.remove('flex');
+
                 if (currentCircle.is_private) {
                     document.getElementById('feed-section').classList.add('hidden');
                     document.getElementById('inventory-section-wrapper').classList.add('hidden');
                     document.getElementById('private-gate').classList.remove('hidden');
 
-                    // Check for pending request
                     if (currentUser) {
                         const req = await window.db.getMyJoinRequest(currentCircleId, currentUser.uid);
                         if (req) {
@@ -1037,12 +1123,23 @@
                         } else {
                             document.getElementById('request-join-btn').classList.remove('hidden');
                             document.getElementById('request-join-btn').classList.add('flex');
+                            document.getElementById('gate-request-btn').textContent = 'Request to Join';
+                            document.getElementById('gate-request-btn').onclick = handleRequestJoin;
                         }
+                    } else {
+                        // Unauthenticated spectator
+                        document.getElementById('gate-request-btn').textContent = 'Sign In to Request Access';
+                        document.getElementById('gate-request-btn').onclick = handleRequestJoin;
+                        document.getElementById('request-join-btn').classList.remove('hidden');
+                        document.getElementById('request-join-btn').classList.add('flex');
+                        document.getElementById('request-join-btn').innerHTML = `<span class="material-symbols-outlined text-base align-middle mr-1">login</span>Sign In to Request Access`;
                     }
                 } else {
                     // Public circle — show Join button
+                    document.getElementById('private-gate').classList.add('hidden');
                     document.getElementById('join-btn').classList.remove('hidden');
                     document.getElementById('join-btn').classList.add('flex');
+                    document.getElementById('join-btn').textContent = 'Join Circle';
                     document.getElementById('feed-section').classList.remove('hidden');
                     document.getElementById('inventory-section-wrapper').classList.remove('hidden');
                 }
@@ -1231,24 +1328,54 @@
         window.handleRequestJoin = handleRequestJoin;
 
         async function handleJoin() {
-            if (!currentUser) return;
+            if (!currentUser) {
+                const returnUrl = `circle-detail.html?id=${encodeURIComponent(currentCircleId)}`;
+                window.location.href = `join-community.html?redirect=${encodeURIComponent(returnUrl)}`;
+                return;
+            }
             const btn = document.getElementById('join-btn');
-            btn.disabled = true;
-            btn.textContent = 'Joining...';
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Joining...';
+            }
             try {
                 await window.db.joinCircle(currentCircleId, currentUser.uid);
                 window.location.reload();
             } catch (err) {
-                btn.disabled = false;
-                btn.textContent = 'Join Circle';
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Join Circle';
+                }
                 alert('Failed to join: ' + err.message);
             }
         }
+        window.handleJoin = handleJoin;
 
         function handleRequestJoin() {
-            if (!currentUser) return;
+            if (!currentUser) {
+                const returnUrl = `circle-detail.html?id=${encodeURIComponent(currentCircleId)}`;
+                window.location.href = `join-community.html?redirect=${encodeURIComponent(returnUrl)}`;
+                return;
+            }
             openJoinRequestModal();
         }
+
+        async function handleShareCircle() {
+            const shareBtnText = document.getElementById('share-btn-text');
+            const res = await window.shareCircle({
+                circleId: currentCircleId,
+                name: currentCircle ? currentCircle.name : '',
+                description: currentCircle ? currentCircle.description : ''
+            });
+            if (res && res.shared && res.method === 'clipboard') {
+                if (shareBtnText) {
+                    const orig = shareBtnText.textContent;
+                    shareBtnText.textContent = 'Copied!';
+                    setTimeout(() => { shareBtnText.textContent = orig; }, 2000);
+                }
+            }
+        }
+        window.handleShareCircle = handleShareCircle;
 
         function openJoinRequestModal() {
             document.getElementById('join-request-message-input').value = '';
@@ -1819,10 +1946,8 @@
         document.addEventListener('DOMContentLoaded', () => {
             initEditCategorySearchAutocomplete();
             firebase.auth().onAuthStateChanged((user) => {
-                if (user) {
-                    currentUser = user;
-                    loadCircleDetails();
-                }
+                currentUser = user || null;
+                loadCircleDetails();
             });
         });
     </script>

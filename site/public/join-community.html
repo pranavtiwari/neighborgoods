@@ -24,11 +24,17 @@
     }
   </style>
   <script>
+    function getRedirectTarget() {
+        const params = new URLSearchParams(window.location.search);
+        const rawTarget = params.get('redirect') || 'explore.html';
+        return window.safeRedirect ? window.safeRedirect(rawTarget) : rawTarget;
+    }
+
     // Redirect if already logged in (skip while a Google redirect sign-in is in
     // progress, otherwise this redirect races the redirect-completion handler)
     firebase.auth().onAuthStateChanged((user) => {
         if (user && sessionStorage.getItem('pg_login_in_progress') !== '1') {
-            window.location.href = 'explore.html';
+            window.location.href = getRedirectTarget();
         }
     });
 
@@ -39,7 +45,7 @@
         return;
       }
       if (sessionStorage.getItem('pg_login_in_progress') === '1') return;
-      await window.loginWithGoogle('explore.html');
+      await window.loginWithGoogle(getRedirectTarget());
     }
 
     function switchAuthTab(tab) {
@@ -85,7 +91,7 @@
       submitBtn.textContent = 'Signing in...';
       
       try {
-        await window.loginWithEmail(email, password, 'explore.html');
+        await window.loginWithEmail(email, password, getRedirectTarget());
       } catch (err) {
         showError(err.message);
         submitBtn.disabled = false;
@@ -104,7 +110,7 @@
       submitBtn.textContent = 'Registering...';
 
       try {
-        await window.registerWithEmail(email, password, name, 'explore.html');
+        await window.registerWithEmail(email, password, name, getRedirectTarget());
       } catch (err) {
         showError(err.message);
         submitBtn.disabled = false;
