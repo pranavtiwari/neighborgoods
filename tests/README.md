@@ -56,16 +56,24 @@ It loads and runs the actual `site/public/firebase-client.js` script inside a mo
    - **Flow 19 (Issue #21)**: Keyset pagination for circles, members, posts, and impact leaderboards ($O(1)$ membership checks and aggregate counts).
    - **Flow 20 (Issue #22)**: Feature flag cohort scoping, lifecycle instrumentation, seed feedback path, soft launch metrics, and Go/No-Go decision framework.
 
+8. **Phase 4: Scale and Public Launch (Flows 21-25)**
+   - **Flow 21 (Issue #33)**: Shareable circle invite links, view-only landing preview, token verification, and post-signup automatic circle join with open-redirect defenses.
+   - **Flow 22 (Issue #23)**: Typesense search integration at catalog threshold, typo-tolerant fuzzy matching, multi-field ranking, live index synchronization, and resilient fallback under simulated network outages.
+   - **Flow 23 (Issue #24)**: In-app notifications subsystem, transaction lifecycle event dispatchers, automated due-date reminders (`due_soon`, `due_today`, `due_overdue`), 12-hour deduplication, and user notification preferences.
+   - **Flow 24 (Issue #25)**: Supply-growth tools: Goodreads CSV parsing with Excel-quoted formula ISBN cleaning, duplicate candidate handling, bulk shelf import, barcode/ISBN scanner copy generator, and want lists ("wishlists") with automatic match notifications.
+   - **Flow 25 (Issue #26)**: Public rollout: synthetic concurrent load test (25 workers, 100 ops), launch privacy audit (address redaction, open-redirect defense, moderation readiness), global catalog public activation gate, and emergency rollback kill-switches.
+
 ## How to Run
 
-Run the tests directly via NPM:
+Run the full test suite directly via NPM:
 
 ```bash
-npm run test
+npm test
 ```
 
-Or run via Node:
+Or run individual test suites:
 
 ```bash
-node tests/run-tests.js
+npm run test:unit
+npm run test:load
 ```
