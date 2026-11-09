@@ -1694,6 +1694,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 const db = firebase.firestore();
                 const itemRef = db.collection('items').doc(requestData.item_id);
                 let itemCircleId = null;
+                let itemOwnerId = null;
+                let itemDisplayName = null;
+                let itemBookId = null;
                 
                 const result = await db.runTransaction(async (transaction) => {
                     const itemDoc = await transaction.get(itemRef);
@@ -1702,6 +1705,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     }
                     const itemData = itemDoc.data();
                     itemCircleId = itemData.circle_id || (Array.isArray(itemData.circle_ids) ? itemData.circle_ids[0] : null);
+                    itemOwnerId = itemData.owner_id;
+                    itemDisplayName = itemData.name;
+                    itemBookId = itemData.book_id || null;
                     
                     // Enforce ownership: owner cannot borrow their own item
                     if (itemData.owner_id === requestData.borrower_id) {
@@ -1869,6 +1875,26 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     circle_id: itemCircleId,
                     borrower_id: requestData.borrower_id
                 });
+
+                try {
+                    const lenderId = requestData.lender_id || itemOwnerId;
+                    if (lenderId) {
+                        await this.dispatchNotification({
+                            recipientId: lenderId,
+                            actorId: requestData.borrower_id,
+                            type: 'request_created',
+                            title: 'New Borrow Request',
+                            body: `New request received for "${itemDisplayName || 'your book'}".`,
+                            actionUrl: `activity.html?request=${result.id}`,
+                            requestId: result.id,
+                            bookId: itemBookId,
+                            itemId: requestData.item_id,
+                            circleId: itemCircleId
+                        });
+                    }
+                } catch (notifErr) {
+                    console.warn('[Notifications] Non-fatal notification error on request_created:', notifErr);
+                }
 
                 return result;
             } catch (err) {
@@ -2063,6 +2089,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 const requestRef = db.collection('requests').doc(requestId);
                 const itemRef = db.collection('items').doc(itemId);
                 let itemCircleId = null;
+                let notifiedBorrowerId = null;
+                let notifiedItemName = null;
+                let notifiedBookId = null;
 
                 await db.runTransaction(async (transaction) => {
                     const itemDoc = await transaction.get(itemRef);
@@ -2071,6 +2100,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     }
                     const itemData = itemDoc.data();
                     itemCircleId = itemData.circle_id || (Array.isArray(itemData.circle_ids) ? itemData.circle_ids[0] : null);
+                    notifiedItemName = itemData.name;
+                    notifiedBookId = itemData.book_id || null;
                     
                     // Check if item is already lent/promised (i.e., is_available is false, or status is approved/borrowed/returned)
                     if (itemData.is_available === false || ['approved', 'borrowed', 'returned'].includes(itemData.status)) {
@@ -2082,6 +2113,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         throw new Error("Request does not exist.");
                     }
                     const requestData = requestDoc.data();
+                    notifiedBorrowerId = requestData.borrower_id;
+                    if (!notifiedBookId && requestData.book_id) notifiedBookId = requestData.book_id;
                     if (requestData.status !== 'pending') {
                         throw new Error("This request is no longer pending.");
                     }
@@ -2154,6 +2187,25 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     item_id: itemId,
                     circle_id: itemCircleId
                 });
+
+                try {
+                    if (notifiedBorrowerId) {
+                        await this.dispatchNotification({
+                            recipientId: notifiedBorrowerId,
+                            actorId: firebase.auth().currentUser?.uid || null,
+                            type: 'request_approved',
+                            title: 'Borrow Request Approved',
+                            body: `Your request for "${notifiedItemName || 'the book'}" has been approved!`,
+                            actionUrl: `activity.html?request=${requestId}`,
+                            requestId: requestId,
+                            bookId: notifiedBookId,
+                            itemId: itemId,
+                            circleId: itemCircleId
+                        });
+                    }
+                } catch (notifErr) {
+                    console.warn('[Notifications] Non-fatal notification error on request_approved:', notifErr);
+                }
             } catch (err) {
                 console.error("Error confirming borrow request:", err);
                 throw err;
@@ -2164,6 +2216,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             try {
                 const db = firebase.firestore();
                 const requestRef = db.collection('requests').doc(requestId);
+                let notifiedBorrowerId = null;
+                let notifiedCircleId = null;
+                let notifiedItemName = null;
                 
                 await db.runTransaction(async (transaction) => {
                     const requestDoc = await transaction.get(requestRef);
@@ -2172,6 +2227,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     if (requestData.status !== 'pending') {
                         throw new Error("Only pending requests can be declined.");
                     }
+                    notifiedBorrowerId = requestData.borrower_id;
+                    notifiedCircleId = requestData.circle_id || null;
+                    notifiedItemName = requestData.item_name || 'the book';
 
                     const eventRef = db.collection('transaction_events').doc();
                     const now = new Date();
@@ -2223,6 +2281,23 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         created_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 });
+
+                try {
+                    if (notifiedBorrowerId) {
+                        await this.dispatchNotification({
+                            recipientId: notifiedBorrowerId,
+                            actorId: firebase.auth().currentUser?.uid || null,
+                            type: 'request_declined',
+                            title: 'Borrow Request Declined',
+                            body: `Your request for "${notifiedItemName}" was declined.`,
+                            actionUrl: `activity.html?request=${requestId}`,
+                            requestId: requestId,
+                            circleId: notifiedCircleId
+                        });
+                    }
+                } catch (notifErr) {
+                    console.warn('[Notifications] Non-fatal notification error on request_declined:', notifErr);
+                }
             } catch (err) {
                 console.error("Error declining borrow request:", err);
                 throw err;
@@ -2899,6 +2974,10 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 const db = firebase.firestore();
                 const requestRef = db.collection('requests').doc(requestId);
                 const itemRef = db.collection('items').doc(itemId);
+                let notifiedLenderId = null;
+                let notifiedBorrowerId = null;
+                let notifiedItemName = null;
+                let notifiedCircleId = null;
 
                 await db.runTransaction(async (transaction) => {
                     const requestDoc = await transaction.get(requestRef);
@@ -2911,6 +2990,10 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     const itemDoc = await transaction.get(itemRef);
                     if (!itemDoc.exists) throw new Error("Item not found");
                     const itemData = itemDoc.data();
+                    notifiedLenderId = requestData.lender_id || itemData.owner_id;
+                    notifiedBorrowerId = requestData.borrower_id;
+                    notifiedItemName = itemData.name;
+                    notifiedCircleId = requestData.circle_id || itemData.circle_id || null;
 
                     const eventRef = db.collection('transaction_events').doc();
                     const now = new Date();
@@ -2960,6 +3043,26 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         created_at: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 });
+
+                try {
+                    const currentUid = firebase.auth().currentUser?.uid;
+                    const recipientId = currentUid === notifiedBorrowerId ? notifiedLenderId : notifiedBorrowerId;
+                    if (recipientId) {
+                        await this.dispatchNotification({
+                            recipientId,
+                            actorId: currentUid || null,
+                            type: 'item_picked_up',
+                            title: 'Item Picked Up',
+                            body: `"${notifiedItemName || 'The book'}" has been marked as picked up.`,
+                            actionUrl: `activity.html?request=${requestId}`,
+                            requestId: requestId,
+                            itemId: itemId,
+                            circleId: notifiedCircleId
+                        });
+                    }
+                } catch (notifErr) {
+                    console.warn('[Notifications] Non-fatal notification error on item_picked_up:', notifErr);
+                }
             } catch (err) {
                 console.error("Error marking as picked up:", err);
                 throw err;
@@ -3232,6 +3335,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 let beneficiaries = [];
                 let completedItemId = null;
                 let completedCircleId = null;
+                let notifiedBorrowerId = null;
+                let notifiedItemName = null;
 
                 await db.runTransaction(async (transaction) => {
                     const requestDoc = await transaction.get(requestRef);
@@ -3242,6 +3347,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     }
                     completedItemId = requestData.item_id;
                     completedCircleId = requestData.circle_id || null;
+                    notifiedBorrowerId = requestData.borrower_id;
+                    notifiedItemName = requestData.item_name || 'the book';
 
                     const eventRef = db.collection('transaction_events').doc();
                     const now = new Date();
@@ -3351,6 +3458,24 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     circle_id: completedCircleId,
                     status: 'completed'
                 });
+
+                try {
+                    if (notifiedBorrowerId) {
+                        await this.dispatchNotification({
+                            recipientId: notifiedBorrowerId,
+                            actorId: user.uid,
+                            type: 'transaction_completed',
+                            title: 'Return Confirmed',
+                            body: `Return confirmed for "${notifiedItemName}". Thank you for sharing!`,
+                            actionUrl: `activity.html?request=${requestId}`,
+                            requestId: requestId,
+                            itemId: completedItemId,
+                            circleId: completedCircleId
+                        });
+                    }
+                } catch (notifErr) {
+                    console.warn('[Notifications] Non-fatal notification error on transaction_completed:', notifErr);
+                }
 
                 return { credited: beneficiaries.length };
             } catch (err) {
@@ -6018,6 +6143,390 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 criteria,
                 evaluated_at: new Date().toISOString()
             };
+        },
+
+        // ==========================================
+        // Issue #24: Notifications and Due-Date Reminders
+        // ==========================================
+        _mockEmailOutbox: [],
+
+        getNotificationPreferences: async function(userId) {
+            if (!userId) {
+                return {
+                    in_app_enabled: true,
+                    email_enabled: true,
+                    due_reminders_enabled: true,
+                    marketing_enabled: false,
+                    email_unsubscribe_token: null
+                };
+            }
+            try {
+                const userDoc = await firebase.firestore().collection('users').doc(userId).get();
+                if (userDoc.exists) {
+                    const data = userDoc.data();
+                    if (data && data.notification_preferences) {
+                        return {
+                            in_app_enabled: data.notification_preferences.in_app_enabled !== false,
+                            email_enabled: data.notification_preferences.email_enabled !== false,
+                            due_reminders_enabled: data.notification_preferences.due_reminders_enabled !== false,
+                            marketing_enabled: Boolean(data.notification_preferences.marketing_enabled),
+                            email_unsubscribe_token: data.notification_preferences.email_unsubscribe_token || `unsub_${userId}`
+                        };
+                    }
+                }
+            } catch (err) {
+                console.warn('Could not read user notification preferences:', err);
+            }
+            return {
+                in_app_enabled: true,
+                email_enabled: true,
+                due_reminders_enabled: true,
+                marketing_enabled: false,
+                email_unsubscribe_token: `unsub_${userId}`
+            };
+        },
+
+        updateNotificationPreferences: async function(userId, updates) {
+            if (!userId) throw new Error('User ID required');
+            const patch = {};
+            if ('in_app_enabled' in updates) patch.in_app_enabled = Boolean(updates.in_app_enabled);
+            if ('email_enabled' in updates) patch.email_enabled = Boolean(updates.email_enabled);
+            if ('due_reminders_enabled' in updates) patch.due_reminders_enabled = Boolean(updates.due_reminders_enabled);
+            if ('marketing_enabled' in updates) patch.marketing_enabled = Boolean(updates.marketing_enabled);
+            patch.email_unsubscribe_token = updates.email_unsubscribe_token || `unsub_${userId}`;
+            patch.updated_at = firebase.firestore.FieldValue.serverTimestamp();
+
+            await firebase.firestore().collection('users').doc(userId).set({
+                notification_preferences: patch
+            }, { merge: true });
+
+            return patch;
+        },
+
+        unsubscribeEmailNotifications: async function(token) {
+            if (!token || typeof token !== 'string') throw new Error('Invalid unsubscribe token');
+            const cleanToken = token.trim();
+            let targetUserId = null;
+
+            if (cleanToken.startsWith('unsub_')) {
+                targetUserId = cleanToken.substring(6);
+            } else {
+                const snap = await firebase.firestore().collection('users')
+                    .where('notification_preferences.email_unsubscribe_token', '==', cleanToken)
+                    .limit(1)
+                    .get();
+                if (!snap.empty) {
+                    targetUserId = snap.docs[0].id;
+                }
+            }
+
+            if (!targetUserId) {
+                throw new Error('Unsubscribe token not found or expired');
+            }
+
+            await this.updateNotificationPreferences(targetUserId, { email_enabled: false });
+            return { success: true, userId: targetUserId, email_enabled: false };
+        },
+
+        dispatchNotification: async function({
+            recipientId,
+            actorId = null,
+            type,
+            title,
+            body,
+            actionUrl = '',
+            requestId = null,
+            bookId = null,
+            itemId = null,
+            circleId = null,
+            metadata = {}
+        }) {
+            if (!recipientId || !type || !title || !body) {
+                console.warn('[Notifications] Missing required notification fields:', { recipientId, type, title });
+                return { success: false, reason: 'missing_fields' };
+            }
+
+            try {
+                const prefs = await this.getNotificationPreferences(recipientId);
+
+                // Check due-date reminder preference specifically
+                if (type.startsWith('due_') && !prefs.due_reminders_enabled) {
+                    return { success: false, reason: 'due_reminders_disabled' };
+                }
+
+                const db = firebase.firestore();
+
+                // Rate limiting and deduplication:
+                const dedupKey = metadata.dedup_key || (requestId ? `${recipientId}_${type}_${requestId}` : null);
+                if (dedupKey) {
+                    const existingSnap = await db.collection('notifications')
+                        .where('recipient_id', '==', recipientId)
+                        .where('dedup_key', '==', dedupKey)
+                        .limit(1)
+                        .get();
+                    if (existingSnap && existingSnap.docs && existingSnap.docs.length > 0) {
+                        return { success: true, dedupSkipped: true, existingId: existingSnap.docs[0].id };
+                    }
+                }
+
+                let createdInAppId = null;
+
+                // 1. Create In-App Notification if enabled
+                if (prefs.in_app_enabled) {
+                    const notifDocRef = await db.collection('notifications').add({
+                        recipient_id: recipientId,
+                        actor_id: actorId,
+                        type,
+                        title,
+                        body,
+                        action_url: actionUrl,
+                        request_id: requestId,
+                        book_id: bookId,
+                        item_id: itemId,
+                        circle_id: circleId,
+                        is_read: false,
+                        dedup_key: dedupKey,
+                        metadata: metadata || {},
+                        created_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    createdInAppId = notifDocRef.id;
+                }
+
+                // 2. Dispatch simulated email if enabled
+                let emailSent = false;
+                if (prefs.email_enabled) {
+                    const unsubscribeUrl = `https://neighborgoods.app/unsubscribe?token=${prefs.email_unsubscribe_token || ('unsub_' + recipientId)}`;
+                    const emailRecord = {
+                        recipient_id: recipientId,
+                        subject: title,
+                        body_text: body,
+                        action_url: actionUrl,
+                        unsubscribe_url: unsubscribeUrl,
+                        sent_at: new Date().toISOString()
+                    };
+                    this._mockEmailOutbox.push(emailRecord);
+                    emailSent = true;
+                }
+
+                return {
+                    success: true,
+                    inAppDispatched: Boolean(createdInAppId),
+                    emailDispatched: emailSent,
+                    notificationId: createdInAppId,
+                    dedupSkipped: false
+                };
+            } catch (err) {
+                console.warn('[Notifications] Non-fatal notification dispatch error:', err);
+                return { success: false, error: err.message };
+            }
+        },
+
+        getUserNotifications: async function(userId, { unreadOnly = false, limit = 20, startAfter = null } = {}) {
+            if (!userId) return [];
+            try {
+                let query = firebase.firestore().collection('notifications')
+                    .where('recipient_id', '==', userId);
+
+                if (unreadOnly) {
+                    query = query.where('is_read', '==', false);
+                }
+
+                const snap = await query.get();
+                let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                list.sort((a, b) => {
+                    const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : new Date(a.created_at || 0).getTime();
+                    const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : new Date(b.created_at || 0).getTime();
+                    return timeB - timeA;
+                });
+
+                if (startAfter) {
+                    const idx = list.findIndex(n => n.id === startAfter);
+                    if (idx !== -1) {
+                        list = list.slice(idx + 1);
+                    }
+                }
+
+                return list.slice(0, limit);
+            } catch (err) {
+                console.error('Error fetching user notifications:', err);
+                return [];
+            }
+        },
+
+        getUnreadNotificationCount: async function(userId) {
+            if (!userId) return 0;
+            try {
+                const snap = await firebase.firestore().collection('notifications')
+                    .where('recipient_id', '==', userId)
+                    .where('is_read', '==', false)
+                    .get();
+                return snap.docs.length;
+            } catch (err) {
+                console.warn('Error reading unread notification count:', err);
+                return 0;
+            }
+        },
+
+        markNotificationAsRead: async function(notificationId, userId = null) {
+            if (!notificationId) return null;
+            try {
+                await firebase.firestore().collection('notifications').doc(notificationId).update({
+                    is_read: true,
+                    read_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                return { id: notificationId, is_read: true };
+            } catch (err) {
+                console.error('Error marking notification as read:', err);
+                throw err;
+            }
+        },
+
+        markAllNotificationsAsRead: async function(userId) {
+            if (!userId) return { count: 0 };
+            try {
+                const snap = await firebase.firestore().collection('notifications')
+                    .where('recipient_id', '==', userId)
+                    .where('is_read', '==', false)
+                    .get();
+
+                const db = firebase.firestore();
+                const batch = db.batch();
+                snap.docs.forEach(doc => {
+                    batch.update(doc.ref, {
+                        is_read: true,
+                        read_at: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                });
+                await batch.commit();
+                return { count: snap.docs.length };
+            } catch (err) {
+                console.error('Error marking all notifications as read:', err);
+                throw err;
+            }
+        },
+
+        subscribeToUserNotifications: function(userId, callback) {
+            if (!userId || typeof callback !== 'function') return () => {};
+            try {
+                return firebase.firestore().collection('notifications')
+                    .where('recipient_id', '==', userId)
+                    .onSnapshot(snap => {
+                        const notifications = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        notifications.sort((a, b) => {
+                            const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : new Date(a.created_at || 0).getTime();
+                            const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : new Date(b.created_at || 0).getTime();
+                            return timeB - timeA;
+                        });
+                        const unreadCount = notifications.filter(n => !n.is_read).length;
+                        callback({ notifications, unreadCount });
+                    }, err => {
+                        console.warn('Subscription error for notifications:', err);
+                    });
+            } catch (e) {
+                return () => {};
+            }
+        },
+
+        checkAndDispatchDueDateReminders: async function({ asOfDate = new Date(), warningDays = 2 } = {}) {
+            const now = asOfDate instanceof Date ? asOfDate : new Date(asOfDate);
+            const dateStr = now.toISOString().split('T')[0];
+            let totalEvaluated = 0;
+            let remindersSent = 0;
+            let dueSoonCount = 0;
+            let overdueCount = 0;
+
+            try {
+                const db = firebase.firestore();
+                const snap = await db.collection('requests')
+                    .where('status', 'in', ['borrowed', 'picked_up', 'in_progress'])
+                    .get();
+
+                for (const doc of snap.docs) {
+                    totalEvaluated++;
+                    const req = { id: doc.id, ...doc.data() };
+                    if (!req.borrower_id) continue;
+
+                    let dueDate = null;
+                    if (req.return_due_date) {
+                        dueDate = new Date(req.return_due_date);
+                    } else if (req.end_date) {
+                        dueDate = new Date(req.end_date);
+                    } else {
+                        const baseDate = req.picked_up_at?.toMillis
+                            ? new Date(req.picked_up_at.toMillis())
+                            : (req.created_at?.toMillis ? new Date(req.created_at.toMillis()) : new Date());
+                        dueDate = new Date(baseDate.getTime() + (14 * 24 * 60 * 60 * 1000));
+                    }
+
+                    if (isNaN(dueDate.getTime())) continue;
+
+                    const diffMs = dueDate.getTime() - now.getTime();
+                    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+                    const itemName = req.item_name || req.name || 'your borrowed book';
+
+                    let reminderType = null;
+                    let title = '';
+                    let body = '';
+
+                    if (diffDays < 0) {
+                        reminderType = 'due_overdue';
+                        const overdueDays = Math.abs(diffDays);
+                        title = `Overdue: "${itemName}" was due ${overdueDays} day${overdueDays !== 1 ? 's' : ''} ago`;
+                        body = `"${itemName}" was due on ${dueDate.toLocaleDateString()}. Please arrange a return with the lender.`;
+                        overdueCount++;
+                    } else if (diffDays <= warningDays) {
+                        reminderType = diffDays === 0 ? 'due_today' : 'due_soon';
+                        title = diffDays === 0
+                            ? `Due Today: "${itemName}"`
+                            : `Due in ${diffDays} day${diffDays !== 1 ? 's' : ''}: "${itemName}"`;
+                        body = `Friendly reminder: "${itemName}" is due on ${dueDate.toLocaleDateString()}.`;
+                        dueSoonCount++;
+                    }
+
+                    if (reminderType) {
+                        const dedupKey = `${req.id}_${reminderType}_${dateStr}`;
+                        const res = await this.dispatchNotification({
+                            recipientId: req.borrower_id,
+                            actorId: req.lender_id || null,
+                            type: reminderType,
+                            title,
+                            body,
+                            actionUrl: `activity.html?request=${req.id}`,
+                            requestId: req.id,
+                            bookId: req.book_id || null,
+                            itemId: req.item_id || null,
+                            circleId: req.circle_id || null,
+                            metadata: {
+                                dedup_key: dedupKey,
+                                due_date: dueDate.toISOString(),
+                                diff_days: diffDays
+                            }
+                        });
+
+                        if (res && res.success && !res.dedupSkipped) {
+                            remindersSent++;
+                        }
+                    }
+                }
+
+                return {
+                    success: true,
+                    totalEvaluated,
+                    remindersSent,
+                    dueSoonCount,
+                    overdueCount,
+                    evaluatedAt: now.toISOString()
+                };
+            } catch (err) {
+                console.error('Error checking due date reminders:', err);
+                return {
+                    success: false,
+                    totalEvaluated,
+                    remindersSent,
+                    error: err.message
+                };
+            }
         }
     };
 

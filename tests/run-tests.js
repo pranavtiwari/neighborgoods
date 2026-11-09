@@ -3857,6 +3857,160 @@ await test('Flow 22: Typesense search integration at catalog threshold, typo tol
     delete window.TYPESENSE_FORCE_ENABLED;
 });
 
+await test('Flow 23: Notifications model, transaction event dispatchers, due-date reminders, and preferences (Issue #24)', async () => {
+    const aliceUid = 'notif-alice-' + Math.random().toString(36).substring(2, 7);
+    const bobUid = 'notif-bob-' + Math.random().toString(36).substring(2, 7);
+
+    // Seed user accounts
+    await firebase.firestore().collection('users').doc(aliceUid).set({
+        email: 'alice@example.com',
+        created_at: new Date().toISOString()
+    });
+    await firebase.firestore().collection('users').doc(bobUid).set({
+        email: 'bob@example.com',
+        created_at: new Date().toISOString()
+    });
+
+    // 1. Delivery Preferences & Opt-Out
+    const alicePrefs = await window.db.getNotificationPreferences(aliceUid);
+    assert.strictEqual(alicePrefs.in_app_enabled, true);
+    assert.strictEqual(alicePrefs.email_enabled, true);
+    assert.strictEqual(alicePrefs.due_reminders_enabled, true);
+
+    // Bob opts out of email notifications
+    await window.db.updateNotificationPreferences(bobUid, { email_enabled: false });
+    const bobPrefs = await window.db.getNotificationPreferences(bobUid);
+    assert.strictEqual(bobPrefs.email_enabled, false, 'Bob opted out of email');
+    assert.strictEqual(bobPrefs.in_app_enabled, true, 'In-app notifications remain active');
+
+    // 2. Direct Dispatch & Mock Email Outbox
+    window.db._mockEmailOutbox = [];
+    firebase.auth().currentUser = { uid: bobUid };
+
+    // Dispatch to Alice (both in-app and email enabled)
+    const aliceDispatch = await window.db.dispatchNotification({
+        recipientId: aliceUid,
+        actorId: bobUid,
+        type: 'test_notification',
+        title: 'Welcome to NeighborGoods',
+        body: 'Check out local books in your neighborhood!'
+    });
+    assert.strictEqual(aliceDispatch.inAppDispatched, true);
+    assert.strictEqual(aliceDispatch.emailDispatched, true);
+    assert.ok(window.db._mockEmailOutbox.some(e => e.recipient_id === aliceUid && e.unsubscribe_url.includes('token=')));
+
+    // Dispatch to Bob (email disabled)
+    const bobDispatch = await window.db.dispatchNotification({
+        recipientId: bobUid,
+        actorId: aliceUid,
+        type: 'test_notification',
+        title: 'New Update',
+        body: 'In-app notification for Bob'
+    });
+    assert.strictEqual(bobDispatch.inAppDispatched, true);
+    assert.strictEqual(bobDispatch.emailDispatched, false, 'No email sent when user has opted out');
+
+    // One-click unsubscribe via token
+    const unsubToken = alicePrefs.email_unsubscribe_token;
+    const unsubResult = await window.db.unsubscribeEmailNotifications(unsubToken);
+    assert.strictEqual(unsubResult.success, true);
+    assert.strictEqual(unsubResult.userId, aliceUid);
+    const updatedAlicePrefs = await window.db.getNotificationPreferences(aliceUid);
+    assert.strictEqual(updatedAlicePrefs.email_enabled, false, 'Alice successfully unsubscribed from email');
+    assert.strictEqual(updatedAlicePrefs.in_app_enabled, true, 'Alice in-app remains true');
+
+    // 3. Transaction Event Notification Dispatchers
+    firebase.auth().currentUser = { uid: bobUid };
+    const duneBook = await window.db.createBook({
+        title: 'The Dune Chronicles',
+        authors: ['Frank Herbert'],
+        isbn: '9780441172719'
+    });
+    const bookListing = await window.db.addItem({
+        name: 'The Dune Chronicles',
+        kind: 'book',
+        book_id: duneBook.id,
+        owner_id: bobUid,
+        visibility: 'public',
+        request_policy: 'anyone'
+    });
+
+    // Alice requests to borrow Bob's book
+    firebase.auth().currentUser = { uid: aliceUid };
+    const borrowReq = await window.db.createBorrowRequest({
+        item_id: bookListing.id,
+        borrower_id: aliceUid
+    });
+
+    // Verify Bob received in-app notification of new request
+    const bobNotifs = await window.db.getUserNotifications(bobUid);
+    assert.ok(bobNotifs.some(n => n.type === 'request_created' && n.request_id === borrowReq.id), 'Bob received request_created notification');
+
+    // Bob approves Alice's request
+    firebase.auth().currentUser = { uid: bobUid };
+    await window.db.confirmBorrowRequest(borrowReq.id, bookListing.id, 'borrow');
+
+    // Verify Alice received request_approved notification
+    const aliceNotifsAfterApprove = await window.db.getUserNotifications(aliceUid);
+    assert.ok(aliceNotifsAfterApprove.some(n => n.type === 'request_approved' && n.request_id === borrowReq.id), 'Alice received request_approved notification');
+
+    // Alice marks as picked up
+    firebase.auth().currentUser = { uid: aliceUid };
+    await window.db.markPickedUp(borrowReq.id, bookListing.id);
+
+    // Verify Bob received item_picked_up notification
+    const bobNotifsAfterPickup = await window.db.getUserNotifications(bobUid);
+    assert.ok(bobNotifsAfterPickup.some(n => n.type === 'item_picked_up' && n.request_id === borrowReq.id), 'Bob received item_picked_up notification');
+
+    // 4. Due-Date Reminders Engine & Deduplication
+    const mockToday = new Date('2026-11-10T12:00:00Z');
+    // Set return_due_date to 1 day away (due soon) by the lender (Bob)
+    firebase.auth().currentUser = { uid: bobUid };
+    const dueDateTomorrow = new Date('2026-11-11T12:00:00Z');
+    await firebase.firestore().collection('requests').doc(borrowReq.id).update({
+        return_due_date: dueDateTomorrow.toISOString()
+    });
+
+    const reminderRun1 = await window.db.checkAndDispatchDueDateReminders({ asOfDate: mockToday, warningDays: 2 });
+    assert.strictEqual(reminderRun1.success, true);
+    assert.ok(reminderRun1.remindersSent >= 1, 'Dispatched due soon reminder');
+
+    // Verify Alice received due_soon notification
+    const aliceReminders = await window.db.getUserNotifications(aliceUid);
+    assert.ok(aliceReminders.some(n => n.type === 'due_soon' && n.request_id === borrowReq.id), 'Alice received due_soon reminder');
+
+    // Test deduplication on same day: running reminders again should not create duplicate
+    const reminderRun2 = await window.db.checkAndDispatchDueDateReminders({ asOfDate: mockToday, warningDays: 2 });
+    assert.strictEqual(reminderRun2.remindersSent, 0, 'Deduplication prevented duplicate reminder on the same date');
+
+    // Test overdue reminder: set due date in the past by Bob
+    firebase.auth().currentUser = { uid: bobUid };
+    const overdueDate = new Date('2026-11-05T12:00:00Z');
+    await firebase.firestore().collection('requests').doc(borrowReq.id).update({
+        return_due_date: overdueDate.toISOString()
+    });
+
+    const reminderRunOverdue = await window.db.checkAndDispatchDueDateReminders({ asOfDate: mockToday, warningDays: 2 });
+    assert.ok(reminderRunOverdue.overdueCount >= 1, 'Detected overdue book');
+
+    const aliceOverdueNotifs = await window.db.getUserNotifications(aliceUid);
+    assert.ok(aliceOverdueNotifs.some(n => n.type === 'due_overdue' && n.request_id === borrowReq.id), 'Alice received due_overdue reminder');
+
+    // 5. Read Tracking & Batch Mark Read
+    firebase.auth().currentUser = { uid: aliceUid };
+    const unreadCountBefore = await window.db.getUnreadNotificationCount(aliceUid);
+    assert.ok(unreadCountBefore > 0, 'Alice has unread notifications');
+
+    const notifToMark = aliceOverdueNotifs[0];
+    await window.db.markNotificationAsRead(notifToMark.id);
+    const unreadAfterSingle = await window.db.getUnreadNotificationCount(aliceUid);
+    assert.strictEqual(unreadAfterSingle, unreadCountBefore - 1);
+
+    await window.db.markAllNotificationsAsRead(aliceUid);
+    const unreadAfterAll = await window.db.getUnreadNotificationCount(aliceUid);
+    assert.strictEqual(unreadAfterAll, 0, 'All notifications marked as read');
+});
+
 // ==========================================
 // RESULTS REPORT
 // ==========================================

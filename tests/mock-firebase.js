@@ -187,6 +187,7 @@ class MockQuery {
         return {
             docs: mappedDocs,
             size: mappedDocs.length,
+            empty: mappedDocs.length === 0,
             forEach: (cb) => mappedDocs.forEach(cb)
         };
     }

@@ -79,9 +79,13 @@
 <button id="btn-lending" onclick="switchView('lending')" class="flex-1 md:px-8 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all">
                     Lending
                 </button>
+<button id="btn-notifications" onclick="switchView('notifications')" class="flex-1 md:px-8 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all flex items-center justify-center gap-1.5">
+                    <span>Notifications</span>
+                    <span id="notif-badge" class="hidden bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">0</span>
+                </button>
 </div>
 </div>
-<section class="mb-12">
+<section id="active-section" class="mb-12">
 <div class="flex justify-between items-end mb-6">
 <h3 id="section-title" class="text-1.75rem font-headline font-bold text-on-surface">In Progress</h3>
 <span id="item-count" class="text-label-md font-medium text-primary uppercase tracking-widest">0 Items</span>
@@ -90,10 +94,24 @@
     <!-- Items will be injected here -->
 </div>
 </section>
-<section class="mb-8">
+<section id="past-section" class="mb-8">
 <h3 class="text-1.75rem font-headline font-bold text-on-surface mb-6">Past Activity</h3>
 <div id="past-activity-list" class="space-y-3">
     <!-- Past activity items will be injected here dynamically -->
+</div>
+</section>
+<section id="notifications-section" class="mb-12 hidden">
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h3 class="text-1.75rem font-headline font-bold text-on-surface">Notifications & Reminders</h3>
+        <p class="text-xs text-on-surface-variant">Borrow updates, due dates, and reminders</p>
+    </div>
+    <button id="btn-mark-all-read" onclick="handleMarkAllNotificationsRead()" class="text-xs font-bold text-primary hover:underline cursor-pointer">
+        Mark all read
+    </button>
+</div>
+<div id="notifications-list" class="space-y-3">
+    <!-- Notifications injected here dynamically -->
 </div>
 </section>
 
@@ -208,20 +226,101 @@
         document.getElementById('item-count').textContent = `${remaining} Item${remaining !== 1 ? 's' : ''}`;
     }
 
+    let latestNotifications = [];
+
     async function switchView(view) {
         currentView = view;
         const btnB = document.getElementById('btn-borrowing');
         const btnL = document.getElementById('btn-lending');
-        
+        const btnN = document.getElementById('btn-notifications');
+        const activeSec = document.getElementById('active-section');
+        const pastSec = document.getElementById('past-section');
+        const notifSec = document.getElementById('notifications-section');
+
+        btnB.className = 'flex-1 md:px-8 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all';
+        btnL.className = 'flex-1 md:px-8 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all';
+        if (btnN) btnN.className = 'flex-1 md:px-8 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all flex items-center justify-center gap-1.5';
+
         if (view === 'borrowing') {
             btnB.className = 'flex-1 md:px-8 py-2.5 rounded-lg bg-surface-container-lowest text-primary font-semibold shadow-sm transition-all';
-            btnL.className = 'flex-1 md:px-8 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all';
-        } else {
+            if (activeSec) activeSec.classList.remove('hidden');
+            if (pastSec) pastSec.classList.remove('hidden');
+            if (notifSec) notifSec.classList.add('hidden');
+            await fetchActivity();
+        } else if (view === 'lending') {
             btnL.className = 'flex-1 md:px-8 py-2.5 rounded-lg bg-surface-container-lowest text-primary font-semibold shadow-sm transition-all';
-            btnB.className = 'flex-1 md:px-8 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all';
+            if (activeSec) activeSec.classList.remove('hidden');
+            if (pastSec) pastSec.classList.remove('hidden');
+            if (notifSec) notifSec.classList.add('hidden');
+            await fetchActivity();
+        } else if (view === 'notifications') {
+            if (btnN) btnN.className = 'flex-1 md:px-8 py-2.5 rounded-lg bg-surface-container-lowest text-primary font-semibold shadow-sm transition-all flex items-center justify-center gap-1.5';
+            if (activeSec) activeSec.classList.add('hidden');
+            if (pastSec) pastSec.classList.add('hidden');
+            if (notifSec) notifSec.classList.remove('hidden');
+            await renderNotificationsList();
         }
-        
-        await fetchActivity();
+    }
+
+    async function renderNotificationsList() {
+        const container = document.getElementById('notifications-list');
+        if (!container) return;
+        if (!userSession || !userSession.user) return;
+
+        const notifs = await window.db.getUserNotifications(userSession.user.uid, { limit: 30 });
+        latestNotifications = notifs;
+
+        if (notifs.length === 0) {
+            container.innerHTML = `<div class="p-8 text-center text-on-surface-variant bg-surface-container-low rounded-2xl border border-outline-variant/10">No notifications yet. You're all caught up!</div>`;
+            return;
+        }
+
+        container.innerHTML = notifs.map(n => {
+            const isUnread = !n.is_read;
+            const bgClass = isUnread ? 'bg-primary/5 border-primary/20' : 'bg-surface-container-lowest border-outline-variant/10';
+            const icon = n.type.startsWith('due_') ? 'schedule' : (n.type.includes('approved') ? 'check_circle' : 'notifications');
+            const iconColor = n.type === 'due_overdue' ? 'text-red-500' : (n.type.includes('approved') ? 'text-emerald-500' : 'text-primary');
+
+            return `
+                <div class="flex items-start justify-between gap-4 p-4 rounded-xl border ${bgClass} transition-all">
+                    <div class="flex items-start gap-3">
+                        <span class="material-symbols-outlined ${iconColor} text-2xl mt-0.5">${icon}</span>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h4 class="text-sm font-bold text-on-surface">${escapeHtml(n.title)}</h4>
+                                ${isUnread ? '<span class="w-2 h-2 rounded-full bg-primary inline-block"></span>' : ''}
+                            </div>
+                            <p class="text-xs text-on-surface-variant mt-1">${escapeHtml(n.body)}</p>
+                            ${n.action_url ? `<a href="${n.action_url}" class="inline-block mt-2 text-xs font-bold text-primary hover:underline">View details →</a>` : ''}
+                        </div>
+                    </div>
+                    ${isUnread ? `
+                        <button onclick="handleMarkNotificationRead('${n.id}')" class="text-xs text-on-surface-variant hover:text-primary px-2 py-1 rounded hover:bg-surface-container transition-colors shrink-0">
+                            Mark read
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function handleMarkNotificationRead(id) {
+        try {
+            await window.db.markNotificationAsRead(id);
+            if (currentView === 'notifications') await renderNotificationsList();
+        } catch (e) {
+            console.warn(e);
+        }
+    }
+
+    async function handleMarkAllNotificationsRead() {
+        if (!userSession || !userSession.user) return;
+        try {
+            await window.db.markAllNotificationsAsRead(userSession.user.uid);
+            if (currentView === 'notifications') await renderNotificationsList();
+        } catch (e) {
+            console.warn(e);
+        }
     }
 
     // --- Return Flow handlers ---
@@ -941,6 +1040,21 @@
                 userSession.user.id = user.uid; // compatibility mapping
                 updateHeaderAvatar(user);
                 fetchActivity();
+
+                window.db.subscribeToUserNotifications(user.uid, ({ notifications, unreadCount }) => {
+                    const badge = document.getElementById('notif-badge');
+                    if (badge) {
+                        badge.textContent = unreadCount;
+                        if (unreadCount > 0) {
+                            badge.classList.remove('hidden');
+                        } else {
+                            badge.classList.add('hidden');
+                        }
+                    }
+                    if (currentView === 'notifications') {
+                        renderNotificationsList();
+                    }
+                });
             } else {
                 window.location.href = 'join-community.html';
             }

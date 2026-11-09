@@ -98,6 +98,11 @@ function enforceDelete(collectionName, docId, data, uid, firestore) {
             // Append-only moderation records; no client deletes.
             DENY(`${collectionName} are immutable once created`);
 
+        case 'notifications': {
+            if (data.recipient_id !== uid) DENY('only recipient may delete notification');
+            return;
+        }
+
         default:
             return;
     }
@@ -108,7 +113,7 @@ function enforceDelete(collectionName, docId, data, uid, firestore) {
 const ENFORCED = new Set([
     'requests', 'items', 'circle_members', 'circle_join_requests',
     'ratings', 'wishlists', 'reports', 'blocks', 'profiles', 'impact_events',
-    'transaction_events', 'analytics_events', 'seed_feedback'
+    'transaction_events', 'analytics_events', 'seed_feedback', 'notifications'
 ]);
 
 function buildRulesEngine(firestore) {
@@ -188,7 +193,7 @@ function buildRulesEngine(firestore) {
                     const isBorrower = prior.borrower_id === uid;
                     if (!isLender && !isBorrower) DENY('only the borrower or lender may update');
                     const SHARED_FIELDS = ['status', 'timeline', 'last_event_id', 'last_event_type', 'updated_at', 'cancelled_at', 'shipped_at', 'delivered_at', 'tracking_number', 'carrier'];
-                    const LENDER_FIELDS = [...SHARED_FIELDS, 'confirmed_at', 'declined_at', 'picked_up_at', 'returned_at', 'completed_at', 'donated_at', 'lender_confirmed_at', 'owner_confirmed_at'];
+                    const LENDER_FIELDS = [...SHARED_FIELDS, 'confirmed_at', 'declined_at', 'picked_up_at', 'returned_at', 'completed_at', 'donated_at', 'lender_confirmed_at', 'owner_confirmed_at', 'return_due_date'];
                     const BORROWER_FIELDS = [...SHARED_FIELDS, 'picked_up_at', 'returned_at', 'borrower_confirmed_at', 'requester_confirmed_at'];
                     if (isLender && !isBorrower) {
                         if (changed.some(k => !LENDER_FIELDS.includes(k))) DENY(`lender may only change: ${LENDER_FIELDS.join(', ')}`);
@@ -500,6 +505,21 @@ function buildRulesEngine(firestore) {
                 if (data.user_id !== uid) DENY('user_id must match authenticated user');
                 if (typeof data.comment !== 'string' || !data.comment) {
                     DENY('comment is required');
+                }
+                return;
+            }
+
+            // ── notifications (Issue #24) ──────────────────────────────────
+            case 'notifications': {
+                if (!uid) DENY('not signed in');
+                if (isCreate) {
+                    if (typeof data.recipient_id !== 'string' || !data.recipient_id) {
+                        DENY('recipient_id is required');
+                    }
+                } else {
+                    if (prior && prior.recipient_id !== uid) {
+                        DENY('only recipient may update notification');
+                    }
                 }
                 return;
             }

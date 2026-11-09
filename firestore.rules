@@ -409,7 +409,7 @@ service cloud.firestore {
                        'returned_at', 'completed_at', 'donated_at', 'cancelled_at',
                        'shipped_at', 'delivered_at', 'timeline', 'last_event_id',
                        'last_event_type', 'updated_at', 'tracking_number', 'carrier',
-                       'lender_confirmed_at', 'owner_confirmed_at'])) ||
+                       'lender_confirmed_at', 'owner_confirmed_at', 'return_due_date'])) ||
           // Borrower may acknowledge pickup/shipping/return or cancel
           (resource.data.borrower_id == request.auth.uid &&
            request.resource.data.diff(resource.data).affectedKeys()
@@ -643,5 +643,16 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if request.auth != null;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Notifications (Issue #24: Notifications and Reminders)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && resource.data.recipient_id == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.recipient_id is string;
+      allow update: if request.auth != null && resource.data.recipient_id == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.recipient_id == request.auth.uid;
+    }
   }
 }
+
