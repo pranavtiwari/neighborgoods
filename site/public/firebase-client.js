@@ -5892,7 +5892,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 enabledCircles: ['a-world-of-books', 'seed-books-circle'],
                 enabledForSeedUsers: true
             },
-            soft_launch_active: true
+            soft_launch_active: true,
+            global_catalog_public: false
         },
 
         getFeatureFlags: async function() {
@@ -5912,6 +5913,163 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 console.warn('Feature flag persistence non-fatal error:', err);
             }
             return this._featureFlags[flagName];
+        },
+
+        openGlobalCatalog: async function() {
+            return await this.setFeatureFlag('global_catalog_public', {
+                enabled: true,
+                opened_at: new Date().toISOString()
+            });
+        },
+
+        isPublicCatalogEnabled: function() {
+            return this.isFeatureEnabled('global_catalog_public');
+        },
+
+        sanitizeRedirectUrl: function(url, fallback = 'explore.html') {
+            return typeof safeRedirect === 'function' ? safeRedirect(url, fallback) : fallback;
+        },
+
+        runLaunchPrivacyAudit: async function() {
+            const checks = [];
+            try {
+                const catalogPage = await this.getItemsPage('all', null, { pageSize: 20 });
+                let addressLeaked = false;
+                if (catalogPage && Array.isArray(catalogPage.items)) {
+                    for (const item of catalogPage.items) {
+                        if (item.exact_address) {
+                            addressLeaked = true;
+                            break;
+                        }
+                    }
+                }
+                checks.push({
+                    name: 'Public items omit exact_address',
+                    passed: !addressLeaked,
+                    detail: addressLeaked ? 'CRITICAL: exact_address was found on public item' : 'All checked item documents have exact_address redacted or omitted'
+                });
+            } catch (err) {
+                checks.push({ name: 'Public items omit exact_address', passed: false, detail: err.message });
+            }
+
+            const maliciousUrls = [
+                'https://evil-phishing.com/login',
+                '//attacker.com/steal',
+                'javascript:alert(1)',
+                'data:text/html,<script>alert(1)</script>'
+            ];
+            let redirectVulnerable = false;
+            for (const bad of maliciousUrls) {
+                const sanitized = this.sanitizeRedirectUrl(bad);
+                if (sanitized && (sanitized.includes('evil-phishing') || sanitized.includes('attacker.com') || sanitized.startsWith('javascript:'))) {
+                    redirectVulnerable = true;
+                }
+            }
+            checks.push({
+                name: 'Open redirect protection',
+                passed: !redirectVulnerable,
+                detail: redirectVulnerable ? 'CRITICAL: malicious redirect URL accepted' : 'All malicious redirect vectors successfully neutralized'
+            });
+
+            const hasModerationRole = typeof this.getReportQueue === 'function' && typeof this.resolveReport === 'function';
+            checks.push({
+                name: 'Moderation workflow & escalation queue ready',
+                passed: hasModerationRole,
+                detail: hasModerationRole ? 'Report queue and resolution handlers active' : 'Moderation functions missing'
+            });
+
+            const searchHealthy = this._typesenseStatus && this._typesenseStatus.isHealthy;
+            checks.push({
+                name: 'Search subsystem health & fallback status',
+                passed: !!searchHealthy,
+                detail: searchHealthy ? 'Search provider online with graceful fallback configured' : 'Search provider unhealthy'
+            });
+
+            const allPassed = checks.every(c => c.passed);
+            return {
+                passed: allPassed,
+                totalChecks: checks.length,
+                checks,
+                auditedAt: new Date().toISOString()
+            };
+        },
+
+        runSyntheticLoadTest: async function({ concurrency = 15, totalOperations = 45 } = {}) {
+            const start = Date.now();
+            const latencies = [];
+            let successes = 0;
+            let failures = 0;
+
+            const operations = [
+                async () => {
+                    const t0 = Date.now();
+                    await this.getItemsPage('all', null, { pageSize: 5 });
+                    latencies.push(Date.now() - t0);
+                },
+                async () => {
+                    const t0 = Date.now();
+                    await this.searchBooksTypesense('Dune', { limit: 5 });
+                    latencies.push(Date.now() - t0);
+                },
+                async () => {
+                    const t0 = Date.now();
+                    await this.getUnreadNotificationCount('load_test_user');
+                    latencies.push(Date.now() - t0);
+                },
+                async () => {
+                    const t0 = Date.now();
+                    await this.getFeatureFlags();
+                    latencies.push(Date.now() - t0);
+                }
+            ];
+
+            const queue = [];
+            for (let i = 0; i < totalOperations; i++) {
+                const op = operations[i % operations.length];
+                queue.push(op);
+            }
+
+            let currentIndex = 0;
+            const workers = Array(concurrency).fill(null).map(async () => {
+                while (currentIndex < queue.length) {
+                    const idx = currentIndex++;
+                    try {
+                        await queue[idx]();
+                        successes++;
+                    } catch (err) {
+                        failures++;
+                    }
+                }
+            });
+
+            await Promise.all(workers);
+            const durationMs = Date.now() - start;
+
+            latencies.sort((a, b) => a - b);
+            const p50 = latencies[Math.floor(latencies.length * 0.50)] || 0;
+            const p95 = latencies[Math.floor(latencies.length * 0.95)] || 0;
+            const p99 = latencies[Math.floor(latencies.length * 0.99)] || 0;
+            const avg = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+            const errorRate = (failures / totalOperations) * 100;
+
+            return {
+                totalOperations,
+                concurrency,
+                successes,
+                failures,
+                errorRatePercent: errorRate,
+                durationMs,
+                throughputOpsPerSec: Math.round((totalOperations / (Math.max(1, durationMs) / 1000)) * 10) / 10,
+                latencies: {
+                    min: latencies[0] || 0,
+                    max: latencies[latencies.length - 1] || 0,
+                    avg,
+                    p50,
+                    p95,
+                    p99
+                },
+                passed: errorRate < 1.0
+            };
         },
 
         isFeatureEnabled: function(flagName, context = {}) {

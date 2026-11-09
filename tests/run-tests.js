@@ -4153,6 +4153,50 @@ await test('Flow 24: Supply-Growth Tools (CSV/Goodreads import, ISBN scanner, an
 });
 
 // ==========================================
+// FLOW 25: Public rollout: synthetic load test, privacy audit, and global catalog launch (Issue #26)
+// ==========================================
+await test('Flow 25: Public rollout: synthetic load test, privacy audit, and global catalog launch', async () => {
+    const adminUid = 'admin_launch_uid';
+    firebase.auth().currentUser = { uid: adminUid };
+
+    // 1. Synthetic Load Testing
+    const loadResult = await window.db.runSyntheticLoadTest({ concurrency: 15, totalOperations: 45 });
+    assert.strictEqual(loadResult.failures, 0, 'Zero load test operation failures');
+    assert.strictEqual(loadResult.errorRatePercent, 0, 'Zero error rate under concurrent load');
+    assert.ok(loadResult.passed, 'Met load benchmark criteria');
+    assert.ok(loadResult.latencies.p50 >= 0, 'p50 latency computed');
+    assert.ok(loadResult.latencies.p95 >= 0, 'p95 latency computed');
+
+    // 2. Programmatic Privacy Review & Security Audit
+    const auditResult = await window.db.runLaunchPrivacyAudit();
+    assert.strictEqual(auditResult.passed, true, 'All launch privacy audit checks passed');
+    assert.ok(auditResult.checks.length >= 4, 'Ran full checklist of audit points');
+    for (const check of auditResult.checks) {
+        assert.strictEqual(check.passed, true, `Audit check "${check.name}" passed`);
+    }
+
+    // 3. Global Catalog Launch Gate & Feature Flag Activation
+    assert.strictEqual(window.db.isPublicCatalogEnabled(), false, 'Global catalog is not public prior to launch');
+
+    const flagRes = await window.db.openGlobalCatalog();
+    assert.strictEqual(flagRes.enabled, true, 'Global catalog public flag set to enabled');
+    assert.strictEqual(window.db.isPublicCatalogEnabled(), true, 'Global catalog is officially open');
+
+    // Verify persistence in Firestore
+    const flagDoc = await firebase.firestore().collection('feature_flags').doc('global_catalog_public').get();
+    assert.ok(flagDoc.exists, 'Feature flag saved in Firestore');
+    assert.strictEqual(flagDoc.data().enabled, true);
+
+    // 4. Emergency Kill Switch / Rollback Verification
+    await window.db.setFeatureFlag('global_catalog_public', false);
+    assert.strictEqual(window.db.isPublicCatalogEnabled(), false, 'Rollback emergency kill switch disables public catalog');
+
+    // Re-enable for production launch state
+    await window.db.openGlobalCatalog();
+    assert.strictEqual(window.db.isPublicCatalogEnabled(), true, 'Catalog is live for launch');
+});
+
+// ==========================================
 // RESULTS REPORT
 // ==========================================
 console.log('\n==========================================');
