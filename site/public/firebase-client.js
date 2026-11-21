@@ -7285,6 +7285,428 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 console.warn('[WantList] Non-blocking checkAndNotifyWantListMatches error:', err);
                 return { matchedCount: 0, notifiedCount: 0, error: err.message };
             }
+        },
+
+        // =====================================================================
+        // Neighbor Help ("Lend a Hand") — Senior-Friendly Community Help API
+        // =====================================================================
+        HELP_CATEGORIES: [
+            {
+                key: 'tech',
+                label: 'Phone & Tech',
+                icon: 'smartphone',
+                description: 'Phone storage, bank/app login help, Wi-Fi, Smart TV, CCTV',
+                defaultMode: 'in_person',
+                isSensitive: true
+            },
+            {
+                key: 'spam_check',
+                label: 'Spam / Scam Check',
+                icon: 'shield',
+                description: 'Check if an SMS, WhatsApp message, or call is fake',
+                defaultMode: 'remote',
+                isSensitive: true
+            },
+            {
+                key: 'home_handyman',
+                label: 'Home & Handyman',
+                icon: 'handyman',
+                description: 'Changing a bulb, loose hinge, moving a heavy box',
+                defaultMode: 'in_person',
+                isSensitive: false
+            },
+            {
+                key: 'errands',
+                label: 'Errands & Medicines',
+                icon: 'local_pharmacy',
+                description: 'Picking up medicines, groceries, or a parcel',
+                defaultMode: 'in_person',
+                isSensitive: false
+            },
+            {
+                key: 'rides',
+                label: 'Rides',
+                icon: 'directions_car',
+                description: 'A ride to a clinic, bank, or nearby market',
+                defaultMode: 'in_person',
+                isSensitive: false
+            },
+            {
+                key: 'other',
+                label: 'Other Help',
+                icon: 'volunteer_activism',
+                description: 'Anything else a neighbor can lend a hand with',
+                defaultMode: 'remote',
+                isSensitive: false
+            }
+        ],
+
+        HELP_TIME_WINDOWS: [
+            { key: 'today_morning', label: 'Today Morning' },
+            { key: 'today_evening', label: 'Today Evening' },
+            { key: 'tomorrow', label: 'Tomorrow' },
+            { key: 'flexible', label: 'Anytime / Flexible' }
+        ],
+
+        getHelpCategoryMeta: function(key) {
+            return this.HELP_CATEGORIES.find(c => c.key === key) || this.HELP_CATEGORIES[this.HELP_CATEGORIES.length - 1];
+        },
+
+        getHelpTimeLabel: function(key) {
+            const match = this.HELP_TIME_WINDOWS.find(t => t.key === key);
+            return match ? match.label : 'Anytime / Flexible';
+        },
+
+        createHelpRequest: async function(data) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('You must be signed in to ask for help.');
+            if (!data.circle_id) throw new Error('Please choose one of your Circles.');
+            const description = (data.description || '').trim();
+            if (!description) throw new Error('Please describe what you need help with.');
+
+            const validCategories = this.HELP_CATEGORIES.map(c => c.key);
+            const category = validCategories.includes(data.category) ? data.category : 'other';
+            const helpMode = data.help_mode === 'in_person' ? 'in_person' : 'remote';
+            const preferredTime = helpMode === 'in_person' ? (data.preferred_time || 'flexible') : null;
+
+            const profile = await this.getProfile(user.uid);
+            const requesterName = (profile && profile.full_name) || user.displayName || 'Neighbor';
+            const requesterAvatar = (profile && profile.avatar_url) || user.photoURL || null;
+
+            const catMeta = this.getHelpCategoryMeta(category);
+            let title = (data.title || '').trim();
+            if (!title) {
+                const snippet = description.length > 52 ? description.slice(0, 52).trim() + '…' : description;
+                title = snippet || catMeta.label;
+            }
+
+            const photoUrls = Array.isArray(data.photo_urls)
+                ? data.photo_urls.filter(Boolean).slice(0, 3)
+                : [];
+
+            const docData = {
+                circle_id: data.circle_id,
+                requester_id: user.uid,
+                requester_name: requesterName,
+                requester_avatar: requesterAvatar,
+                category,
+                help_mode: helpMode,
+                preferred_time: preferredTime,
+                title: title.slice(0, 150),
+                description: description.slice(0, 1500),
+                photo_urls: photoUrls,
+                status: 'open',
+                helper_id: null,
+                helper_name: null,
+                helper_avatar: null,
+                claimed_at: null,
+                resolved_at: null,
+                resolved_by: null,
+                cancelled_at: null,
+                thank_you_note: null,
+                thank_you_sent_at: null,
+                created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            const ref = await firebase.firestore().collection('help_requests').add(docData);
+            return { id: ref.id, ...docData };
+        },
+
+        getHelpRequestsForCircles: async function(circleIds) {
+            if (!Array.isArray(circleIds) || circleIds.length === 0) return [];
+            try {
+                const uniqueIds = [...new Set(circleIds.filter(Boolean))];
+                const snapshots = await Promise.all(
+                    uniqueIds.map(cid =>
+                        firebase.firestore().collection('help_requests')
+                            .where('circle_id', '==', cid)
+                            .get()
+                            .catch(err => {
+                                console.warn('[NeighborHelp] Could not fetch help_requests for circle', cid, err);
+                                return { docs: [] };
+                            })
+                    )
+                );
+                const all = [];
+                const seen = new Set();
+                snapshots.forEach(snap => {
+                    (snap.docs || []).forEach(doc => {
+                        if (!seen.has(doc.id)) {
+                            seen.add(doc.id);
+                            all.push({ id: doc.id, ...doc.data() });
+                        }
+                    });
+                });
+                all.sort((a, b) => {
+                    const tA = a.created_at?.toMillis ? a.created_at.toMillis() : new Date(a.created_at || 0).getTime();
+                    const tB = b.created_at?.toMillis ? b.created_at.toMillis() : new Date(b.created_at || 0).getTime();
+                    return tB - tA;
+                });
+                return all;
+            } catch (err) {
+                console.error('[NeighborHelp] Error getting circle help requests:', err);
+                return [];
+            }
+        },
+
+        getHelpRequestById: async function(requestId) {
+            if (!requestId) return null;
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            const doc = await docRef.get();
+            if (!doc.exists) return null;
+            const data = { id: doc.id, ...doc.data() };
+            try {
+                const repliesSnap = await docRef.collection('replies').get();
+                const replies = repliesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                replies.sort((a, b) => {
+                    const tA = a.created_at?.toMillis ? a.created_at.toMillis() : new Date(a.created_at || 0).getTime();
+                    const tB = b.created_at?.toMillis ? b.created_at.toMillis() : new Date(b.created_at || 0).getTime();
+                    return tA - tB;
+                });
+                data.replies = replies;
+            } catch (err) {
+                console.warn('[NeighborHelp] Could not load replies:', err);
+                data.replies = [];
+            }
+            return data;
+        },
+
+        claimHelpRequest: async function(requestId) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            const profile = await this.getProfile(user.uid);
+            const helperName = (profile && profile.full_name) || user.displayName || 'Neighbor';
+            const helperAvatar = (profile && profile.avatar_url) || user.photoURL || null;
+
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            let requesterId = null;
+            let requestTitle = 'your request';
+            let circleId = null;
+
+            await firebase.firestore().runTransaction(async (tx) => {
+                const snap = await tx.get(docRef);
+                if (!snap.exists) throw new Error('Help request not found.');
+                const data = snap.data();
+                if (data.status !== 'open') {
+                    throw new Error('Another neighbor is already helping with this request.');
+                }
+                if (data.requester_id === user.uid) {
+                    throw new Error('You cannot claim your own help request.');
+                }
+                requesterId = data.requester_id;
+                requestTitle = data.title || 'your help request';
+                circleId = data.circle_id || null;
+
+                tx.update(docRef, {
+                    status: 'claimed',
+                    helper_id: user.uid,
+                    helper_name: helperName,
+                    helper_avatar: helperAvatar,
+                    claimed_at: firebase.firestore.FieldValue.serverTimestamp(),
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+
+            if (requesterId && typeof this.dispatchNotification === 'function') {
+                try {
+                    await this.dispatchNotification({
+                        recipientId: requesterId,
+                        actorId: user.uid,
+                        type: 'help_claimed',
+                        title: `${helperName} offered to help!`,
+                        body: `Your neighbor ${helperName} can help with "${requestTitle}".`,
+                        actionUrl: `/help-detail.html?id=${requestId}`,
+                        circleId,
+                        dedupKey: `help_claimed_${requestId}_${user.uid}`
+                    });
+                } catch (e) {
+                    console.warn('[NeighborHelp] Notification non-fatal error:', e);
+                }
+            }
+            return { success: true };
+        },
+
+        unclaimHelpRequest: async function(requestId) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            await docRef.update({
+                status: 'open',
+                helper_id: null,
+                helper_name: null,
+                helper_avatar: null,
+                claimed_at: null,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            return { success: true };
+        },
+
+        resolveHelpRequest: async function(requestId, options = {}) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            const updatePayload = {
+                status: 'resolved',
+                resolved_at: firebase.firestore.FieldValue.serverTimestamp(),
+                resolved_by: user.uid,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (options.helper_id) {
+                updatePayload.helper_id = options.helper_id;
+                updatePayload.helper_name = options.helper_name || 'Neighbor';
+                updatePayload.helper_avatar = options.helper_avatar || null;
+            }
+            await docRef.update(updatePayload);
+            return { success: true };
+        },
+
+        cancelHelpRequest: async function(requestId) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            await docRef.update({
+                status: 'cancelled',
+                cancelled_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            return { success: true };
+        },
+
+        addHelpReply: async function(requestId, text) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            const cleanText = (text || '').trim();
+            if (!cleanText) throw new Error('Please write a reply first.');
+
+            const profile = await this.getProfile(user.uid);
+            const authorName = (profile && profile.full_name) || user.displayName || 'Neighbor';
+            const authorAvatar = (profile && profile.avatar_url) || user.photoURL || null;
+
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            const replyData = {
+                author_id: user.uid,
+                author_name: authorName,
+                author_avatar: authorAvatar,
+                text: cleanText.slice(0, 1500),
+                is_marked_helpful: false,
+                created_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            const replyRef = await docRef.collection('replies').add(replyData);
+
+            // Best-effort notification to requester if a neighbor replied
+            try {
+                const parentSnap = await docRef.get();
+                if (parentSnap.exists) {
+                    const parent = parentSnap.data();
+                    if (parent.requester_id && parent.requester_id !== user.uid && typeof this.dispatchNotification === 'function') {
+                        await this.dispatchNotification({
+                            recipientId: parent.requester_id,
+                            actorId: user.uid,
+                            type: 'help_reply',
+                            title: `${authorName} replied to your help request`,
+                            body: cleanText.slice(0, 120),
+                            actionUrl: `/help-detail.html?id=${requestId}`,
+                            circleId: parent.circle_id || null,
+                            dedupKey: `help_reply_${replyRef.id}`
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn('[NeighborHelp] Reply notification non-fatal error:', e);
+            }
+
+            return { id: replyRef.id, ...replyData };
+        },
+
+        markHelpReplyHelpful: async function(requestId, replyId, isHelpful = true) {
+            const docRef = firebase.firestore()
+                .collection('help_requests').doc(requestId)
+                .collection('replies').doc(replyId);
+            await docRef.update({ is_marked_helpful: Boolean(isHelpful) });
+            return { success: true };
+        },
+
+        sendHelpThankYou: async function(requestId, helperId, note, meta = {}) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            if (!helperId || helperId === user.uid) {
+                throw new Error('A neighbor helper is required to send a Thank-You.');
+            }
+            const cleanNote = (note || 'Thank you so much for your help!').trim().slice(0, 500);
+            const profile = await this.getProfile(user.uid);
+            const requesterName = (profile && profile.full_name) || user.displayName || 'Neighbor';
+
+            // 1. Append-only public/authenticated Thank-You record for Helper's profile karma
+            const thankYouDoc = {
+                help_request_id: requestId,
+                helper_id: helperId,
+                requester_id: user.uid,
+                requester_name: requesterName,
+                circle_id: meta.circle_id || null,
+                category: meta.category || 'other',
+                note: cleanNote,
+                created_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            const ref = await firebase.firestore().collection('help_thank_yous').add(thankYouDoc);
+
+            // 2. Also record the thank-you note on the help_request itself (and ensure resolved)
+            const updateData = {
+                thank_you_note: cleanNote,
+                thank_you_sent_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (meta.markResolved) {
+                updateData.status = 'resolved';
+                updateData.resolved_at = firebase.firestore.FieldValue.serverTimestamp();
+                updateData.resolved_by = user.uid;
+            }
+            if (meta.assignHelper) {
+                updateData.helper_id = helperId;
+                updateData.helper_name = meta.helper_name || 'Neighbor';
+                updateData.helper_avatar = meta.helper_avatar || null;
+            }
+            await firebase.firestore().collection('help_requests').doc(requestId).update(updateData);
+
+            // 3. Notify helper
+            if (typeof this.dispatchNotification === 'function') {
+                try {
+                    await this.dispatchNotification({
+                        recipientId: helperId,
+                        actorId: user.uid,
+                        type: 'help_thank_you',
+                        title: `${requesterName} sent you a Thank You!`,
+                        body: cleanNote,
+                        actionUrl: `/profile.html?userId=${helperId}`,
+                        circleId: meta.circle_id || null,
+                        dedupKey: `help_ty_${requestId}_${helperId}`
+                    });
+                } catch (e) {
+                    console.warn('[NeighborHelp] Thank-you notification non-fatal error:', e);
+                }
+            }
+
+            return { id: ref.id, ...thankYouDoc };
+        },
+
+        getHelpThankYousForUser: async function(helperId) {
+            if (!helperId) return [];
+            try {
+                const snap = await firebase.firestore().collection('help_thank_yous')
+                    .where('helper_id', '==', helperId)
+                    .get();
+                const notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                notes.sort((a, b) => {
+                    const tA = a.created_at?.toMillis ? a.created_at.toMillis() : new Date(a.created_at || 0).getTime();
+                    const tB = b.created_at?.toMillis ? b.created_at.toMillis() : new Date(b.created_at || 0).getTime();
+                    return tB - tA;
+                });
+                return notes;
+            } catch (err) {
+                console.warn('[NeighborHelp] Could not load help thank-yous:', err);
+                return [];
+            }
         }
     };
 

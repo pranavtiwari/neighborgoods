@@ -257,6 +257,25 @@
                     </div>
                 </div>
 
+                <!-- Neighbor Help Panel (Members Only) -->
+                <div id="circle-neighbor-help-panel" class="hidden bg-green-50/70 dark:bg-green-950/20 border-2 border-green-200 dark:border-green-900/50 rounded-2xl p-6 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between gap-2">
+                        <h2 class="text-lg font-extrabold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-2xl" aria-hidden="true">volunteer_activism</span>
+                            <span>Neighbor Help</span>
+                        </h2>
+                        <a id="circle-help-view-all" href="help.html" class="text-sm font-bold text-primary hover:underline">View All</a>
+                    </div>
+                    <p class="text-sm text-stone-700 dark:text-stone-300">
+                        Need help with phone storage, a suspicious message, Wi-Fi/TV setup, or a quick errand? Ask your Circle neighbors.
+                    </p>
+                    <a id="circle-ask-help-btn" href="help.html?ask=1" class="w-full py-3.5 px-4 rounded-xl bg-forest-gradient text-white font-bold text-base shadow-sm hover:opacity-95 transition-opacity flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined text-xl" aria-hidden="true">front_hand</span>
+                        <span>Ask a Neighbor for Help</span>
+                    </a>
+                    <div id="circle-help-list" class="space-y-2.5 pt-1"></div>
+                </div>
+
                 <!-- Recent Activity Feed -->
                 <div id="feed-section" class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-sm">
                     <h2 class="text-lg font-bold text-on-surface mb-6 flex items-center gap-2">
@@ -1100,6 +1119,9 @@
                 document.getElementById('private-gate').classList.add('hidden');
                 document.getElementById('feed-section').classList.remove('hidden');
                 document.getElementById('inventory-section-wrapper').classList.remove('hidden');
+
+                // Show Neighbor Help panel for verified members
+                loadCircleNeighborHelp(currentCircleId);
 
             } else {
                 // Non-member or unauthenticated visitor
@@ -1967,6 +1989,46 @@
         window.handleRemoveMember = handleRemoveMember;
         window.handleSetMemberRole = handleSetMemberRole;
         window.handleToggleLibrarianRole = handleToggleLibrarianRole;
+
+        async function loadCircleNeighborHelp(circleId) {
+            const panel = document.getElementById('circle-neighbor-help-panel');
+            const listEl = document.getElementById('circle-help-list');
+            const viewAllLink = document.getElementById('circle-help-view-all');
+            const askBtn = document.getElementById('circle-ask-help-btn');
+            if (!panel || !listEl || !window.db || !window.db.getHelpRequestsForCircles) return;
+
+            panel.classList.remove('hidden');
+            if (viewAllLink) viewAllLink.href = `help.html?circleId=${encodeURIComponent(circleId)}`;
+            if (askBtn) askBtn.href = `help.html?circleId=${encodeURIComponent(circleId)}&ask=1`;
+
+            try {
+                const reqs = await window.db.getHelpRequestsForCircles([circleId]);
+                const openReqs = reqs.filter(r => r.status === 'open').slice(0, 3);
+                if (openReqs.length === 0) {
+                    listEl.innerHTML = `<p class="text-xs text-stone-500 text-center py-2">No open help requests right now.</p>`;
+                    return;
+                }
+                listEl.innerHTML = openReqs.map(r => {
+                    const cat = window.db.getHelpCategoryMeta(r.category);
+                    const safeDesc = window.db.escapeHtml((r.description || '').slice(0, 90) + ((r.description || '').length > 90 ? '…' : ''));
+                    const safeName = window.db.escapeHtml(r.requester_name || 'Neighbor');
+                    return `
+                        <a href="help-detail.html?id=${r.id}" class="block bg-white dark:bg-stone-900 rounded-xl p-3.5 border border-green-200 dark:border-green-900/50 hover:border-primary transition-colors shadow-sm">
+                            <div class="flex items-center justify-between gap-2 mb-1">
+                                <span class="text-xs font-bold text-primary flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-sm" aria-hidden="true">${cat.icon}</span>
+                                    ${window.db.escapeHtml(cat.label)}
+                                </span>
+                                <span class="text-[11px] font-semibold text-stone-500">${safeName}</span>
+                            </div>
+                            <p class="text-sm font-medium text-stone-800 dark:text-stone-200 leading-snug">${safeDesc}</p>
+                        </a>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.warn('Error loading circle neighbor help:', err);
+            }
+        }
 
         // Close dropdown on outside click
         document.addEventListener('pointerdown', (e) => {
