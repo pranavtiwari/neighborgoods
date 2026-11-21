@@ -697,11 +697,11 @@
 
   async function refreshDetail() {
     const urlParams = new URLSearchParams(window.location.search);
-    const reqId = urlParams.get('id');
+    const reqId = await window.db.resolveEntityId('help', { name: urlParams.get('name'), id: urlParams.get('id') });
     if (!reqId) {
       document.getElementById('detail-loading').hidden = true;
       document.getElementById('detail-error').hidden = false;
-      document.getElementById('detail-error-text').textContent = 'Missing help request ID.';
+      document.getElementById('detail-error-text').textContent = 'Missing help request identifier.';
       return;
     }
 
@@ -714,6 +714,11 @@
         return;
       }
       currentReq = req;
+      const resolvedSlug = await window.db.ensureEntitySlug('help', req);
+      if (resolvedSlug) {
+        req.slug = req.slug || resolvedSlug;
+        window.db.replaceUrlWithSlug('help-detail', req.slug);
+      }
       if (req.circle_id) {
         try {
           const cDoc = await firebase.firestore().collection('circles').doc(req.circle_id).get();

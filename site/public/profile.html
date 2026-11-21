@@ -223,13 +223,26 @@
         if (!session) return;
 
         const urlParams = new URLSearchParams(window.location.search);
-        const targetUserId = urlParams.get('userId') || session.user.uid;
+        const rawProfileName = urlParams.get('name');
+        const rawUserId = urlParams.get('userId');
+        let targetUserId = session.user.uid;
+        if (rawProfileName || rawUserId) {
+            const resolvedUid = await window.db.resolveEntityId('profile', { name: rawProfileName, id: rawUserId });
+            if (resolvedUid) targetUserId = resolvedUid;
+        }
         const isSelf = targetUserId === session.user.uid;
         
         // Fetch Profile Data
         const data = await window.db.getProfile(targetUserId);
 
         if (data) {
+            const resolvedSlug = await window.db.ensureEntitySlug('profile', data);
+            if (resolvedSlug) {
+                data.slug = data.slug || resolvedSlug;
+                if (rawProfileName || rawUserId) {
+                    window.db.replaceUrlWithSlug('profile', data.slug);
+                }
+            }
             document.getElementById('profile-name').textContent = data.full_name || 'Anonymous User';
             document.getElementById('profile-location').textContent = data.location ? `${data.location} Community Member` : 'Community Member';
             const metaAvatar = session.user.photoURL;
@@ -279,7 +292,7 @@
             if (viewAllBtn) viewAllBtn.classList.add('hidden');
 
             document.getElementById('public-message-button').onclick = () => {
-                window.location.href = `chat.html?userId=${targetUserId}`;
+                window.location.href = window.db.urls.chat({ user: data || targetUserId });
             };
         }
 
@@ -339,7 +352,7 @@
             itemsList.innerHTML = `<div class="text-center py-6 text-stone-500 font-medium">No shared items yet.</div>`;
         } else {
             itemsList.innerHTML = items.map(item => {
-                const editUrl = window.location.pathname.endsWith('.html') ? `add-item.html?id=${item.id}` : `add-item?id=${item.id}`;
+                const editUrl = window.db.urls.editItem(item);
                 
                 // Check if this item has an active transaction request
                 const activeReq = lendingRequests.find(req => req.item_id === item.id && ['approved', 'borrowed', 'returned'].includes(req.status));
@@ -369,7 +382,7 @@
                            <span class="material-symbols-outlined text-[16px] font-bold" data-icon="edit">edit</span>
                            <span>Edit</span>
                        </a>`
-                    : `<a href="item-details.html?id=${item.id}" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold active:scale-[0.98]">
+                    : `<a href="${db.escapeAttr(window.db.urls.item(item))}" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold active:scale-[0.98]">
                            <span class="material-symbols-outlined text-[16px] font-bold">visibility</span>
                            <span>View</span>
                        </a>`;

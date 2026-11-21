@@ -380,7 +380,7 @@
             const copiesStatus = window.db.getBookCopiesStatus(book);
             const authors = (book.authors || []).join(', ') || 'Unknown author';
             const cover = window.db.sanitizeUrl(book.cover_url) || 'https://placehold.co/120x180?text=Book';
-            const detailUrl = 'book-detail.html?id=' + encodeURIComponent(book.id);
+            const detailUrl = window.db.urls.book(book);
             const badgeClass = copiesStatus.hasCopies
                 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
                 : 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400';
@@ -423,7 +423,7 @@
         const ownerRatingVal = ownerRating && ownerRating.count > 0 ? ownerRating.average.toFixed(1) : 'New';
 
         const isBook = !!item.book_id || item.kind === 'book';
-        const itemUrl = item.book_id ? ('book-detail.html?id=' + encodeURIComponent(item.book_id)) : ('item-details.html?id=' + encodeURIComponent(item.id));
+        const itemUrl = item.book_id ? window.db.urls.book(item.book_id, item.name) : window.db.urls.item(item);
         const bookBadge = isBook
             ? `<span class="bg-primary/90 text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md shadow-sm flex items-center gap-1">
                  <span class="material-symbols-outlined text-[10px]">auto_stories</span>
@@ -447,7 +447,7 @@
                 : '';
 
             return `
-            <div onclick="window.location.href='item-details.html?id=' + encodeURIComponent(this.dataset.itemId)" data-item-id="${db.escapeAttr(item.id)}" class="item-card col-span-1 sm:col-span-2 md:col-span-3 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${escapeHtml(item.name)}" data-description="${escapeHtml(item.description || '')}" data-categories="${itemCategories}">
+            <div onclick="window.location.href=this.dataset.itemUrl" data-item-url="${db.escapeAttr(itemUrl)}" class="item-card col-span-1 sm:col-span-2 md:col-span-3 bg-surface-container-lowest rounded-xl p-6 shadow-[0_12px_40px_rgba(51,51,51,0.04)] flex gap-6 items-center cursor-pointer relative" data-name="${escapeHtml(item.name)}" data-description="${escapeHtml(item.description || '')}" data-categories="${itemCategories}">
                 ${badgeHtml}
                 <div class="w-24 h-24 shrink-0 rounded-lg overflow-hidden bg-primary-fixed">
                     <img alt="${escapeHtml(item.name)}" class="w-full h-full object-contain bg-stone-100 dark:bg-stone-900 mix-blend-multiply opacity-80" src="${db.sanitizeUrl(item.image_url) || ''}" onerror="this.src='https://placehold.co/400x400?text=${encodeURIComponent(fallbackText)}'"/>
@@ -707,7 +707,7 @@
                                 : (isRental 
                                     ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' 
                                     : 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300');
-                            const itemUrl = item.book_id ? ('book-detail.html?id=' + encodeURIComponent(item.book_id)) : ('item-details.html?id=' + encodeURIComponent(item.id));
+                            const itemUrl = item.book_id ? window.db.urls.book(item.book_id, item.name) : window.db.urls.item(item);
                             const ownerRating = feedState.reputations[item.owner_id];
                             const ownerRatingVal = ownerRating && ownerRating.count > 0 ? ownerRating.average.toFixed(1) : 'New';
 
@@ -994,7 +994,7 @@
             const lng = item.longitude;
             if (lat === undefined || lng === undefined || lat === null || lng === null) return;
 
-            const mapItemUrl = item.book_id ? ('book-detail.html?id=' + encodeURIComponent(item.book_id)) : ('item-details.html?id=' + encodeURIComponent(item.id));
+            const mapItemUrl = item.book_id ? window.db.urls.book(item.book_id, item.name) : window.db.urls.item(item);
             const popupContent = `
                 <div class="flex flex-col gap-2 p-1 min-w-[200px]" style="font-family: 'Lexend', sans-serif;">
                     ${item.image_url ? `<img src="${db.sanitizeUrl(item.image_url)}" class="w-full h-24 object-cover rounded-lg bg-stone-100" />` : ''}

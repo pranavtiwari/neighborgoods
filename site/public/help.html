@@ -801,7 +801,7 @@
       announce('Your help request has been posted to your Circle!');
 
       // Open detail view immediately so the senior sees their confirmation & status tracker
-      window.location.href = `help-detail.html?id=${created.id}`;
+      window.location.href = window.db.urls.help(created);
     } catch (err) {
       console.error('Error posting help request:', err);
       showWizardError(err.message || 'Could not post your request. Please try again.');
@@ -924,7 +924,7 @@
           ${thumbHtml}
 
           <div class="pt-2 flex flex-col sm:flex-row gap-3">
-            <a href="help-detail.html?id=${req.id}" class="senior-tap flex-1 bg-[#0d631b] hover:bg-[#0a4f15] text-white font-bold text-lg px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 text-center shadow-sm">
+            <a href="${window.db.escapeAttr(window.db.urls.help(req))}" class="senior-tap flex-1 bg-[#0d631b] hover:bg-[#0a4f15] text-white font-bold text-lg px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 text-center shadow-sm">
               <span>${primaryActionLabel}</span>
               <span class="material-symbols-outlined text-xl" aria-hidden="true">arrow_forward</span>
             </a>
@@ -985,7 +985,16 @@
     });
 
     const urlParams = new URLSearchParams(window.location.search);
-    const preselectedCircle = urlParams.get('circleId');
+    let preselectedCircle = urlParams.get('circleId');
+    const circleSlugParam = urlParams.get('circle');
+    if (!preselectedCircle && circleSlugParam) {
+      const matched = userCircles.find(c => c.slug === circleSlugParam || window.db.slugify(c.name, 'circle') === circleSlugParam);
+      if (matched) {
+        preselectedCircle = matched.id;
+      } else {
+        preselectedCircle = await window.db.resolveEntityId('circle', { name: circleSlugParam });
+      }
+    }
     if (preselectedCircle && circlesById[preselectedCircle]) {
       wizardSelect.value = preselectedCircle;
       filterSelect.value = preselectedCircle;

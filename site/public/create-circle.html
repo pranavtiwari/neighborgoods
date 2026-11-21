@@ -173,7 +173,7 @@
                 }, session.user.id);
 
                 // 3. Redirect to Circle Detail
-                window.location.href = `circle-detail.html?id=${circle.id}`;
+                window.location.href = window.db.urls.circle({ id: circle.id, slug: circle.slug, name: name });
 
             } catch (err) {
                 console.error(err);

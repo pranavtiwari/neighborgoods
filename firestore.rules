@@ -740,7 +740,7 @@ service cloud.firestore {
           'category', 'help_mode', 'preferred_time', 'title', 'description',
           'photo_urls', 'status', 'helper_id', 'helper_name', 'helper_avatar',
           'claimed_at', 'resolved_at', 'resolved_by', 'cancelled_at',
-          'thank_you_note', 'thank_you_sent_at', 'created_at', 'updated_at'
+          'thank_you_note', 'thank_you_sent_at', 'slug', 'created_at', 'updated_at'
         ])
         && data.circle_id is string && data.circle_id.size() >= 1 && data.circle_id.size() <= 128
         && data.requester_id is string && data.requester_id.size() >= 1 && data.requester_id.size() <= 128
@@ -762,6 +762,7 @@ service cloud.firestore {
         && (!('cancelled_at' in data) || data.cancelled_at == null || data.cancelled_at is timestamp)
         && (!('thank_you_note' in data) || data.thank_you_note == null || (data.thank_you_note is string && data.thank_you_note.size() <= 500))
         && (!('thank_you_sent_at' in data) || data.thank_you_sent_at == null || data.thank_you_sent_at is timestamp)
+        && (!('slug' in data) || data.slug == null || (data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 120 && data.slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$')))
         && (!('created_at' in data) || data.created_at is timestamp)
         && (!('updated_at' in data) || data.updated_at is timestamp);
     }
@@ -822,14 +823,18 @@ service cloud.firestore {
         && request.resource.data.requester_id == resource.data.requester_id
         && (!('created_at' in resource.data) || request.resource.data.created_at == resource.data.created_at)
         && (
-          // (a) Requester: update details, resolve, reopen, cancel, or attach thank-you note
+          // (a) Requester: update details, resolve, reopen, cancel, attach thank-you note,
+          //     or one-time lazy backfill of `slug` on legacy docs (immutable once set)
           (resource.data.requester_id == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                  'title', 'description', 'preferred_time', 'status',
                  'helper_id', 'helper_name', 'helper_avatar',
                  'claimed_at', 'resolved_at', 'resolved_by', 'cancelled_at',
-                 'thank_you_note', 'thank_you_sent_at', 'updated_at'
+                 'thank_you_note', 'thank_you_sent_at', 'slug', 'updated_at'
                ])
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['slug'])
+                || !('slug' in resource.data)
+                || resource.data.slug == null)
             && (
               (resource.data.status == 'open'
                 && request.resource.data.status in ['open', 'resolved', 'cancelled'])
@@ -838,7 +843,7 @@ service cloud.firestore {
               || (resource.data.status == 'resolved'
                 && request.resource.data.status == 'resolved'
                 && request.resource.data.diff(resource.data).affectedKeys()
-                     .hasOnly(['thank_you_note', 'thank_you_sent_at', 'updated_at']))
+                     .hasOnly(['thank_you_note', 'thank_you_sent_at', 'slug', 'updated_at']))
             ))
           // (b) Another Circle member: claim an open request
           || (resource.data.requester_id != request.auth.uid
@@ -915,6 +920,38 @@ service cloud.firestore {
         && getHelpRequest(request.resource.data.help_request_id).requester_id == request.auth.uid;
 
       allow update, delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Entity URL Slugs (O(1) lookup: {entityType}_{slug} -> entity_id)
+    // Maps kebab-case URL slugs to entity IDs so ?name=<slug> resolves in O(1)
+    // without violating Firestore's "rules are not filters" on private/circle
+    // collections. Actual entity reads remain governed by each entity's rules.
+    // ─────────────────────────────────────────────────────────────────────────
+    function isValidSlugDoc(slugKey, data) {
+      return data.keys().hasOnly([
+          'entity_type', 'entity_id', 'slug', 'created_by', 'created_at'
+        ])
+        && data.entity_type in ['circle', 'item', 'book', 'help', 'profile']
+        && data.entity_id is string && data.entity_id.size() >= 1 && data.entity_id.size() <= 128
+        && data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 120
+        && data.slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$')
+        && slugKey == data.entity_type + '_' + data.slug
+        && data.created_by is string && data.created_by.size() >= 1 && data.created_by.size() <= 128
+        && (!('created_at' in data) || data.created_at is timestamp);
+    }
+
+    match /slugs/{slugKey} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && isValidSlugDoc(slugKey, request.resource.data)
+        && request.resource.data.created_by == request.auth.uid;
+
+      allow update: if false;
+
+      allow delete: if request.auth != null
+        && resource.data.created_by == request.auth.uid;
     }
   }
 }

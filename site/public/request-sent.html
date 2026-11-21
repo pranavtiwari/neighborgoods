@@ -133,7 +133,7 @@
     <script>
         async function loadRequestSentDetails() {
             const urlParams = new URLSearchParams(window.location.search);
-            const itemId = urlParams.get('itemId');
+            const itemId = await window.db.resolveEntityId('item', { name: urlParams.get('name'), id: urlParams.get('itemId') });
             if (!itemId) {
                 document.getElementById('request-status-text').innerHTML = `Your neighbor has been notified. We'll let you know once they approve your request.`;
                 return;
