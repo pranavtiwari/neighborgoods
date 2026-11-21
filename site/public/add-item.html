@@ -1207,7 +1207,7 @@
                     }
                 }));
                 
-                const validCircles = circles.filter(Boolean);
+                const validCircles = circles.filter(c => c && !(c.features && c.features.listings === false));
                 userCircles = validCircles;
 
                 if (validCircles.length === 0) {

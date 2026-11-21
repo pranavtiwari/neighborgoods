@@ -965,7 +965,12 @@
           .catch(() => null)
       )
     );
-    userCircles = circleDocs.filter(Boolean);
+    userCircles = circleDocs.filter(c => c && !(c.features && c.features.neighbor_help === false));
+    if (userCircles.length === 0) {
+      document.getElementById('no-circles-notice').hidden = false;
+      document.getElementById('help-board-section').hidden = true;
+      return;
+    }
     userCircles.forEach(c => { circlesById[c.id] = c; });
 
     // Populate Circle dropdowns

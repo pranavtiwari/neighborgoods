@@ -93,6 +93,44 @@
                 </label>
             </div>
 
+            <!-- Circle Functions -->
+            <div class="space-y-3 bg-surface-container p-4 rounded-xl">
+                <div>
+                    <p class="font-bold text-sm">Circle Functions</p>
+                    <p class="text-xs text-stone-500">Enable or disable capabilities for this Circle.</p>
+                </div>
+                <div class="flex items-center justify-between gap-3 pt-1">
+                    <div>
+                        <p class="font-semibold text-sm">Listings</p>
+                        <p class="text-xs text-stone-500">Share, search, and borrow items &amp; books</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input type="checkbox" id="feature-listings" checked class="sr-only peer">
+                        <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                </div>
+                <div class="flex items-center justify-between gap-3 pt-2 border-t border-outline-variant/15">
+                    <div>
+                        <p class="font-semibold text-sm">Neighbourhood Help</p>
+                        <p class="text-xs text-stone-500">Ask and offer free volunteer help</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input type="checkbox" id="feature-help" checked class="sr-only peer">
+                        <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                </div>
+                <div class="flex items-center justify-between gap-3 pt-2 border-t border-outline-variant/15">
+                    <div>
+                        <p class="font-semibold text-sm">Bulletin</p>
+                        <p class="text-xs text-stone-500">Community updates, notes, and posts</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input type="checkbox" id="feature-bulletin" checked class="sr-only peer">
+                        <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                </div>
+            </div>
+
             <!-- Error Banner -->
             <div id="error-message" class="hidden bg-red-100 text-error p-4 rounded-xl text-sm font-medium"></div>
 
@@ -169,7 +207,12 @@
                     category: circleType === 'library' ? 'books' : (circleType === 'neighborhood' ? 'all' : 'specialized'),
                     description: description,
                     image_url: imageUrl,
-                    is_private: isPrivate
+                    is_private: isPrivate,
+                    features: {
+                        listings: document.getElementById('feature-listings').checked,
+                        neighbor_help: document.getElementById('feature-help').checked,
+                        bulletin: document.getElementById('feature-bulletin').checked
+                    }
                 }, session.user.id);
 
                 // 3. Redirect to Circle Detail
