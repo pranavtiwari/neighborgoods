@@ -681,6 +681,278 @@ service cloud.firestore {
       allow delete: if request.auth != null
         && resource.data.profile_id == request.auth.uid;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Neighbor Help ("Lend a Hand") Helpers & Domain Validators
+    //
+    // Assumed Data Model:
+    //   - help_requests/{requestId}:
+    //       circle_id (string, required, immutable), requester_id (string, required, immutable),
+    //       requester_name (string|null, optional, <=120), requester_avatar (string|null, optional),
+    //       category (enum: tech|spam_check|home_handyman|errands|rides|other, required),
+    //       help_mode (enum: remote|in_person, required),
+    //       preferred_time (string|null, optional, <=60), title (string|null, optional, <=150),
+    //       description (string, required, 1..1500), photo_urls (list<string>, optional, <=3),
+    //       status (enum: open|claimed|resolved|cancelled, required),
+    //       helper_id (string|null, null on create), helper_name (string|null, optional, <=120),
+    //       helper_avatar (string|null, optional), claimed_at (timestamp|null, optional),
+    //       resolved_at (timestamp|null, optional), resolved_by (string|null, optional),
+    //       cancelled_at (timestamp|null, optional), thank_you_note (string|null, optional, <=500),
+    //       thank_you_sent_at (timestamp|null, optional),
+    //       created_at (timestamp, immutable), updated_at (timestamp)
+    //   - help_requests/{requestId}/replies/{replyId}:
+    //       author_id (string, required, immutable), author_name (string|null, optional, <=120),
+    //       author_avatar (string|null, optional), text (string, required, 1..1500),
+    //       is_marked_helpful (bool, optional, false on create), created_at (timestamp)
+    //   - help_thank_yous/{thankYouId} (append-only):
+    //       help_request_id (string, required), requester_id (string, required),
+    //       requester_name (string|null, optional, <=120), helper_id (string, required, != requester_id),
+    //       helper_name (string|null, optional, <=120), circle_id (string|null, optional),
+    //       category (enum|null, optional), note (string, required, <=500), created_at (timestamp)
+    // ─────────────────────────────────────────────────────────────────────────
+    function isHelpCircleMember(circleId) {
+      return request.auth != null
+        && circleId is string
+        && circleId.size() >= 1
+        && circleId.size() <= 128
+        && exists(/databases/$(database)/documents/circle_members/$(circleId + '_' + request.auth.uid));
+    }
+
+    function helpRequestExists(requestId) {
+      return exists(/databases/$(database)/documents/help_requests/$(requestId));
+    }
+
+    function getHelpRequest(requestId) {
+      return get(/databases/$(database)/documents/help_requests/$(requestId)).data;
+    }
+
+    function isValidHelpPhotoUrls(urls) {
+      return urls is list
+        && urls.size() <= 3
+        && (urls.size() < 1 || (urls[0] is string && urls[0].size() <= 250000))
+        && (urls.size() < 2 || (urls[1] is string && urls[1].size() <= 250000))
+        && (urls.size() < 3 || (urls[2] is string && urls[2].size() <= 250000));
+    }
+
+    function isValidHelpRequest(data) {
+      return data.keys().hasOnly([
+          'circle_id', 'requester_id', 'requester_name', 'requester_avatar',
+          'category', 'help_mode', 'preferred_time', 'title', 'description',
+          'photo_urls', 'status', 'helper_id', 'helper_name', 'helper_avatar',
+          'claimed_at', 'resolved_at', 'resolved_by', 'cancelled_at',
+          'thank_you_note', 'thank_you_sent_at', 'slug', 'created_at', 'updated_at'
+        ])
+        && data.circle_id is string && data.circle_id.size() >= 1 && data.circle_id.size() <= 128
+        && data.requester_id is string && data.requester_id.size() >= 1 && data.requester_id.size() <= 128
+        && (!('requester_name' in data) || data.requester_name == null || (data.requester_name is string && data.requester_name.size() <= 120))
+        && (!('requester_avatar' in data) || data.requester_avatar == null || (data.requester_avatar is string && data.requester_avatar.size() <= 50000))
+        && data.category in ['tech', 'spam_check', 'home_handyman', 'errands', 'rides', 'other']
+        && data.help_mode in ['remote', 'in_person']
+        && (!('preferred_time' in data) || data.preferred_time == null || (data.preferred_time is string && data.preferred_time.size() <= 60))
+        && (!('title' in data) || data.title == null || (data.title is string && data.title.size() <= 150))
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 1500
+        && (!('photo_urls' in data) || isValidHelpPhotoUrls(data.photo_urls))
+        && data.status in ['open', 'claimed', 'resolved', 'cancelled']
+        && (!('helper_id' in data) || data.helper_id == null || (data.helper_id is string && data.helper_id.size() >= 1 && data.helper_id.size() <= 128))
+        && (!('helper_name' in data) || data.helper_name == null || (data.helper_name is string && data.helper_name.size() <= 120))
+        && (!('helper_avatar' in data) || data.helper_avatar == null || (data.helper_avatar is string && data.helper_avatar.size() <= 50000))
+        && (!('claimed_at' in data) || data.claimed_at == null || data.claimed_at is timestamp)
+        && (!('resolved_at' in data) || data.resolved_at == null || data.resolved_at is timestamp)
+        && (!('resolved_by' in data) || data.resolved_by == null || (data.resolved_by is string && data.resolved_by.size() >= 1 && data.resolved_by.size() <= 128))
+        && (!('cancelled_at' in data) || data.cancelled_at == null || data.cancelled_at is timestamp)
+        && (!('thank_you_note' in data) || data.thank_you_note == null || (data.thank_you_note is string && data.thank_you_note.size() <= 500))
+        && (!('thank_you_sent_at' in data) || data.thank_you_sent_at == null || data.thank_you_sent_at is timestamp)
+        && (!('slug' in data) || data.slug == null || (data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 120 && data.slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$')))
+        && (!('created_at' in data) || data.created_at is timestamp)
+        && (!('updated_at' in data) || data.updated_at is timestamp);
+    }
+
+    function isValidHelpReply(data) {
+      return data.keys().hasOnly([
+          'author_id', 'author_name', 'author_avatar',
+          'text', 'is_marked_helpful', 'created_at'
+        ])
+        && data.author_id is string && data.author_id.size() >= 1 && data.author_id.size() <= 128
+        && (!('author_name' in data) || data.author_name == null || (data.author_name is string && data.author_name.size() <= 120))
+        && (!('author_avatar' in data) || data.author_avatar == null || (data.author_avatar is string && data.author_avatar.size() <= 50000))
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1500
+        && (!('is_marked_helpful' in data) || data.is_marked_helpful is bool)
+        && (!('created_at' in data) || data.created_at is timestamp);
+    }
+
+    function isValidHelpThankYou(data) {
+      return data.keys().hasOnly([
+          'help_request_id', 'requester_id', 'requester_name',
+          'helper_id', 'helper_name', 'circle_id', 'category',
+          'note', 'created_at'
+        ])
+        && data.help_request_id is string && data.help_request_id.size() >= 1 && data.help_request_id.size() <= 128
+        && data.requester_id is string && data.requester_id.size() >= 1 && data.requester_id.size() <= 128
+        && (!('requester_name' in data) || data.requester_name == null || (data.requester_name is string && data.requester_name.size() <= 120))
+        && data.helper_id is string && data.helper_id.size() >= 1 && data.helper_id.size() <= 128
+        && (!('helper_name' in data) || data.helper_name == null || (data.helper_name is string && data.helper_name.size() <= 120))
+        && (!('circle_id' in data) || data.circle_id == null || (data.circle_id is string && data.circle_id.size() <= 128))
+        && (!('category' in data) || data.category == null || data.category in ['tech', 'spam_check', 'home_handyman', 'errands', 'rides', 'other'])
+        && data.note is string && data.note.size() <= 500
+        && (!('created_at' in data) || data.created_at is timestamp);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Neighbor Help Requests (Circle-only visibility, strict state machine)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /help_requests/{requestId} {
+      allow read: if isHelpCircleMember(resource.data.circle_id)
+        || (request.auth != null && (
+              resource.data.requester_id == request.auth.uid
+              || resource.data.helper_id == request.auth.uid
+            ));
+
+      allow create: if request.auth != null
+        && isValidHelpRequest(request.resource.data)
+        && request.resource.data.requester_id == request.auth.uid
+        && isHelpCircleMember(request.resource.data.circle_id)
+        && request.resource.data.status == 'open'
+        && request.resource.data.helper_id == null
+        && (!('resolved_by' in request.resource.data) || request.resource.data.resolved_by == null)
+        && (!('thank_you_note' in request.resource.data) || request.resource.data.thank_you_note == null);
+
+      allow update: if isHelpCircleMember(resource.data.circle_id)
+        && isValidHelpRequest(request.resource.data)
+        // Immutable scope, ownership, and creation timestamp
+        && request.resource.data.circle_id == resource.data.circle_id
+        && request.resource.data.requester_id == resource.data.requester_id
+        && (!('created_at' in resource.data) || request.resource.data.created_at == resource.data.created_at)
+        && (
+          // (a) Requester: update details, resolve, reopen, cancel, attach thank-you note,
+          //     or one-time lazy backfill of `slug` on legacy docs (immutable once set)
+          (resource.data.requester_id == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                 'title', 'description', 'preferred_time', 'status',
+                 'helper_id', 'helper_name', 'helper_avatar',
+                 'claimed_at', 'resolved_at', 'resolved_by', 'cancelled_at',
+                 'thank_you_note', 'thank_you_sent_at', 'slug', 'updated_at'
+               ])
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['slug'])
+                || !('slug' in resource.data)
+                || resource.data.slug == null)
+            && (
+              (resource.data.status == 'open'
+                && request.resource.data.status in ['open', 'resolved', 'cancelled'])
+              || (resource.data.status == 'claimed'
+                && request.resource.data.status in ['open', 'resolved', 'cancelled'])
+              || (resource.data.status == 'resolved'
+                && request.resource.data.status == 'resolved'
+                && request.resource.data.diff(resource.data).affectedKeys()
+                     .hasOnly(['thank_you_note', 'thank_you_sent_at', 'slug', 'updated_at']))
+            ))
+          // (b) Another Circle member: claim an open request
+          || (resource.data.requester_id != request.auth.uid
+            && resource.data.status == 'open'
+            && request.resource.data.status == 'claimed'
+            && request.resource.data.helper_id == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                 'status', 'helper_id', 'helper_name', 'helper_avatar',
+                 'claimed_at', 'updated_at'
+               ]))
+          // (c) Assigned helper: step back (reopen) OR mark done (resolved)
+          || (resource.data.helper_id == request.auth.uid
+            && resource.data.status == 'claimed'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                 'status', 'helper_id', 'helper_name', 'helper_avatar',
+                 'claimed_at', 'resolved_at', 'resolved_by', 'updated_at'
+               ])
+            && (
+              (request.resource.data.status == 'open'
+                && request.resource.data.helper_id == null)
+              || (request.resource.data.status == 'resolved'
+                && request.resource.data.helper_id == resource.data.helper_id
+                && request.resource.data.resolved_by == request.auth.uid)
+            ))
+        );
+
+      allow delete: if request.auth != null && (
+        resource.data.requester_id == request.auth.uid
+        || (resource.data.circle_id is string
+            && exists(/databases/$(database)/documents/circles/$(resource.data.circle_id))
+            && get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid)
+      );
+
+      // Quick-reply thread scoped to members of the parent help request's Circle
+      match /replies/{replyId} {
+        allow read: if helpRequestExists(requestId)
+          && (isHelpCircleMember(getHelpRequest(requestId).circle_id)
+              || (request.auth != null && getHelpRequest(requestId).requester_id == request.auth.uid));
+
+        allow create: if request.auth != null
+          && helpRequestExists(requestId)
+          && isHelpCircleMember(getHelpRequest(requestId).circle_id)
+          && isValidHelpReply(request.resource.data)
+          && request.resource.data.author_id == request.auth.uid
+          && (!('is_marked_helpful' in request.resource.data)
+              || request.resource.data.is_marked_helpful == false);
+
+        allow update: if request.auth != null
+          && helpRequestExists(requestId)
+          && getHelpRequest(requestId).requester_id == request.auth.uid
+          && isValidHelpReply(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_marked_helpful'])
+          && request.resource.data.is_marked_helpful is bool;
+
+        allow delete: if request.auth != null && (
+          resource.data.author_id == request.auth.uid
+          || (helpRequestExists(requestId)
+              && getHelpRequest(requestId).requester_id == request.auth.uid)
+        );
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Neighbor Help Thank-Yous (append-only karma ledger for profile badges)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /help_thank_yous/{thankYouId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && isValidHelpThankYou(request.resource.data)
+        && request.resource.data.requester_id == request.auth.uid
+        && request.resource.data.helper_id != request.auth.uid
+        && helpRequestExists(request.resource.data.help_request_id)
+        && getHelpRequest(request.resource.data.help_request_id).requester_id == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Entity URL Slugs (O(1) lookup: {entityType}_{slug} -> entity_id)
+    // Maps kebab-case URL slugs to entity IDs so ?name=<slug> resolves in O(1)
+    // without violating Firestore's "rules are not filters" on private/circle
+    // collections. Actual entity reads remain governed by each entity's rules.
+    // ─────────────────────────────────────────────────────────────────────────
+    function isValidSlugDoc(slugKey, data) {
+      return data.keys().hasOnly([
+          'entity_type', 'entity_id', 'slug', 'created_by', 'created_at'
+        ])
+        && data.entity_type in ['circle', 'item', 'book', 'help', 'profile']
+        && data.entity_id is string && data.entity_id.size() >= 1 && data.entity_id.size() <= 128
+        && data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 120
+        && data.slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$')
+        && slugKey == data.entity_type + '_' + data.slug
+        && data.created_by is string && data.created_by.size() >= 1 && data.created_by.size() <= 128
+        && (!('created_at' in data) || data.created_at is timestamp);
+    }
+
+    match /slugs/{slugKey} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && isValidSlugDoc(slugKey, request.resource.data)
+        && request.resource.data.created_by == request.auth.uid;
+
+      allow update: if false;
+
+      allow delete: if request.auth != null
+        && resource.data.created_by == request.auth.uid;
+    }
   }
 }
 

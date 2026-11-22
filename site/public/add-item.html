@@ -425,11 +425,14 @@
         let marker = null;
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-        // Parse query params for edit mode and circle context
+        // Parse query params for edit mode and circle context (supports both ?name=/?circle=/?book= slugs and legacy IDs)
         const urlParams = new URLSearchParams(window.location.search);
-        const itemId = urlParams.get('id');
-        const circleId = urlParams.get('circleId');
-        const bookIdParam = urlParams.get('book_id');
+        let itemId = urlParams.get('id');
+        let circleId = urlParams.get('circleId');
+        let bookIdParam = urlParams.get('book_id');
+        const itemNameParam = urlParams.get('name');
+        const circleSlugParam = urlParams.get('circle');
+        const bookSlugParam = urlParams.get('book');
         let currentItemImageUrl = null;
 
         const CATEGORIES = window.db.getCategoryOptions();
@@ -1204,7 +1207,7 @@
                     }
                 }));
                 
-                const validCircles = circles.filter(Boolean);
+                const validCircles = circles.filter(c => c && !(c.features && c.features.listings === false));
                 userCircles = validCircles;
 
                 if (validCircles.length === 0) {
@@ -1251,6 +1254,17 @@
             const session = await requireAuth();
             if (!session) return;
             const userId = session.user.uid;
+
+            // Resolve slug-based query params into document IDs
+            if (!itemId && itemNameParam) {
+                itemId = await window.db.resolveEntityId('item', { name: itemNameParam });
+            }
+            if (!circleId && circleSlugParam) {
+                circleId = await window.db.resolveEntityId('circle', { name: circleSlugParam });
+            }
+            if (!bookIdParam && bookSlugParam) {
+                bookIdParam = await window.db.resolveEntityId('book', { name: bookSlugParam });
+            }
 
             // Deep links from a book detail page: /add-item.html?book_id=...
             // attach a new physical copy to the existing canonical record.
@@ -1610,7 +1624,8 @@
                 if (itemId) {
                     await window.db.updateItem(itemId, payload);
                     if (bookId) {
-                        window.location.href = 'book-detail.html?id=' + encodeURIComponent(bookId);
+                        const bObj = await window.db.getBook(bookId).catch(() => null);
+                        window.location.href = window.db.urls.book(bObj || bookId);
                     } else {
                         const profileUrl = window.location.pathname.endsWith('.html') ? 'profile.html' : 'profile';
                         window.location.href = profileUrl;
@@ -1622,13 +1637,14 @@
                         status: 'available'
                     });
                     if (bookId) {
-                        window.location.href = 'book-detail.html?id=' + encodeURIComponent(bookId);
+                        const bObj = await window.db.getBook(bookId).catch(() => null);
+                        window.location.href = window.db.urls.book(bObj || bookId);
                     } else if (circleId) {
-                        const circleUrl = window.location.pathname.endsWith('.html') ? `circle-detail.html?id=${circleId}` : `circle-detail?id=${circleId}`;
-                        window.location.href = circleUrl;
+                        const cObj = userCircles.find(c => c.id === circleId) || await window.db.getCircle(circleId).catch(() => null);
+                        window.location.href = window.db.urls.circle(cObj || circleId);
                     } else if (selectedCircles.length > 0) {
-                        const circleUrl = window.location.pathname.endsWith('.html') ? `circle-detail.html?id=${selectedCircles[0]}` : `circle-detail?id=${selectedCircles[0]}`;
-                        window.location.href = circleUrl;
+                        const cObj = userCircles.find(c => c.id === selectedCircles[0]) || await window.db.getCircle(selectedCircles[0]).catch(() => null);
+                        window.location.href = window.db.urls.circle(cObj || selectedCircles[0]);
                     } else {
                         const exploreUrl = window.location.pathname.endsWith('.html') ? 'explore.html' : 'explore';
                         window.location.href = exploreUrl;

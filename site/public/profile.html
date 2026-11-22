@@ -45,6 +45,7 @@
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="index.html">Home</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="explore.html">Explore</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="circles.html">Circles</a>
+<a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight" href="help.html">Neighbor Help</a>
 <a class="text-stone-800 dark:text-stone-200 font-medium hover:bg-[#efeeeb] dark:hover:bg-stone-800 transition-colors duration-300 px-2 py-1 rounded tracking-tight flex items-center gap-1.5" href="messages.html">
     Inbox
     <span class="unread-badge-el bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full hidden">0</span>
@@ -154,6 +155,14 @@
         <div class="text-center py-4 text-stone-500 animate-pulse">Loading transaction history...</div>
     </div>
 </section>
+<!-- Neighbor Help Thank-Yous Section -->
+<section id="profile-help-thankyous-section" class="hidden space-y-4 pt-4">
+    <h3 class="text-xl font-bold tracking-tight px-2 flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary" aria-hidden="true">volunteer_activism</span>
+        <span>Neighbor Help Thank-Yous</span>
+    </h3>
+    <div id="profile-help-thankyous-list" class="space-y-3"></div>
+</section>
 <!-- Reviews Section -->
 <section id="profile-reviews-section" class="space-y-4 pt-4">
     <h3 class="text-xl font-bold tracking-tight px-2">Reviews from Neighbors</h3>
@@ -214,13 +223,26 @@
         if (!session) return;
 
         const urlParams = new URLSearchParams(window.location.search);
-        const targetUserId = urlParams.get('userId') || session.user.uid;
+        const rawProfileName = urlParams.get('name');
+        const rawUserId = urlParams.get('userId');
+        let targetUserId = session.user.uid;
+        if (rawProfileName || rawUserId) {
+            const resolvedUid = await window.db.resolveEntityId('profile', { name: rawProfileName, id: rawUserId });
+            if (resolvedUid) targetUserId = resolvedUid;
+        }
         const isSelf = targetUserId === session.user.uid;
         
         // Fetch Profile Data
         const data = await window.db.getProfile(targetUserId);
 
         if (data) {
+            const resolvedSlug = await window.db.ensureEntitySlug('profile', data);
+            if (resolvedSlug) {
+                data.slug = data.slug || resolvedSlug;
+                if (rawProfileName || rawUserId) {
+                    window.db.replaceUrlWithSlug('profile', data.slug);
+                }
+            }
             document.getElementById('profile-name').textContent = data.full_name || 'Anonymous User';
             document.getElementById('profile-location').textContent = data.location ? `${data.location} Community Member` : 'Community Member';
             const metaAvatar = session.user.photoURL;
@@ -270,7 +292,7 @@
             if (viewAllBtn) viewAllBtn.classList.add('hidden');
 
             document.getElementById('public-message-button').onclick = () => {
-                window.location.href = `chat.html?userId=${targetUserId}`;
+                window.location.href = window.db.urls.chat({ user: data || targetUserId });
             };
         }
 
@@ -290,10 +312,31 @@
 
         // Rating tile is filled from the derived reputation above.
 
-        // Fetch Lending Requests to count helped neighbors
+        // Fetch Lending Requests & Neighbor Help Thank-Yous to count helped neighbors
         const lendingRequests = await window.db.getBorrowRequestsForUser(targetUserId, 'lending');
         const completedLending = lendingRequests.filter(req => req.status === 'completed');
-        document.getElementById('profile-neighbors-helped').textContent = completedLending.length;
+        const helpThankYous = window.db.getHelpThankYousForUser
+            ? await window.db.getHelpThankYousForUser(targetUserId)
+            : [];
+        document.getElementById('profile-neighbors-helped').textContent = completedLending.length + helpThankYous.length;
+
+        const tySection = document.getElementById('profile-help-thankyous-section');
+        const tyList = document.getElementById('profile-help-thankyous-list');
+        if (tySection && tyList && helpThankYous.length > 0) {
+            tySection.classList.remove('hidden');
+            tyList.innerHTML = helpThankYous.slice(0, 6).map(ty => {
+                const cat = window.db.getHelpCategoryMeta ? window.db.getHelpCategoryMeta(ty.category) : { label: 'Neighbor Help' };
+                return `
+                    <div class="bg-green-50/70 border border-green-200 rounded-xl p-4 space-y-1.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-sm font-bold text-stone-900">${escapeHtml(ty.requester_name || 'A Neighbor')}</span>
+                            <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-green-100 text-green-900">${escapeHtml(cat.label)}</span>
+                        </div>
+                        <p class="text-base text-stone-800 italic">"${escapeHtml(ty.note)}"</p>
+                    </div>
+                `;
+            }).join('');
+        }
 
         // Set carbon saved
         document.getElementById('profile-carbon-saved').textContent = `${carbonSaved}kg`;
@@ -309,7 +352,7 @@
             itemsList.innerHTML = `<div class="text-center py-6 text-stone-500 font-medium">No shared items yet.</div>`;
         } else {
             itemsList.innerHTML = items.map(item => {
-                const editUrl = window.location.pathname.endsWith('.html') ? `add-item.html?id=${item.id}` : `add-item?id=${item.id}`;
+                const editUrl = window.db.urls.editItem(item);
                 
                 // Check if this item has an active transaction request
                 const activeReq = lendingRequests.find(req => req.item_id === item.id && ['approved', 'borrowed', 'returned'].includes(req.status));
@@ -339,7 +382,7 @@
                            <span class="material-symbols-outlined text-[16px] font-bold" data-icon="edit">edit</span>
                            <span>Edit</span>
                        </a>`
-                    : `<a href="item-details.html?id=${item.id}" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold active:scale-[0.98]">
+                    : `<a href="${db.escapeAttr(window.db.urls.item(item))}" class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary transition-all text-xs font-bold active:scale-[0.98]">
                            <span class="material-symbols-outlined text-[16px] font-bold">visibility</span>
                            <span>View</span>
                        </a>`;

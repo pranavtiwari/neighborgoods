@@ -175,6 +175,48 @@
         { "fieldPath": "circle_id", "order": "ASCENDING" },
         { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "help_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "circle_id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "help_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "circle_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "help_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "requester_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "help_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "helper_id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "help_thank_yous",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "helper_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -36,6 +36,22 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         console.warn('Firestore persistence settings failed:', err);
     }
 
+    // Shared kebab-case slug generator (e.g. "Palm Meadows Shares" -> "palm-meadows-shares")
+    function slugifyName(text, fallback = 'entity') {
+        if (!text || typeof text !== 'string') return fallback;
+        const slug = text
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/['’]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 80)
+            .replace(/-+$/, '');
+        return slug || fallback;
+    }
+    window.slugify = slugifyName;
+
     // Ensure a Firestore profile exists for an authenticated user
     async function ensureProfile(user) {
         if (!user) return;
@@ -43,8 +59,16 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             const profileRef = firebase.firestore().collection('profiles').doc(user.uid);
             const doc = await profileRef.get();
             if (!doc.exists) {
+                const fullName = user.displayName || 'Neighbor';
+                let slug = slugifyName(fullName, 'neighbor');
+                try {
+                    if (window.db && typeof window.db.reserveUniqueSlug === 'function') {
+                        slug = await window.db.reserveUniqueSlug('profile', fullName, user.uid);
+                    }
+                } catch (_) { /* non-fatal */ }
                 await profileRef.set({
-                    full_name: user.displayName || 'Neighbor',
+                    full_name: fullName,
+                    slug: slug,
                     avatar_url: user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
                     bio: '',
                     reputation_score: 5.0,
@@ -105,9 +129,13 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     // Helper function to handle Email/Password Login
     // Allowed post-auth redirect targets (VULN-19: open redirect prevention)
     const ALLOWED_REDIRECTS = new Set([
-        'explore.html', 'index.html', 'circles.html', 'profile.html',
-        'messages.html', 'activity.html', 'edit-profile.html', 'add-item.html',
-        'circle-detail.html', 'item-details.html', 'book-detail.html'
+        'explore.html', 'explore', 'index.html', 'index', 'circles.html', 'circles',
+        'profile.html', 'profile', 'messages.html', 'messages', 'activity.html', 'activity',
+        'edit-profile.html', 'edit-profile', 'add-item.html', 'add-item',
+        'circle-detail.html', 'circle-detail', 'item-details.html', 'item-details',
+        'book-detail.html', 'book-detail', 'help.html', 'help',
+        'help-detail.html', 'help-detail', 'request-borrow.html', 'request-borrow',
+        'chat.html', 'chat'
     ]);
     function safeRedirect(redirectTo, fallback = 'explore.html') {
         if (!redirectTo || typeof redirectTo !== 'string') return fallback;
@@ -122,27 +150,21 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         const basePage = pagePart.split('#')[0];
         if (!ALLOWED_REDIRECTS.has(basePage)) return fallback;
 
-        // Preserve safe query string parameters (e.g. circle-detail.html?id=...)
+        // Preserve safe query string parameters (e.g. circle-detail?name=palm-meadows-shares)
         if (queryPart) {
             const rawQuery = queryPart.split('#')[0];
             const params = new URLSearchParams(rawQuery);
-            const id = params.get('id');
-            const circleId = params.get('circleId');
-            const safeIdPattern = /^[A-Za-z0-9_-]{1,128}$/;
-
-            if (basePage === 'circle-detail.html') {
-                if (id && safeIdPattern.test(id)) {
-                    return `circle-detail.html?id=${encodeURIComponent(id)}`;
+            const safeValPattern = /^[A-Za-z0-9_-]{1,128}$/;
+            const allowedKeys = ['name', 'id', 'circle', 'circleId', 'book', 'book_id', 'user', 'userId', 'item', 'itemId', 'requestId', 'ask', 'shelf', 'view'];
+            const safeParams = new URLSearchParams();
+            for (const key of allowedKeys) {
+                const val = params.get(key);
+                if (val && safeValPattern.test(val)) {
+                    safeParams.set(key, val);
                 }
-                return 'circle-detail.html';
             }
-
-            if (id && safeIdPattern.test(id)) {
-                return `${basePage}?id=${encodeURIComponent(id)}`;
-            }
-            if (circleId && safeIdPattern.test(circleId)) {
-                return `${basePage}?circleId=${encodeURIComponent(circleId)}`;
-            }
+            const qs = safeParams.toString();
+            return qs ? `${basePage}?${qs}` : basePage;
         }
 
         return basePage;
@@ -177,9 +199,17 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             const user = result.user;
             
             // Create profile
+            const resolvedName = fullName || 'Neighbor';
+            let profileSlug = slugifyName(resolvedName, 'neighbor');
+            try {
+                if (window.db && typeof window.db.reserveUniqueSlug === 'function') {
+                    profileSlug = await window.db.reserveUniqueSlug('profile', resolvedName, user.uid);
+                }
+            } catch (_) { /* non-fatal */ }
             const profileRef = firebase.firestore().collection('profiles').doc(user.uid);
             await profileRef.set({
-                full_name: fullName || 'Neighbor',
+                full_name: resolvedName,
+                slug: profileSlug,
                 avatar_url: `https://i.pravatar.cc/150?u=${user.uid}`,
                 bio: '',
                 reputation_score: 5.0,
@@ -251,14 +281,22 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     };
 
     // Helper to generate canonical share URLs and handle Web Share API / clipboard
-    window.getCircleShareUrl = function(circleId) {
-        if (!circleId) return '';
+    window.getCircleShareUrl = function(circleOrId, circleName) {
+        if (!circleOrId) return '';
         const origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
-        return `${origin}/circle-detail.html?id=${encodeURIComponent(circleId)}`;
+        const isObj = typeof circleOrId === 'object' && circleOrId !== null;
+        const slug = isObj
+            ? (circleOrId.slug || (circleOrId.name ? slugifyName(circleOrId.name, 'circle') : ''))
+            : (circleName ? slugifyName(circleName, 'circle') : '');
+        const id = isObj ? circleOrId.id : circleOrId;
+        if (slug) {
+            return `${origin}/circle-detail?name=${encodeURIComponent(slug)}`;
+        }
+        return `${origin}/circle-detail?id=${encodeURIComponent(id)}`;
     };
 
-    window.shareCircle = async function({ circleId, name, description } = {}) {
-        const url = window.getCircleShareUrl(circleId);
+    window.shareCircle = async function({ circleId, slug, name, description } = {}) {
+        const url = window.getCircleShareUrl({ id: circleId, slug, name });
         const title = name ? `${name} - Share, Instead.` : 'Join my circle on Share, Instead.';
         const text = description || (name ? `Check out the ${name} community circle on Share, Instead.` : 'Join our neighborhood sharing circle.');
         if (typeof navigator !== 'undefined' && navigator.share) {
@@ -619,8 +657,18 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         updateProfile: async function(profileId, profileData) {
             delete this.profilesCache[profileId];
             try {
+                const payload = { ...profileData };
+                if (payload.full_name && !payload.slug) {
+                    const existingSnap = await firebase.firestore().collection('profiles').doc(profileId).get().catch(() => null);
+                    const existingSlug = existingSnap && existingSnap.exists ? existingSnap.data().slug : null;
+                    if (!existingSlug) {
+                        try {
+                            payload.slug = await this.reserveUniqueSlug('profile', payload.full_name, profileId);
+                        } catch (_) { /* non-fatal */ }
+                    }
+                }
                 await firebase.firestore().collection('profiles').doc(profileId).set({
-                    ...profileData,
+                    ...payload,
                     updated_at: firebase.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
             } catch (err) {
@@ -1265,6 +1313,13 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 delete doc.exact_address;
 
                 const ref = firebase.firestore().collection('items').doc();
+                if (!doc.slug) {
+                    try {
+                        doc.slug = await this.reserveUniqueSlug('item', doc.name, ref.id);
+                    } catch (_) {
+                        doc.slug = this.slugify(doc.name, 'item');
+                    }
+                }
                 await ref.set(doc);
 
                 if (rawAddress) {
@@ -1380,8 +1435,18 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         createCircle: async function(circleData, creatorId) {
             try {
                 const db = firebase.firestore();
-                const ref = await db.collection('circles').add({
+                const ref = db.collection('circles').doc();
+                let slug = circleData.slug || null;
+                if (!slug) {
+                    try {
+                        slug = await this.reserveUniqueSlug('circle', circleData.name, ref.id);
+                    } catch (_) {
+                        slug = this.slugify(circleData.name, 'circle');
+                    }
+                }
+                await ref.set({
                     ...circleData,
+                    slug,
                     allowed_categories: circleData.allowed_categories || [],
                     created_by: creatorId,
                     member_count: 1,
@@ -1397,7 +1462,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     joined_at: new Date().toISOString()
                 });
                 
-                return { id: ref.id };
+                return { id: ref.id, slug };
             } catch (err) {
                 console.error("Error creating circle:", err);
                 throw err;
@@ -4544,8 +4609,18 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 ? 'isbn_' + normIsbn.isbn13 
                 : firebase.firestore().collection('books').doc().id;
 
+            let bookSlug = bookData.slug || null;
+            if (!bookSlug) {
+                try {
+                    bookSlug = await this.reserveUniqueSlug('book', title, docId);
+                } catch (_) {
+                    bookSlug = this.slugify(title, 'book');
+                }
+            }
+
             const payload = {
                 title,
+                slug: bookSlug,
                 title_normalized,
                 authors,
                 authors_normalized,
@@ -7284,6 +7359,801 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             } catch (err) {
                 console.warn('[WantList] Non-blocking checkAndNotifyWantListMatches error:', err);
                 return { matchedCount: 0, notifiedCount: 0, error: err.message };
+            }
+        },
+
+        // =====================================================================
+        // Neighbor Help ("Lend a Hand") — Senior-Friendly Community Help API
+        // =====================================================================
+        HELP_CATEGORIES: [
+            {
+                key: 'tech',
+                label: 'Phone & Tech',
+                icon: 'smartphone',
+                description: 'Phone storage, bank/app login help, Wi-Fi, Smart TV, CCTV',
+                defaultMode: 'in_person',
+                isSensitive: true
+            },
+            {
+                key: 'spam_check',
+                label: 'Spam / Scam Check',
+                icon: 'shield',
+                description: 'Check if an SMS, WhatsApp message, or call is fake',
+                defaultMode: 'remote',
+                isSensitive: true
+            },
+            {
+                key: 'home_handyman',
+                label: 'Home & Handyman',
+                icon: 'handyman',
+                description: 'Changing a bulb, loose hinge, moving a heavy box',
+                defaultMode: 'in_person',
+                isSensitive: false
+            },
+            {
+                key: 'errands',
+                label: 'Errands & Medicines',
+                icon: 'local_pharmacy',
+                description: 'Picking up medicines, groceries, or a parcel',
+                defaultMode: 'in_person',
+                isSensitive: false
+            },
+            {
+                key: 'rides',
+                label: 'Rides',
+                icon: 'directions_car',
+                description: 'A ride to a clinic, bank, or nearby market',
+                defaultMode: 'in_person',
+                isSensitive: false
+            },
+            {
+                key: 'other',
+                label: 'Other Help',
+                icon: 'volunteer_activism',
+                description: 'Anything else a neighbor can lend a hand with',
+                defaultMode: 'remote',
+                isSensitive: false
+            }
+        ],
+
+        HELP_TIME_WINDOWS: [
+            { key: 'today_morning', label: 'Today Morning' },
+            { key: 'today_evening', label: 'Today Evening' },
+            { key: 'tomorrow', label: 'Tomorrow' },
+            { key: 'flexible', label: 'Anytime / Flexible' }
+        ],
+
+        getHelpCategoryMeta: function(key) {
+            return this.HELP_CATEGORIES.find(c => c.key === key) || this.HELP_CATEGORIES[this.HELP_CATEGORIES.length - 1];
+        },
+
+        getHelpTimeLabel: function(key) {
+            const match = this.HELP_TIME_WINDOWS.find(t => t.key === key);
+            return match ? match.label : 'Anytime / Flexible';
+        },
+
+        createHelpRequest: async function(data) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('You must be signed in to ask for help.');
+            if (!data.circle_id) throw new Error('Please choose one of your Circles.');
+            const description = (data.description || '').trim();
+            if (!description) throw new Error('Please describe what you need help with.');
+
+            const validCategories = this.HELP_CATEGORIES.map(c => c.key);
+            const category = validCategories.includes(data.category) ? data.category : 'other';
+            const helpMode = data.help_mode === 'in_person' ? 'in_person' : 'remote';
+            const preferredTime = helpMode === 'in_person' ? (data.preferred_time || 'flexible') : null;
+
+            const profile = await this.getProfile(user.uid);
+            const requesterName = (profile && profile.full_name) || user.displayName || 'Neighbor';
+            const requesterAvatar = (profile && profile.avatar_url) || user.photoURL || null;
+
+            const catMeta = this.getHelpCategoryMeta(category);
+            let title = (data.title || '').trim();
+            if (!title) {
+                const snippet = description.length > 52 ? description.slice(0, 52).trim() + '…' : description;
+                title = snippet || catMeta.label;
+            }
+
+            const photoUrls = Array.isArray(data.photo_urls)
+                ? data.photo_urls.filter(Boolean).slice(0, 3)
+                : [];
+
+            const docData = {
+                circle_id: data.circle_id,
+                requester_id: user.uid,
+                requester_name: requesterName,
+                requester_avatar: requesterAvatar,
+                category,
+                help_mode: helpMode,
+                preferred_time: preferredTime,
+                title: title.slice(0, 150),
+                description: description.slice(0, 1500),
+                photo_urls: photoUrls,
+                status: 'open',
+                helper_id: null,
+                helper_name: null,
+                helper_avatar: null,
+                claimed_at: null,
+                resolved_at: null,
+                resolved_by: null,
+                cancelled_at: null,
+                thank_you_note: null,
+                thank_you_sent_at: null,
+                created_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            const ref = firebase.firestore().collection('help_requests').doc();
+            let helpSlug = null;
+            try {
+                helpSlug = await this.reserveUniqueSlug('help', title, ref.id);
+            } catch (_) {
+                helpSlug = this.slugify(title, 'help');
+            }
+            docData.slug = helpSlug;
+
+            await ref.set(docData);
+            return { id: ref.id, ...docData };
+        },
+
+        getHelpRequestsForCircles: async function(circleIds) {
+            if (!Array.isArray(circleIds) || circleIds.length === 0) return [];
+            try {
+                const uniqueIds = [...new Set(circleIds.filter(Boolean))];
+                const snapshots = await Promise.all(
+                    uniqueIds.map(cid =>
+                        firebase.firestore().collection('help_requests')
+                            .where('circle_id', '==', cid)
+                            .get()
+                            .catch(err => {
+                                console.warn('[NeighborHelp] Could not fetch help_requests for circle', cid, err);
+                                return { docs: [] };
+                            })
+                    )
+                );
+                const all = [];
+                const seen = new Set();
+                snapshots.forEach(snap => {
+                    (snap.docs || []).forEach(doc => {
+                        if (!seen.has(doc.id)) {
+                            seen.add(doc.id);
+                            all.push({ id: doc.id, ...doc.data() });
+                        }
+                    });
+                });
+                all.sort((a, b) => {
+                    const tA = a.created_at?.toMillis ? a.created_at.toMillis() : new Date(a.created_at || 0).getTime();
+                    const tB = b.created_at?.toMillis ? b.created_at.toMillis() : new Date(b.created_at || 0).getTime();
+                    return tB - tA;
+                });
+                return all;
+            } catch (err) {
+                console.error('[NeighborHelp] Error getting circle help requests:', err);
+                return [];
+            }
+        },
+
+        getHelpRequestById: async function(requestId) {
+            if (!requestId) return null;
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            const doc = await docRef.get();
+            if (!doc.exists) return null;
+            const data = { id: doc.id, ...doc.data() };
+            try {
+                const repliesSnap = await docRef.collection('replies').get();
+                const replies = repliesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                replies.sort((a, b) => {
+                    const tA = a.created_at?.toMillis ? a.created_at.toMillis() : new Date(a.created_at || 0).getTime();
+                    const tB = b.created_at?.toMillis ? b.created_at.toMillis() : new Date(b.created_at || 0).getTime();
+                    return tA - tB;
+                });
+                data.replies = replies;
+            } catch (err) {
+                console.warn('[NeighborHelp] Could not load replies:', err);
+                data.replies = [];
+            }
+            return data;
+        },
+
+        claimHelpRequest: async function(requestId) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            const profile = await this.getProfile(user.uid);
+            const helperName = (profile && profile.full_name) || user.displayName || 'Neighbor';
+            const helperAvatar = (profile && profile.avatar_url) || user.photoURL || null;
+
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            let requesterId = null;
+            let requestTitle = 'your request';
+            let circleId = null;
+
+            await firebase.firestore().runTransaction(async (tx) => {
+                const snap = await tx.get(docRef);
+                if (!snap.exists) throw new Error('Help request not found.');
+                const data = snap.data();
+                if (data.status !== 'open') {
+                    throw new Error('Another neighbor is already helping with this request.');
+                }
+                if (data.requester_id === user.uid) {
+                    throw new Error('You cannot claim your own help request.');
+                }
+                requesterId = data.requester_id;
+                requestTitle = data.title || 'your help request';
+                circleId = data.circle_id || null;
+
+                tx.update(docRef, {
+                    status: 'claimed',
+                    helper_id: user.uid,
+                    helper_name: helperName,
+                    helper_avatar: helperAvatar,
+                    claimed_at: firebase.firestore.FieldValue.serverTimestamp(),
+                    updated_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+
+            if (requesterId && typeof this.dispatchNotification === 'function') {
+                try {
+                    await this.dispatchNotification({
+                        recipientId: requesterId,
+                        actorId: user.uid,
+                        type: 'help_claimed',
+                        title: `${helperName} offered to help!`,
+                        body: `Your neighbor ${helperName} can help with "${requestTitle}".`,
+                        actionUrl: `/help-detail.html?id=${requestId}`,
+                        circleId,
+                        dedupKey: `help_claimed_${requestId}_${user.uid}`
+                    });
+                } catch (e) {
+                    console.warn('[NeighborHelp] Notification non-fatal error:', e);
+                }
+            }
+            return { success: true };
+        },
+
+        unclaimHelpRequest: async function(requestId) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            await docRef.update({
+                status: 'open',
+                helper_id: null,
+                helper_name: null,
+                helper_avatar: null,
+                claimed_at: null,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            return { success: true };
+        },
+
+        resolveHelpRequest: async function(requestId, options = {}) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            const updatePayload = {
+                status: 'resolved',
+                resolved_at: firebase.firestore.FieldValue.serverTimestamp(),
+                resolved_by: user.uid,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (options.helper_id) {
+                updatePayload.helper_id = options.helper_id;
+                updatePayload.helper_name = options.helper_name || 'Neighbor';
+                updatePayload.helper_avatar = options.helper_avatar || null;
+            }
+            await docRef.update(updatePayload);
+            return { success: true };
+        },
+
+        cancelHelpRequest: async function(requestId) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            await docRef.update({
+                status: 'cancelled',
+                cancelled_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            return { success: true };
+        },
+
+        addHelpReply: async function(requestId, text) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            const cleanText = (text || '').trim();
+            if (!cleanText) throw new Error('Please write a reply first.');
+
+            const profile = await this.getProfile(user.uid);
+            const authorName = (profile && profile.full_name) || user.displayName || 'Neighbor';
+            const authorAvatar = (profile && profile.avatar_url) || user.photoURL || null;
+
+            const docRef = firebase.firestore().collection('help_requests').doc(requestId);
+            const replyData = {
+                author_id: user.uid,
+                author_name: authorName,
+                author_avatar: authorAvatar,
+                text: cleanText.slice(0, 1500),
+                is_marked_helpful: false,
+                created_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            const replyRef = await docRef.collection('replies').add(replyData);
+
+            // Best-effort notification to requester if a neighbor replied
+            try {
+                const parentSnap = await docRef.get();
+                if (parentSnap.exists) {
+                    const parent = parentSnap.data();
+                    if (parent.requester_id && parent.requester_id !== user.uid && typeof this.dispatchNotification === 'function') {
+                        await this.dispatchNotification({
+                            recipientId: parent.requester_id,
+                            actorId: user.uid,
+                            type: 'help_reply',
+                            title: `${authorName} replied to your help request`,
+                            body: cleanText.slice(0, 120),
+                            actionUrl: `/help-detail.html?id=${requestId}`,
+                            circleId: parent.circle_id || null,
+                            dedupKey: `help_reply_${replyRef.id}`
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn('[NeighborHelp] Reply notification non-fatal error:', e);
+            }
+
+            return { id: replyRef.id, ...replyData };
+        },
+
+        markHelpReplyHelpful: async function(requestId, replyId, isHelpful = true) {
+            const docRef = firebase.firestore()
+                .collection('help_requests').doc(requestId)
+                .collection('replies').doc(replyId);
+            await docRef.update({ is_marked_helpful: Boolean(isHelpful) });
+            return { success: true };
+        },
+
+        sendHelpThankYou: async function(requestId, helperId, note, meta = {}) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Please sign in first.');
+            if (!helperId || helperId === user.uid) {
+                throw new Error('A neighbor helper is required to send a Thank-You.');
+            }
+            const cleanNote = (note || 'Thank you so much for your help!').trim().slice(0, 500);
+            const profile = await this.getProfile(user.uid);
+            const requesterName = (profile && profile.full_name) || user.displayName || 'Neighbor';
+
+            // 1. Append-only public/authenticated Thank-You record for Helper's profile karma
+            const thankYouDoc = {
+                help_request_id: requestId,
+                helper_id: helperId,
+                requester_id: user.uid,
+                requester_name: requesterName,
+                circle_id: meta.circle_id || null,
+                category: meta.category || 'other',
+                note: cleanNote,
+                created_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            const ref = await firebase.firestore().collection('help_thank_yous').add(thankYouDoc);
+
+            // 2. Also record the thank-you note on the help_request itself (and ensure resolved)
+            const updateData = {
+                thank_you_note: cleanNote,
+                thank_you_sent_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (meta.markResolved) {
+                updateData.status = 'resolved';
+                updateData.resolved_at = firebase.firestore.FieldValue.serverTimestamp();
+                updateData.resolved_by = user.uid;
+            }
+            if (meta.assignHelper) {
+                updateData.helper_id = helperId;
+                updateData.helper_name = meta.helper_name || 'Neighbor';
+                updateData.helper_avatar = meta.helper_avatar || null;
+            }
+            await firebase.firestore().collection('help_requests').doc(requestId).update(updateData);
+
+            // 3. Notify helper
+            if (typeof this.dispatchNotification === 'function') {
+                try {
+                    await this.dispatchNotification({
+                        recipientId: helperId,
+                        actorId: user.uid,
+                        type: 'help_thank_you',
+                        title: `${requesterName} sent you a Thank You!`,
+                        body: cleanNote,
+                        actionUrl: `/profile.html?userId=${helperId}`,
+                        circleId: meta.circle_id || null,
+                        dedupKey: `help_ty_${requestId}_${helperId}`
+                    });
+                } catch (e) {
+                    console.warn('[NeighborHelp] Thank-you notification non-fatal error:', e);
+                }
+            }
+
+            return { id: ref.id, ...thankYouDoc };
+        },
+
+        getHelpThankYousForUser: async function(helperId) {
+            if (!helperId) return [];
+            try {
+                const snap = await firebase.firestore().collection('help_thank_yous')
+                    .where('helper_id', '==', helperId)
+                    .get();
+                const notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                notes.sort((a, b) => {
+                    const tA = a.created_at?.toMillis ? a.created_at.toMillis() : new Date(a.created_at || 0).getTime();
+                    const tB = b.created_at?.toMillis ? b.created_at.toMillis() : new Date(b.created_at || 0).getTime();
+                    return tB - tA;
+                });
+                return notes;
+            } catch (err) {
+                console.warn('[NeighborHelp] Could not load help thank-yous:', err);
+                return [];
+            }
+        },
+
+        // ==========================================
+        // Kebab-Case Entity Slugs & Clean URL Helpers
+        // ==========================================
+        _slugCache: {},
+
+        slugify: slugifyName,
+
+        reserveUniqueSlug: async function(entityType, rawName, entityId) {
+            const validTypes = ['circle', 'item', 'book', 'help', 'profile'];
+            if (!validTypes.includes(entityType)) {
+                throw new Error(`Unsupported slug entity type: ${entityType}`);
+            }
+            const base = slugifyName(rawName, entityType);
+            const firestore = firebase.firestore();
+            const user = firebase.auth().currentUser;
+            const uid = user ? user.uid : null;
+
+            for (let attempt = 1; attempt <= 50; attempt++) {
+                const candidate = attempt === 1 ? base : `${base}-${attempt}`;
+                const slugKey = `${entityType}_${candidate}`;
+                const slugRef = firestore.collection('slugs').doc(slugKey);
+                try {
+                    const snap = await slugRef.get();
+                    if (!snap.exists) {
+                        if (uid && entityId) {
+                            await slugRef.set({
+                                entity_type: entityType,
+                                entity_id: String(entityId),
+                                slug: candidate,
+                                created_by: uid,
+                                created_at: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                        }
+                        this._slugCache[`${entityType}:${candidate}`] = String(entityId || '');
+                        return candidate;
+                    }
+                    const existing = snap.data();
+                    if (existing && entityId && existing.entity_id === String(entityId)) {
+                        this._slugCache[`${entityType}:${candidate}`] = String(entityId);
+                        return candidate;
+                    }
+                } catch (err) {
+                    // If permission denied or offline on slugs collection, return deterministic candidate
+                    console.warn(`[Slugs] Could not check/reserve ${slugKey}:`, err.message || err);
+                    return candidate;
+                }
+            }
+
+            const suffix = entityId ? String(entityId).slice(0, 6).toLowerCase().replace(/[^a-z0-9]/g, '') : String(Date.now()).slice(-6);
+            const fallbackSlug = `${base}-${suffix || '1'}`;
+            return fallbackSlug;
+        },
+
+        resolveEntityId: async function(entityType, { name, id } = {}) {
+            const cleanName = typeof name === 'string' ? name.trim().toLowerCase() : '';
+            if (cleanName) {
+                const cacheKey = `${entityType}:${cleanName}`;
+                if (this._slugCache[cacheKey]) {
+                    return this._slugCache[cacheKey];
+                }
+
+                const firestore = firebase.firestore();
+                // 1. O(1) lookup via slugs/{entityType}_{slug}
+                try {
+                    const slugSnap = await firestore.collection('slugs').doc(`${entityType}_${cleanName}`).get();
+                    if (slugSnap.exists && slugSnap.data().entity_id) {
+                        const resolvedId = slugSnap.data().entity_id;
+                        this._slugCache[cacheKey] = resolvedId;
+                        return resolvedId;
+                    }
+                } catch (err) {
+                    console.warn(`[Slugs] Lookup failed for ${entityType}_${cleanName}:`, err.message || err);
+                }
+
+                // 2. Fallback: query entity collection directly for public-readable collections or legacy docs
+                try {
+                    if (entityType === 'circle') {
+                        const q = await firestore.collection('circles').where('slug', '==', cleanName).limit(1).get();
+                        if (!q.empty) {
+                            this._slugCache[cacheKey] = q.docs[0].id;
+                            return q.docs[0].id;
+                        }
+                        // Legacy circle without slug field yet
+                        const all = await firestore.collection('circles').get();
+                        const match = all.docs.find(d => slugifyName(d.data().name, 'circle') === cleanName);
+                        if (match) {
+                            this._slugCache[cacheKey] = match.id;
+                            return match.id;
+                        }
+                    } else if (entityType === 'book') {
+                        const q = await firestore.collection('books').where('slug', '==', cleanName).limit(1).get();
+                        if (!q.empty) {
+                            this._slugCache[cacheKey] = q.docs[0].id;
+                            return q.docs[0].id;
+                        }
+                        const all = await firestore.collection('books').limit(200).get();
+                        const match = all.docs.find(d => slugifyName(d.data().title, 'book') === cleanName);
+                        if (match) {
+                            this._slugCache[cacheKey] = match.id;
+                            return match.id;
+                        }
+                    } else if (entityType === 'profile') {
+                        const q = await firestore.collection('profiles').where('slug', '==', cleanName).limit(1).get();
+                        if (!q.empty) {
+                            this._slugCache[cacheKey] = q.docs[0].id;
+                            return q.docs[0].id;
+                        }
+                        const all = await firestore.collection('profiles').limit(200).get();
+                        const match = all.docs.find(d => slugifyName(d.data().full_name, 'neighbor') === cleanName);
+                        if (match) {
+                            this._slugCache[cacheKey] = match.id;
+                            return match.id;
+                        }
+                    } else if (entityType === 'item') {
+                        try {
+                            const q = await firestore.collection('items')
+                                .where('visibility', '==', 'public')
+                                .where('slug', '==', cleanName)
+                                .limit(1)
+                                .get();
+                            if (!q.empty) {
+                                this._slugCache[cacheKey] = q.docs[0].id;
+                                return q.docs[0].id;
+                            }
+                        } catch (_) { /* composite index may not exist; fallback below */ }
+                        const items = await this.getItems();
+                        const match = (items || []).find(it => it.slug === cleanName || slugifyName(it.name, 'item') === cleanName);
+                        if (match) {
+                            this._slugCache[cacheKey] = match.id;
+                            return match.id;
+                        }
+                    } else if (entityType === 'help') {
+                        const user = firebase.auth().currentUser;
+                        if (user) {
+                            const memberships = await this.getUserCircles(user.uid);
+                            const circleIds = (memberships || []).map(c => c.id || c.circle_id).filter(Boolean);
+                            const reqs = await this.getHelpRequestsForCircles(circleIds);
+                            const match = (reqs || []).find(r => r.slug === cleanName || slugifyName(r.title || r.description, 'help') === cleanName);
+                            if (match) {
+                                this._slugCache[cacheKey] = match.id;
+                                return match.id;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`[Slugs] Fallback resolution failed for ${entityType}:${cleanName}:`, err.message || err);
+                }
+            }
+
+            if (id) return id;
+            return null;
+        },
+
+        ensureEntitySlug: async function(entityType, entity) {
+            if (!entity || !entity.id) return entity && entity.slug ? entity.slug : null;
+            if (entity.slug) return entity.slug;
+
+            const nameField = entityType === 'book' ? entity.title
+                : entityType === 'profile' ? entity.full_name
+                : entityType === 'help' ? (entity.title || entity.description)
+                : entity.name;
+            if (!nameField) return null;
+
+            const user = firebase.auth().currentUser;
+            const canPersist = user && (
+                (entityType === 'circle' && entity.created_by === user.uid) ||
+                (entityType === 'item' && entity.owner_id === user.uid) ||
+                (entityType === 'help' && entity.requester_id === user.uid) ||
+                (entityType === 'profile' && entity.id === user.uid) ||
+                (entityType === 'book')
+            );
+
+            if (!canPersist) {
+                return slugifyName(nameField, entityType);
+            }
+
+            try {
+                const slug = await this.reserveUniqueSlug(entityType, nameField, entity.id);
+                const colMap = { circle: 'circles', item: 'items', book: 'books', help: 'help_requests', profile: 'profiles' };
+                const col = colMap[entityType];
+                if (col && slug) {
+                    const updateData = { slug };
+                    if (entityType === 'book' || entityType === 'help' || entityType === 'profile') {
+                        updateData.updated_at = firebase.firestore.FieldValue.serverTimestamp();
+                    }
+                    await firebase.firestore().collection(col).doc(entity.id).update(updateData);
+                    entity.slug = slug;
+                }
+                return slug;
+            } catch (err) {
+                console.warn(`[Slugs] Lazy backfill skipped for ${entityType}/${entity.id}:`, err.message || err);
+                return slugifyName(nameField, entityType);
+            }
+        },
+
+        replaceUrlWithSlug: function(pageName, slug, extraParams = {}) {
+            if (!slug || typeof window === 'undefined' || !window.history || !window.history.replaceState) return;
+            try {
+                const base = this.urls._page(pageName);
+                const params = new URLSearchParams();
+                params.set('name', slug);
+                for (const [k, v] of Object.entries(extraParams || {})) {
+                    if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
+                }
+                const target = `${base}?${params.toString()}${window.location.hash || ''}`;
+                if (window.location.pathname.endsWith(base) && window.location.search === `?${params.toString()}`) {
+                    return;
+                }
+                window.history.replaceState(null, '', target);
+            } catch (_) { /* ignore history errors */ }
+        },
+
+        urls: {
+            _page: function(pageName) {
+                const usesHtml = typeof window !== 'undefined' && window.location && window.location.pathname.endsWith('.html');
+                return usesHtml ? `${pageName}.html` : pageName;
+            },
+            circle: function(circleOrId, fallbackName) {
+                const page = this._page('circle-detail');
+                if (circleOrId && typeof circleOrId === 'object') {
+                    const slug = circleOrId.slug || (circleOrId.name ? slugifyName(circleOrId.name, 'circle') : '');
+                    if (slug) return `${page}?name=${encodeURIComponent(slug)}`;
+                    if (circleOrId.id) return `${page}?id=${encodeURIComponent(circleOrId.id)}`;
+                }
+                if (fallbackName) {
+                    return `${page}?name=${encodeURIComponent(slugifyName(fallbackName, 'circle'))}`;
+                }
+                return `${page}?id=${encodeURIComponent(circleOrId || '')}`;
+            },
+            item: function(itemOrId, fallbackName) {
+                const page = this._page('item-details');
+                if (itemOrId && typeof itemOrId === 'object') {
+                    if (itemOrId.slug) return `${page}?name=${encodeURIComponent(itemOrId.slug)}`;
+                    if (itemOrId.name && (!itemOrId.visibility || itemOrId.visibility === 'public')) {
+                        return `${page}?name=${encodeURIComponent(slugifyName(itemOrId.name, 'item'))}`;
+                    }
+                    if (itemOrId.id) return `${page}?id=${encodeURIComponent(itemOrId.id)}`;
+                }
+                if (fallbackName) {
+                    return `${page}?name=${encodeURIComponent(slugifyName(fallbackName, 'item'))}`;
+                }
+                return `${page}?id=${encodeURIComponent(itemOrId || '')}`;
+            },
+            book: function(bookOrId, fallbackTitle) {
+                const page = this._page('book-detail');
+                if (bookOrId && typeof bookOrId === 'object') {
+                    const slug = bookOrId.slug || (bookOrId.title ? slugifyName(bookOrId.title, 'book') : '');
+                    if (slug) return `${page}?name=${encodeURIComponent(slug)}`;
+                    if (bookOrId.id) return `${page}?id=${encodeURIComponent(bookOrId.id)}`;
+                }
+                if (fallbackTitle) {
+                    return `${page}?name=${encodeURIComponent(slugifyName(fallbackTitle, 'book'))}`;
+                }
+                return `${page}?id=${encodeURIComponent(bookOrId || '')}`;
+            },
+            help: function(reqOrId, fallbackTitle) {
+                const page = this._page('help-detail');
+                if (reqOrId && typeof reqOrId === 'object') {
+                    const slug = reqOrId.slug || ((reqOrId.title || reqOrId.description) ? slugifyName(reqOrId.title || reqOrId.description, 'help') : '');
+                    if (slug) return `${page}?name=${encodeURIComponent(slug)}`;
+                    if (reqOrId.id) return `${page}?id=${encodeURIComponent(reqOrId.id)}`;
+                }
+                if (fallbackTitle) {
+                    return `${page}?name=${encodeURIComponent(slugifyName(fallbackTitle, 'help'))}`;
+                }
+                return `${page}?id=${encodeURIComponent(reqOrId || '')}`;
+            },
+            helpBoard: function(circleOrId, { ask = false } = {}) {
+                const page = this._page('help');
+                const params = new URLSearchParams();
+                if (circleOrId && typeof circleOrId === 'object') {
+                    const slug = circleOrId.slug || (circleOrId.name ? slugifyName(circleOrId.name, 'circle') : '');
+                    if (slug) params.set('circle', slug);
+                    else if (circleOrId.id) params.set('circleId', circleOrId.id);
+                } else if (circleOrId) {
+                    params.set('circleId', String(circleOrId));
+                }
+                if (ask) params.set('ask', '1');
+                const qs = params.toString();
+                return qs ? `${page}?${qs}` : page;
+            },
+            profile: function(profileOrId, fallbackName) {
+                const page = this._page('profile');
+                if (profileOrId && typeof profileOrId === 'object') {
+                    const slug = profileOrId.slug || (profileOrId.full_name ? slugifyName(profileOrId.full_name, 'neighbor') : '');
+                    if (slug) return `${page}?name=${encodeURIComponent(slug)}`;
+                    if (profileOrId.id) return `${page}?userId=${encodeURIComponent(profileOrId.id)}`;
+                }
+                if (fallbackName) {
+                    return `${page}?name=${encodeURIComponent(slugifyName(fallbackName, 'neighbor'))}`;
+                }
+                return profileOrId ? `${page}?userId=${encodeURIComponent(profileOrId)}` : page;
+            },
+            borrow: function(itemOrId) {
+                const page = this._page('request-borrow');
+                if (itemOrId && typeof itemOrId === 'object') {
+                    if (itemOrId.slug) return `${page}?name=${encodeURIComponent(itemOrId.slug)}`;
+                    if (itemOrId.name && (!itemOrId.visibility || itemOrId.visibility === 'public')) {
+                        return `${page}?name=${encodeURIComponent(slugifyName(itemOrId.name, 'item'))}`;
+                    }
+                    if (itemOrId.id) return `${page}?id=${encodeURIComponent(itemOrId.id)}`;
+                }
+                return `${page}?id=${encodeURIComponent(itemOrId || '')}`;
+            },
+            editItem: function(itemOrId) {
+                const page = this._page('add-item');
+                if (itemOrId && typeof itemOrId === 'object') {
+                    if (itemOrId.slug) return `${page}?name=${encodeURIComponent(itemOrId.slug)}`;
+                    if (itemOrId.id) return `${page}?id=${encodeURIComponent(itemOrId.id)}`;
+                }
+                return `${page}?id=${encodeURIComponent(itemOrId || '')}`;
+            },
+            addItemForCircle: function(circleOrId) {
+                const page = this._page('add-item');
+                if (circleOrId && typeof circleOrId === 'object') {
+                    const slug = circleOrId.slug || (circleOrId.name ? slugifyName(circleOrId.name, 'circle') : '');
+                    if (slug) return `${page}?circle=${encodeURIComponent(slug)}`;
+                    if (circleOrId.id) return `${page}?circleId=${encodeURIComponent(circleOrId.id)}`;
+                }
+                return `${page}?circleId=${encodeURIComponent(circleOrId || '')}`;
+            },
+            addItemForBook: function(bookOrId) {
+                const page = this._page('add-item');
+                if (bookOrId && typeof bookOrId === 'object') {
+                    const slug = bookOrId.slug || (bookOrId.title ? slugifyName(bookOrId.title, 'book') : '');
+                    if (slug) return `${page}?book=${encodeURIComponent(slug)}`;
+                    if (bookOrId.id) return `${page}?book_id=${encodeURIComponent(bookOrId.id)}`;
+                }
+                return `${page}?book_id=${encodeURIComponent(bookOrId || '')}`;
+            },
+            requestSent: function(itemOrId) {
+                const page = this._page('request-sent');
+                if (itemOrId && typeof itemOrId === 'object') {
+                    if (itemOrId.slug) return `${page}?name=${encodeURIComponent(itemOrId.slug)}`;
+                    if (itemOrId.id) return `${page}?itemId=${encodeURIComponent(itemOrId.id)}`;
+                }
+                return `${page}?itemId=${encodeURIComponent(itemOrId || '')}`;
+            },
+            chat: function({ user, userId, userName, item, itemId, itemName, requestId } = {}) {
+                const page = this._page('chat');
+                const params = new URLSearchParams();
+                if (user && typeof user === 'object') {
+                    const uSlug = user.slug || (user.full_name ? slugifyName(user.full_name, 'neighbor') : '');
+                    if (uSlug) params.set('user', uSlug);
+                    else if (user.id) params.set('userId', user.id);
+                } else if (userName) {
+                    params.set('user', slugifyName(userName, 'neighbor'));
+                } else if (userId) {
+                    params.set('userId', userId);
+                }
+                if (item && typeof item === 'object') {
+                    if (item.slug) params.set('item', item.slug);
+                    else if (item.id) params.set('itemId', item.id);
+                } else if (itemName) {
+                    params.set('item', slugifyName(itemName, 'item'));
+                } else if (itemId) {
+                    params.set('itemId', itemId);
+                }
+                if (requestId) params.set('requestId', requestId);
+                const qs = params.toString();
+                return qs ? `${page}?${qs}` : page;
             }
         }
     };

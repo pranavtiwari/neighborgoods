@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Help Request Details | Share, Instead.</title>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
+<script>requireAuth();</script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  body {
+    font-family: 'Lexend', sans-serif;
+    background-color: #fbf9f6;
+    font-size: 18px;
+    line-height: 1.5;
+    min-height: max(884px, 100dvh);
+    -webkit-font-smoothing: antialiased;
+  }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  }
+  .visually-hidden:where(:not(:focus-within, :active)) {
+    position: absolute !important;
+    clip-path: inset(50%) !important;
+    overflow: hidden !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    white-space: nowrap !important;
+  }
+  :where(a:any-link, button, input, textarea, select):focus-visible {
+    outline: 3px solid #0d631b;
+    outline-offset: 3px;
+  }
+  input, textarea, button {
+    font: inherit;
+    font-size: max(1rem, 1em);
+  }
+  .senior-tap {
+    min-block-size: 52px;
+    min-inline-size: 52px;
+  }
+  @media (pointer: coarse) {
+    .senior-tap, textarea {
+      min-block-size: 56px;
+    }
+  }
+  dialog:modal {
+    overscroll-behavior: contain;
+    max-width: min(640px, calc(100vw - 1.5rem));
+    width: 100%;
+    max-height: calc(100dvh - 2rem);
+    border: none;
+    border-radius: 1.5rem;
+    padding: 0;
+    background: #fbf9f6;
+    color: #1c1b18;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
+  }
+  dialog[open] {
+    display: flex;
+    flex-direction: column;
+  }
+  dialog::backdrop {
+    overflow: hidden;
+    overscroll-behavior: contain;
+    background: rgba(20, 20, 18, 0.65);
+    backdrop-filter: blur(4px);
+  }
+</style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen pb-28">
+
+<div id="status-announcer" role="status" aria-live="polite" class="visually-hidden"></div>
+
+<!-- Top Header -->
+<header class="bg-[#fbf9f6]/95 backdrop-blur-xl top-0 sticky z-40 shadow-sm border-b border-stone-200">
+  <div class="flex justify-between items-center w-full px-5 py-3.5 max-w-3xl mx-auto">
+    <a href="help.html" class="senior-tap inline-flex items-center gap-2 text-[#0d631b] font-bold text-lg px-2 py-1 rounded-xl hover:bg-green-50">
+      <span class="material-symbols-outlined text-2xl" aria-hidden="true">arrow_back</span>
+      <span>All Help Requests</span>
+    </a>
+    <a href="profile.html" class="w-11 h-11 rounded-full overflow-hidden border-2 border-primary/30 shrink-0">
+      <img id="header-avatar" alt="My Profile" class="w-full h-full object-cover" src="https://i.pravatar.cc/150?u=me"/>
+    </a>
+  </div>
+</header>
+
+<main id="main-content" class="px-5 pt-6 pb-12 max-w-3xl mx-auto space-y-6">
+  <!-- Loading / Error container -->
+  <div id="detail-loading" class="bg-white rounded-3xl border border-stone-200 p-10 text-center text-lg font-medium text-stone-600">
+    Loading help request...
+  </div>
+
+  <div id="detail-error" hidden role="alert" class="bg-red-50 border-2 border-red-300 rounded-3xl p-8 text-center space-y-4">
+    <p id="detail-error-text" class="text-xl font-bold text-red-900">Could not load this help request.</p>
+    <a href="help.html" class="senior-tap inline-flex items-center gap-2 bg-[#0d631b] text-white font-bold px-6 py-3 rounded-xl">
+      Back to Neighbor Help
+    </a>
+  </div>
+
+  <!-- Main Request Content -->
+  <div id="detail-content" hidden class="space-y-6">
+
+    <!-- Plain-Language 3-Step Progress Tracker -->
+    <nav aria-label="Help request progress" class="bg-white rounded-3xl border-2 border-stone-200 p-5 shadow-sm">
+      <ol id="progress-steps" class="grid grid-cols-3 gap-2 text-center">
+        <!-- Rendered dynamically -->
+      </ol>
+    </nav>
+
+    <!-- Main Request Card -->
+    <article class="bg-white rounded-3xl border-2 border-stone-200 p-6 sm:p-7 shadow-sm space-y-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3.5">
+          <img id="req-avatar" src="" alt="" class="w-14 h-14 rounded-full object-cover border-2 border-stone-200"/>
+          <div>
+            <h1 id="req-requester-name" class="text-2xl font-extrabold text-stone-900 leading-tight">Neighbor</h1>
+            <p id="req-meta" class="text-base text-stone-600 font-medium"></p>
+          </div>
+        </div>
+        <div id="req-badges" class="flex flex-wrap gap-2"></div>
+      </div>
+
+      <p id="req-description" class="text-xl font-semibold text-stone-900 leading-relaxed whitespace-pre-line bg-stone-50 rounded-2xl p-5 border border-stone-200"></p>
+
+      <!-- Attached Photos / Screenshots -->
+      <div id="req-photos-wrap" hidden class="space-y-2">
+        <h2 class="text-lg font-bold text-stone-800">Attached Photos (Tap to Zoom)</h2>
+        <div id="req-photos" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+      </div>
+
+      <!-- Contextual Safety Reminder -->
+      <div id="detail-safety-banner" class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex items-start gap-3 text-base text-amber-950">
+        <span class="material-symbols-outlined text-2xl text-amber-700 shrink-0 mt-0.5" aria-hidden="true">verified_user</span>
+        <p id="detail-safety-text" class="font-medium"></p>
+      </div>
+
+      <!-- Matched Helper Banner (when claimed or resolved with a helper) -->
+      <div id="helper-match-banner" hidden class="bg-blue-50 border-2 border-blue-300 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="flex items-center gap-3.5">
+          <img id="helper-avatar" src="" alt="" class="w-14 h-14 rounded-full object-cover border-2 border-blue-300"/>
+          <div>
+            <p id="helper-banner-label" class="text-sm font-bold uppercase tracking-wider text-blue-800">Neighbor Helping</p>
+            <p id="helper-banner-name" class="text-xl font-extrabold text-blue-950"></p>
+          </div>
+        </div>
+        <a id="chat-with-other-btn" href="#" class="senior-tap bg-blue-700 hover:bg-blue-800 text-white font-bold text-lg px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-sm">
+          <span class="material-symbols-outlined text-2xl" aria-hidden="true">chat</span>
+          <span id="chat-btn-label">Message Neighbor</span>
+        </a>
+      </div>
+
+      <!-- Thank-You Display Card (when sent) -->
+      <div id="thank-you-display" hidden class="bg-green-50 border-2 border-green-300 rounded-2xl p-5 space-y-1">
+        <p class="text-sm font-bold uppercase tracking-wider text-green-800 flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-xl" aria-hidden="true">favorite</span>
+          <span>Thank-You Note Sent</span>
+        </p>
+        <p id="thank-you-display-text" class="text-xl font-bold text-green-950"></p>
+      </div>
+
+      <!-- Primary Action Buttons (Role & State Aware) -->
+      <div id="action-buttons-bar" class="flex flex-col sm:flex-row flex-wrap gap-3 pt-2"></div>
+    </article>
+
+    <!-- Quick Answers / Neighbor Replies Thread -->
+    <section class="bg-white rounded-3xl border-2 border-stone-200 p-6 sm:p-7 shadow-sm space-y-5">
+      <div>
+        <h2 class="text-2xl font-extrabold text-stone-900 flex items-center gap-2">
+          <span class="material-symbols-outlined text-3xl text-[#0d631b]" aria-hidden="true">forum</span>
+          <span>Neighbor Replies &amp; Quick Answers</span>
+        </h2>
+        <p class="text-base text-stone-600 mt-1">
+          Neighbors can answer quick questions right here (like checking if a message is spam) or ask a quick detail before visiting.
+        </p>
+      </div>
+
+      <div id="replies-list" class="space-y-4">
+        <p class="text-stone-500 text-lg italic">No replies yet. Be the first neighbor to respond!</p>
+      </div>
+
+      <!-- Reply Form (hidden if cancelled) -->
+      <form id="reply-form" class="space-y-3 pt-3 border-t border-stone-200" novalidate>
+        <label for="reply-input" class="block text-lg font-bold text-stone-900">Write a helpful reply</label>
+        <textarea id="reply-input" name="reply" rows="3" required maxlength="1500" class="w-full rounded-2xl border-2 border-stone-400 bg-white p-4 text-lg text-stone-900" placeholder="Example: That SMS is 100% spam, please delete and block it! Or: I can drop by around 6 PM today."></textarea>
+        <div id="reply-error" role="alert" hidden class="text-red-700 font-bold text-base"></div>
+        <button type="submit" id="reply-submit-btn" class="senior-tap w-full sm:w-auto bg-[#0d631b] hover:bg-[#0a4f15] text-white font-extrabold text-lg px-7 py-3.5 rounded-2xl shadow-sm flex items-center justify-center gap-2 cursor-pointer">
+          <span class="material-symbols-outlined text-2xl" aria-hidden="true">send</span>
+          <span id="reply-submit-label">Post Reply</span>
+        </button>
+      </form>
+    </section>
+  </div>
+</main>
+
+<!-- Native Modal Dialog: Zoomed Photo / Screenshot Lightbox -->
+<dialog id="photo-lightbox-dialog" aria-labelledby="lightbox-title" closedby="any">
+  <div class="p-4 sm:p-5 flex items-center justify-between border-b border-stone-200 bg-white">
+    <h2 id="lightbox-title" class="text-xl font-bold text-stone-900">Photo Preview</h2>
+    <button type="button" id="close-lightbox-btn" autofocus class="senior-tap px-4 py-2 rounded-xl border-2 border-stone-300 bg-white font-bold text-base text-stone-900 cursor-pointer flex items-center gap-1">
+      <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      <span>Close</span>
+    </button>
+  </div>
+  <div class="p-4 bg-stone-950 flex items-center justify-center overflow-auto flex-1">
+    <img id="lightbox-img" src="" alt="Enlarged attached photo" class="max-w-full max-h-[75dvh] object-contain rounded-lg"/>
+  </div>
+</dialog>
+
+<!-- Native Modal Dialog: 1-Tap Thank-You Note -->
+<dialog id="thank-you-dialog" aria-labelledby="thank-you-title" closedby="any">
+  <div class="p-6 sm:p-8 space-y-5 overflow-y-auto">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h2 id="thank-you-title" class="text-2xl font-extrabold text-stone-900">Say Thank You!</h2>
+        <p id="thank-you-subtitle" class="text-base text-stone-600 mt-1">Send a warm note to your neighbor.</p>
+      </div>
+      <button type="button" id="close-thank-you-btn" class="senior-tap px-4 py-2 rounded-xl border-2 border-stone-300 font-bold text-base cursor-pointer">
+        Close
+      </button>
+    </div>
+
+    <div class="flex flex-wrap gap-2.5" aria-label="Quick thank you messages">
+      <button type="button" class="ty-preset senior-tap px-4 py-2.5 rounded-full bg-green-100 hover:bg-green-200 text-green-950 font-bold text-base cursor-pointer" data-note="Thank you so much for your kindness and help! 🙏">
+        Thank you so much! 🙏
+      </button>
+      <button type="button" class="ty-preset senior-tap px-4 py-2.5 rounded-full bg-green-100 hover:bg-green-200 text-green-950 font-bold text-base cursor-pointer" data-note="You are a lifesaver — really appreciate it!">
+        You're a lifesaver!
+      </button>
+      <button type="button" class="ty-preset senior-tap px-4 py-2.5 rounded-full bg-green-100 hover:bg-green-200 text-green-950 font-bold text-base cursor-pointer" data-note="So grateful to have helpful neighbors like you!">
+        So grateful for you!
+      </button>
+    </div>
+
+    <form id="thank-you-form" class="space-y-4" novalidate>
+      <div class="space-y-2">
+        <label for="thank-you-input" class="block text-lg font-bold text-stone-900">Your Thank-You Note</label>
+        <textarea id="thank-you-input" rows="3" maxlength="500" class="w-full rounded-2xl border-2 border-stone-400 bg-white p-4 text-lg text-stone-900" placeholder="Write a short thank-you note...">Thank you so much for your kindness and help! 🙏</textarea>
+      </div>
+      <div id="thank-you-error" role="alert" hidden class="text-red-700 font-bold text-base"></div>
+      <button type="submit" id="thank-you-submit-btn" class="senior-tap w-full bg-[#0d631b] hover:bg-[#0a4f15] text-white font-extrabold text-xl py-4 rounded-2xl shadow-md cursor-pointer">
+        Send Thank You
+      </button>
+    </form>
+  </div>
+</dialog>
+
+<script>
+  let currentUser = null;
+  let currentReq = null;
+  let circleName = 'My Circle';
+  let pendingThankYouTarget = null; // { helperId, helperName, helperAvatar, markResolved, assignHelper }
+
+  const lightboxDialog = document.getElementById('photo-lightbox-dialog');
+  const thankYouDialog = document.getElementById('thank-you-dialog');
+  const announcer = document.getElementById('status-announcer');
+
+  function announce(msg) {
+    if (!announcer) return;
+    announcer.textContent = '';
+    setTimeout(() => { announcer.textContent = msg; }, 50);
+  }
+
+  function escapeHtml(str) {
+    return window.db.escapeHtml(str || '');
+  }
+
+  function formatDateTime(ts) {
+    if (!ts) return 'Just now';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  // Light-dismiss fallback for browsers without native dialog `closedby` (e.g. Safari)
+  if (!('closedBy' in HTMLDialogElement.prototype)) {
+    const outside = (e, dialog) => {
+      const r = dialog.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    for (const dialog of document.querySelectorAll('dialog[closedby="any"]')) {
+      let pressedOutside = false;
+      dialog.addEventListener('pointerdown', (e) => { pressedOutside = outside(e, dialog); });
+      dialog.addEventListener('pointerup', (e) => { if (pressedOutside && outside(e, dialog)) dialog.close(); });
+    }
+  }
+
+  // Reset returnValue on close per dialog best practices
+  [lightboxDialog, thankYouDialog].forEach(d => {
+    d.addEventListener('close', () => { d.returnValue = ''; });
+  });
+
+  document.getElementById('close-lightbox-btn').addEventListener('click', () => lightboxDialog.close());
+  document.getElementById('close-thank-you-btn').addEventListener('click', () => thankYouDialog.close());
+
+  document.querySelectorAll('.ty-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('thank-you-input').value = btn.dataset.note;
+    });
+  });
+
+  function openThankYouModal(target) {
+    pendingThankYouTarget = target;
+    document.getElementById('thank-you-subtitle').textContent = `Send a warm Thank-You to ${target.helperName || 'your neighbor'} — it will appear on their Helpful Neighbor profile!`;
+    document.getElementById('thank-you-error').hidden = true;
+    thankYouDialog.showModal();
+  }
+
+  document.getElementById('thank-you-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!pendingThankYouTarget || !currentReq) return;
+    const btn = document.getElementById('thank-you-submit-btn');
+    const errEl = document.getElementById('thank-you-error');
+    const note = document.getElementById('thank-you-input').value.trim() || 'Thank you so much for your help!';
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    errEl.hidden = true;
+
+    try {
+      await window.db.sendHelpThankYou(currentReq.id, pendingThankYouTarget.helperId, note, {
+        circle_id: currentReq.circle_id,
+        category: currentReq.category,
+        markResolved: Boolean(pendingThankYouTarget.markResolved),
+        assignHelper: Boolean(pendingThankYouTarget.assignHelper),
+        helper_name: pendingThankYouTarget.helperName,
+        helper_avatar: pendingThankYouTarget.helperAvatar
+      });
+      thankYouDialog.close('sent');
+      announce('Thank-You sent!');
+      await refreshDetail();
+    } catch (err) {
+      console.error('Error sending thank you:', err);
+      errEl.textContent = err.message || 'Could not send Thank-You. Please try again.';
+      errEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Send Thank You';
+    }
+  });
+
+  // --- Render Progress Bar ---
+  function renderProgress(status) {
+    const el = document.getElementById('progress-steps');
+    if (status === 'cancelled') {
+      el.innerHTML = `
+        <li class="col-span-3 py-2 px-4 rounded-xl bg-stone-200 text-stone-800 font-bold text-lg">
+          This request was cancelled
+        </li>
+      `;
+      return;
+    }
+    const stepIndex = status === 'resolved' ? 3 : (status === 'claimed' ? 2 : 1);
+    const steps = [
+      { num: 1, label: 'Waiting for Neighbor' },
+      { num: 2, label: 'Neighbor Helping' },
+      { num: 3, label: 'All Done!' }
+    ];
+    el.innerHTML = steps.map(s => {
+      const done = s.num < stepIndex;
+      const active = s.num === stepIndex;
+      const cls = active
+        ? 'bg-[#0d631b] text-white shadow-sm'
+        : (done ? 'bg-green-100 text-green-900' : 'bg-stone-100 text-stone-500');
+      return `
+        <li ${active ? 'aria-current="step"' : ''} class="rounded-2xl p-3 font-bold text-sm sm:text-base flex flex-col items-center justify-center gap-1 ${cls}">
+          <span class="text-xs uppercase tracking-wider opacity-80">Step ${s.num}</span>
+          <span>${s.label}</span>
+        </li>
+      `;
+    }).join('');
+  }
+
+  // --- Render Detail View ---
+  function renderDetail() {
+    const req = currentReq;
+    const isRequester = req.requester_id === currentUser.uid;
+    const isHelper = req.helper_id === currentUser.uid;
+    const cat = window.db.getHelpCategoryMeta(req.category);
+
+    document.title = `${cat.label} — Neighbor Help | Share, Instead.`;
+    renderProgress(req.status);
+
+    document.getElementById('req-avatar').src = req.requester_avatar || `https://i.pravatar.cc/100?u=${req.requester_id}`;
+    document.getElementById('req-requester-name').textContent = `${req.requester_name || 'Neighbor'}${isRequester ? ' (You)' : ''}`;
+    document.getElementById('req-meta').textContent = `${circleName} • Posted ${formatDateTime(req.created_at)}`;
+    document.getElementById('req-description').textContent = req.description;
+
+    // Badges
+    const modeBadge = req.help_mode === 'in_person'
+      ? `<span class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-purple-100 text-purple-900 text-sm font-bold"><span class="material-symbols-outlined text-lg" aria-hidden="true">home</span>In-Person • ${escapeHtml(window.db.getHelpTimeLabel(req.preferred_time))}</span>`
+      : `<span class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-teal-100 text-teal-900 text-sm font-bold"><span class="material-symbols-outlined text-lg" aria-hidden="true">chat</span>Quick Question</span>`;
+
+    document.getElementById('req-badges').innerHTML = `
+      <span class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-green-100 text-green-900 text-sm font-bold">
+        <span class="material-symbols-outlined text-lg" aria-hidden="true">${cat.icon}</span>
+        <span>${escapeHtml(cat.label)}</span>
+      </span>
+      ${modeBadge}
+    `;
+
+    // Photos
+    const photosWrap = document.getElementById('req-photos-wrap');
+    const photosGrid = document.getElementById('req-photos');
+    if (Array.isArray(req.photo_urls) && req.photo_urls.length > 0) {
+      photosWrap.hidden = false;
+      photosGrid.innerHTML = req.photo_urls.map((url, idx) => `
+        <button type="button" data-zoom-url="${escapeHtml(url)}" class="rounded-2xl overflow-hidden border-2 border-stone-300 bg-stone-100 aspect-square cursor-pointer hover:opacity-90">
+          <img src="${url}" alt="Attached photo ${idx + 1} — tap to enlarge" class="w-full h-full object-cover"/>
+        </button>
+      `).join('');
+    } else {
+      photosWrap.hidden = true;
+    }
+
+    // Safety Banner
+    const safetyText = document.getElementById('detail-safety-text');
+    if (cat.isSensitive) {
+      safetyText.textContent = 'Safety reminder: Never share your bank OTP, ATM PIN, or password out loud or in chat. A good neighbor will guide you while you type it yourself.';
+    } else if (req.help_mode === 'in_person') {
+      safetyText.textContent = 'Privacy reminder: Confirm exact flat/door numbers and visit timing in private chat once matched.';
+    } else {
+      safetyText.textContent = `Visible only to verified members of ${circleName}.`;
+    }
+
+    // Helper Match Banner
+    const helperBanner = document.getElementById('helper-match-banner');
+    if (req.helper_id && (req.status === 'claimed' || req.status === 'resolved')) {
+      helperBanner.hidden = false;
+      document.getElementById('helper-avatar').src = req.helper_avatar || `https://i.pravatar.cc/100?u=${req.helper_id}`;
+      document.getElementById('helper-banner-label').textContent = req.status === 'resolved' ? 'Helped By' : 'Neighbor Helping';
+      document.getElementById('helper-banner-name').textContent = `${req.helper_name || 'Neighbor'}${isHelper ? ' (You)' : ''}`;
+
+      const chatBtn = document.getElementById('chat-with-other-btn');
+      if (isRequester) {
+        chatBtn.hidden = false;
+        chatBtn.href = `chat.html?userId=${req.helper_id}`;
+        document.getElementById('chat-btn-label').textContent = `Message ${req.helper_name || 'Helper'}`;
+      } else if (isHelper) {
+        chatBtn.hidden = false;
+        chatBtn.href = `chat.html?userId=${req.requester_id}`;
+        document.getElementById('chat-btn-label').textContent = `Message ${req.requester_name || 'Neighbor'}`;
+      } else {
+        chatBtn.hidden = true;
+      }
+    } else {
+      helperBanner.hidden = true;
+    }
+
+    // Thank-You Display
+    const tyDisplay = document.getElementById('thank-you-display');
+    if (req.thank_you_note) {
+      tyDisplay.hidden = false;
+      document.getElementById('thank-you-display-text').textContent = `"${req.thank_you_note}"`;
+    } else {
+      tyDisplay.hidden = true;
+    }
+
+    // Role & State Action Buttons
+    const bar = document.getElementById('action-buttons-bar');
+    bar.innerHTML = '';
+
+    if (req.status === 'open') {
+      if (!isRequester) {
+        bar.innerHTML = `
+          <button type="button" id="btn-claim-help" class="senior-tap flex-1 bg-[#0d631b] hover:bg-[#0a4f15] text-white font-extrabold text-xl px-7 py-4 rounded-2xl shadow-md flex items-center justify-center gap-2 cursor-pointer">
+            <span class="material-symbols-outlined text-2xl" aria-hidden="true">volunteer_activism</span>
+            <span>I Can Help!</span>
+          </button>
+        `;
+      } else {
+        bar.innerHTML = `
+          <button type="button" id="btn-mark-done" class="senior-tap flex-1 bg-[#0d631b] hover:bg-[#0a4f15] text-white font-extrabold text-lg px-6 py-4 rounded-2xl shadow-sm flex items-center justify-center gap-2 cursor-pointer">
+            <span class="material-symbols-outlined text-2xl" aria-hidden="true">check_circle</span>
+            <span>Mark All Done</span>
+          </button>
+          <button type="button" id="btn-cancel-req" class="senior-tap border-2 border-red-300 bg-red-50 hover:bg-red-100 text-red-900 font-bold text-lg px-6 py-4 rounded-2xl cursor-pointer">
+            Cancel Request
+          </button>
+        `;
+      }
+    } else if (req.status === 'claimed') {
+      if (isRequester || isHelper) {
+        bar.innerHTML = `
+          <button type="button" id="btn-mark-done" class="senior-tap flex-1 bg-[#0d631b] hover:bg-[#0a4f15] text-white font-extrabold text-xl px-6 py-4 rounded-2xl shadow-md flex items-center justify-center gap-2 cursor-pointer">
+            <span class="material-symbols-outlined text-2xl" aria-hidden="true">check_circle</span>
+            <span>Mark All Done</span>
+          </button>
+          <button type="button" id="btn-unclaim" class="senior-tap border-2 border-stone-400 bg-white hover:bg-stone-100 text-stone-900 font-bold text-lg px-6 py-4 rounded-2xl cursor-pointer">
+            ${isHelper ? 'Step Back (Re-open)' : 'Find Another Neighbor'}
+          </button>
+        `;
+      }
+    } else if (req.status === 'resolved') {
+      if (isRequester && req.helper_id && !req.thank_you_note) {
+        bar.innerHTML = `
+          <button type="button" id="btn-open-thank-you" class="senior-tap flex-1 bg-[#0d631b] hover:bg-[#0a4f15] text-white font-extrabold text-xl px-6 py-4 rounded-2xl shadow-md flex items-center justify-center gap-2 cursor-pointer">
+            <span class="material-symbols-outlined text-2xl" aria-hidden="true">favorite</span>
+            <span>Say Thank You to ${escapeHtml(req.helper_name || 'Helper')}</span>
+          </button>
+        `;
+      }
+    }
+
+    // Reply form visibility
+    document.getElementById('reply-form').hidden = req.status === 'cancelled';
+
+    // Replies list
+    renderReplies();
+  }
+
+  function renderReplies() {
+    const list = document.getElementById('replies-list');
+    const replies = currentReq.replies || [];
+    const isRequester = currentReq.requester_id === currentUser.uid;
+
+    if (replies.length === 0) {
+      list.innerHTML = `<p class="text-stone-500 text-lg italic">No replies yet. Be the first neighbor to respond!</p>`;
+      return;
+    }
+
+    list.innerHTML = replies.map(rep => {
+      const isAuthorRequester = rep.author_id === currentReq.requester_id;
+      const canThankThisReply = isRequester && !isAuthorRequester && currentReq.status !== 'cancelled' && !currentReq.thank_you_note;
+      return `
+        <div class="rounded-2xl border-2 ${rep.is_marked_helpful ? 'border-green-500 bg-green-50/70' : 'border-stone-200 bg-stone-50'} p-4 sm:p-5 space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5">
+              <img src="${rep.author_avatar || 'https://i.pravatar.cc/100?u=' + rep.author_id}" alt="" class="w-10 h-10 rounded-full object-cover border border-stone-300"/>
+              <div>
+                <p class="font-bold text-base text-stone-900">${escapeHtml(rep.author_name || 'Neighbor')}${isAuthorRequester ? ' (Requester)' : ''}</p>
+                <p class="text-xs text-stone-600">${formatDateTime(rep.created_at)}</p>
+              </div>
+            </div>
+            ${rep.is_marked_helpful ? '<span class="px-3 py-1 rounded-full bg-green-200 text-green-950 text-xs font-extrabold">Helpful Answer</span>' : ''}
+          </div>
+          <p class="text-lg text-stone-900 leading-relaxed whitespace-pre-line">${escapeHtml(rep.text)}</p>
+          ${canThankThisReply ? `
+            <div class="pt-1">
+              <button type="button"
+                data-helpful-reply-id="${rep.id}"
+                data-helper-id="${rep.author_id}"
+                data-helper-name="${escapeHtml(rep.author_name || 'Neighbor')}"
+                data-helper-avatar="${escapeHtml(rep.author_avatar || '')}"
+                class="senior-tap bg-white hover:bg-green-100 border-2 border-[#0d631b] text-[#0d631b] font-bold text-base px-4 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer">
+                <span class="material-symbols-outlined text-xl" aria-hidden="true">thumb_up</span>
+                <span>This Helped! Mark Done &amp; Say Thanks</span>
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  // --- Delegated Click Handlers ---
+  document.getElementById('req-photos').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-zoom-url]');
+    if (!btn) return;
+    document.getElementById('lightbox-img').src = btn.dataset.zoomUrl;
+    lightboxDialog.showModal();
+  });
+
+  document.getElementById('action-buttons-bar').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button');
+    if (!btn || !currentReq) return;
+
+    if (btn.id === 'btn-claim-help') {
+      btn.disabled = true;
+      btn.textContent = 'Confirming...';
+      try {
+        await window.db.claimHelpRequest(currentReq.id);
+        announce('You offered to help! You can now message your neighbor.');
+        await refreshDetail();
+      } catch (err) {
+        alert(err.message || 'Could not claim request.');
+        await refreshDetail();
+      }
+    } else if (btn.id === 'btn-unclaim') {
+      btn.disabled = true;
+      try {
+        await window.db.unclaimHelpRequest(currentReq.id);
+        announce('Request re-opened for another neighbor.');
+        await refreshDetail();
+      } catch (err) {
+        alert(err.message || 'Could not re-open request.');
+        btn.disabled = false;
+      }
+    } else if (btn.id === 'btn-mark-done') {
+      btn.disabled = true;
+      try {
+        await window.db.resolveHelpRequest(currentReq.id);
+        announce('Marked as All Done!');
+        await refreshDetail();
+        if (currentReq.requester_id === currentUser.uid && currentReq.helper_id && !currentReq.thank_you_note) {
+          openThankYouModal({
+            helperId: currentReq.helper_id,
+            helperName: currentReq.helper_name,
+            helperAvatar: currentReq.helper_avatar,
+            markResolved: false,
+            assignHelper: false
+          });
+        }
+      } catch (err) {
+        alert(err.message || 'Could not mark done.');
+        btn.disabled = false;
+      }
+    } else if (btn.id === 'btn-cancel-req') {
+      if (!confirm('Cancel this help request?')) return;
+      btn.disabled = true;
+      try {
+        await window.db.cancelHelpRequest(currentReq.id);
+        announce('Request cancelled.');
+        await refreshDetail();
+      } catch (err) {
+        alert(err.message || 'Could not cancel request.');
+        btn.disabled = false;
+      }
+    } else if (btn.id === 'btn-open-thank-you') {
+      openThankYouModal({
+        helperId: currentReq.helper_id,
+        helperName: currentReq.helper_name,
+        helperAvatar: currentReq.helper_avatar,
+        markResolved: false,
+        assignHelper: false
+      });
+    }
+  });
+
+  document.getElementById('replies-list').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-helpful-reply-id]');
+    if (!btn || !currentReq) return;
+    const replyId = btn.dataset.helpfulReplyId;
+    try {
+      await window.db.markHelpReplyHelpful(currentReq.id, replyId, true);
+    } catch (err) {
+      console.warn('Could not mark reply helpful:', err);
+    }
+    openThankYouModal({
+      helperId: btn.dataset.helperId,
+      helperName: btn.dataset.helperName,
+      helperAvatar: btn.dataset.helperAvatar || null,
+      markResolved: currentReq.status !== 'resolved',
+      assignHelper: !currentReq.helper_id
+    });
+  });
+
+  // --- Post Reply (IME-safe Ctrl/Cmd+Enter) ---
+  const replyInput = document.getElementById('reply-input');
+  replyInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing) {
+      e.preventDefault();
+      document.getElementById('reply-form').requestSubmit();
+    }
+  });
+
+  document.getElementById('reply-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById('reply-error');
+    const text = replyInput.value.trim();
+    if (!text) {
+      errEl.textContent = 'Please type a reply before posting.';
+      errEl.hidden = false;
+      replyInput.setAttribute('aria-invalid', 'true');
+      replyInput.focus();
+      return;
+    }
+    errEl.hidden = true;
+    replyInput.removeAttribute('aria-invalid');
+
+    const btn = document.getElementById('reply-submit-btn');
+    const label = document.getElementById('reply-submit-label');
+    btn.disabled = true;
+    label.textContent = 'Posting...';
+
+    try {
+      await window.db.addHelpReply(currentReq.id, text);
+      replyInput.value = '';
+      announce('Your reply has been posted.');
+      await refreshDetail();
+    } catch (err) {
+      errEl.textContent = err.message || 'Could not post reply.';
+      errEl.hidden = false;
+    } finally {
+      btn.disabled = false;
+      label.textContent = 'Post Reply';
+    }
+  });
+
+  async function refreshDetail() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const reqId = await window.db.resolveEntityId('help', { name: urlParams.get('name'), id: urlParams.get('id') });
+    if (!reqId) {
+      document.getElementById('detail-loading').hidden = true;
+      document.getElementById('detail-error').hidden = false;
+      document.getElementById('detail-error-text').textContent = 'Missing help request identifier.';
+      return;
+    }
+
+    try {
+      const req = await window.db.getHelpRequestById(reqId);
+      if (!req) {
+        document.getElementById('detail-loading').hidden = true;
+        document.getElementById('detail-error').hidden = false;
+        document.getElementById('detail-error-text').textContent = 'This help request was not found or is in a private Circle you have not joined.';
+        return;
+      }
+      currentReq = req;
+      const resolvedSlug = await window.db.ensureEntitySlug('help', req);
+      if (resolvedSlug) {
+        req.slug = req.slug || resolvedSlug;
+        window.db.replaceUrlWithSlug('help-detail', req.slug);
+      }
+      if (req.circle_id) {
+        try {
+          const cDoc = await firebase.firestore().collection('circles').doc(req.circle_id).get();
+          if (cDoc.exists && cDoc.data().name) circleName = cDoc.data().name;
+        } catch (e) {}
+      }
+      document.getElementById('detail-loading').hidden = true;
+      document.getElementById('detail-content').hidden = false;
+      renderDetail();
+    } catch (err) {
+      console.error('Error loading help request:', err);
+      document.getElementById('detail-loading').hidden = true;
+      document.getElementById('detail-error').hidden = false;
+      document.getElementById('detail-error-text').textContent = 'You must be a member of this Circle to view this help request.';
+    }
+  }
+
+  async function initDetailPage() {
+    const session = await requireAuth();
+    if (!session) return;
+    currentUser = session.user;
+
+    const profile = await window.db.getProfile(currentUser.uid);
+    document.getElementById('header-avatar').src = (profile && profile.avatar_url) || currentUser.photoURL || `https://i.pravatar.cc/150?u=${currentUser.uid}`;
+
+    await refreshDetail();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDetailPage);
+  } else {
+    initDetailPage();
+  }
+</script>
+</body>
+</html>

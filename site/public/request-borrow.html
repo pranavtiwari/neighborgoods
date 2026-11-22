@@ -278,7 +278,9 @@
 
     // DYNAMIC DATA LOADING
     const urlParams = new URLSearchParams(window.location.search);
-    const itemId = urlParams.get('id');
+    let itemId = urlParams.get('id');
+    const itemNameParam = urlParams.get('name');
+    let currentLoadedItem = null;
     let itemOwnerId = null;
     let suggestedMessageStr = '';
     let itemListingType = null;
@@ -286,15 +288,24 @@
 
     // Back button setup
     document.getElementById('back-btn').onclick = () => {
-        window.location.href = 'item-details.html?id=' + itemId;
+        window.location.href = window.db.urls.item(currentLoadedItem || itemId);
     };
 
     async function loadItem(user) {
+        if (!itemId && itemNameParam) {
+            itemId = await window.db.resolveEntityId('item', { name: itemNameParam });
+        }
         if (!itemId) return;
 
         try {
             const item = await window.db.getItem(itemId);
             if (!item) return;
+            currentLoadedItem = item;
+            const resolvedSlug = await window.db.ensureEntitySlug('item', item);
+            if (resolvedSlug) {
+                item.slug = item.slug || resolvedSlug;
+                window.db.replaceUrlWithSlug('request-borrow', item.slug);
+            }
 
             itemOwnerId = item.owner_id;
             itemListingType = item.listing_type;
@@ -558,7 +569,7 @@
             );
 
             // 3. Redirect to success page
-            window.location.href = `request-sent.html?itemId=${itemId}`;
+            window.location.href = window.db.urls.requestSent(currentLoadedItem || itemId);
 
         } catch (err) {
             console.error("Error sending request:", err);

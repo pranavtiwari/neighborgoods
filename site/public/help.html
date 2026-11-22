@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Neighbor Help | Share, Instead.</title>
+<script src="config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="firebase-client.js"></script>
+<script>requireAuth();</script>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<style>
+  body {
+    font-family: 'Lexend', sans-serif;
+    background-color: #fbf9f6;
+    font-size: 18px;
+    line-height: 1.5;
+    min-height: max(884px, 100dvh);
+    -webkit-font-smoothing: antialiased;
+  }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  }
+  .visually-hidden:where(:not(:focus-within, :active)) {
+    position: absolute !important;
+    clip-path: inset(50%) !important;
+    overflow: hidden !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    white-space: nowrap !important;
+  }
+  .skip-link:focus {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 100;
+    background: #0d631b;
+    color: #fff;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.75rem;
+    font-weight: 700;
+  }
+  :where(a:any-link, button, input, textarea, select, [tabindex="-1"]):focus-visible {
+    outline: 3px solid #0d631b;
+    outline-offset: 3px;
+  }
+  input, textarea, select, button {
+    font: inherit;
+    font-size: max(1rem, 1em);
+  }
+  .senior-tap {
+    min-block-size: 52px;
+    min-inline-size: 52px;
+  }
+  @media (pointer: coarse) {
+    .senior-tap, input[type="text"], textarea, select {
+      min-block-size: 56px;
+    }
+  }
+  /* Native modal dialog scroll containment & styling */
+  dialog:modal {
+    overscroll-behavior: contain;
+    max-width: min(680px, calc(100vw - 1.5rem));
+    width: 100%;
+    max-height: calc(100dvh - 2rem);
+    border: none;
+    border-radius: 1.5rem;
+    padding: 0;
+    background: #fbf9f6;
+    color: #1c1b18;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+  }
+  dialog[open] {
+    display: flex;
+    flex-direction: column;
+  }
+  dialog::backdrop {
+    overflow: hidden;
+    overscroll-behavior: contain;
+    background: rgba(24, 24, 22, 0.55);
+    backdrop-filter: blur(4px);
+  }
+  .radio-card-input:checked + .radio-card-label {
+    border-color: #0d631b;
+    background-color: #e8f5e9;
+    box-shadow: 0 0 0 2px #0d631b;
+  }
+  .radio-card-input:focus-visible + .radio-card-label {
+    outline: 3px solid #0d631b;
+    outline-offset: 3px;
+  }
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+  .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen pb-32">
+
+<a href="#main-content" class="skip-link visually-hidden">Skip to main content</a>
+<div id="status-announcer" role="status" aria-live="polite" class="visually-hidden"></div>
+
+<!-- TopAppBar -->
+<header class="bg-[#fbf9f6]/90 dark:bg-stone-900/90 backdrop-blur-xl top-0 sticky z-40 shadow-[0_8px_30px_rgba(51,51,51,0.06)] border-b border-stone-200/70">
+  <div class="flex justify-between items-center w-full px-5 py-3.5 max-w-5xl mx-auto">
+    <a href="index.html" class="text-xl sm:text-2xl font-bold text-primary tracking-tight flex items-center gap-2">
+      <span class="material-symbols-outlined text-primary text-2xl" aria-hidden="true">menu_book</span>
+      <span>Share, Instead.</span>
+    </a>
+    <nav aria-label="Primary" class="hidden md:flex gap-6 items-center text-base">
+      <a class="text-stone-800 font-medium hover:bg-[#efeeeb] transition-colors px-2 py-1 rounded" href="index.html">Home</a>
+      <a class="text-stone-800 font-medium hover:bg-[#efeeeb] transition-colors px-2 py-1 rounded" href="explore.html">Explore</a>
+      <a class="text-stone-800 font-medium hover:bg-[#efeeeb] transition-colors px-2 py-1 rounded" href="circles.html">Circles</a>
+      <a class="text-primary font-bold border-b-2 border-primary pb-1" href="help.html" aria-current="page">Neighbor Help</a>
+      <a class="text-stone-800 font-medium hover:bg-[#efeeeb] transition-colors px-2 py-1 rounded flex items-center gap-1.5" href="messages.html">
+        Inbox
+        <span class="unread-badge-el bg-red-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full hidden">0</span>
+      </a>
+      <a class="text-stone-800 font-medium hover:bg-[#efeeeb] transition-colors px-2 py-1 rounded" href="activity.html">Activity</a>
+    </nav>
+    <div class="relative">
+      <button type="button" id="profile-menu-btn" aria-expanded="false" aria-controls="profile-dropdown" class="w-11 h-11 rounded-full bg-surface-container overflow-hidden border-2 border-primary/30 cursor-pointer flex items-center justify-center">
+        <img id="header-avatar" alt="My Profile menu" class="w-full h-full object-cover" src="https://i.pravatar.cc/150?u=me"/>
+      </button>
+      <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-xl border border-stone-200 z-50 py-2">
+        <a href="profile.html" class="flex items-center gap-3 px-4 py-3 hover:bg-stone-100 text-base font-medium">
+          <span class="material-symbols-outlined" aria-hidden="true">person</span>
+          <span>My Profile</span>
+        </a>
+        <button type="button" id="logout-btn" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 text-red-700 text-base font-bold text-left cursor-pointer">
+          <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="main-content" class="px-5 pt-8 pb-12 max-w-3xl mx-auto space-y-8">
+  <!-- Friendly Senior-First Hero -->
+  <section class="bg-gradient-to-br from-[#0d631b] to-[#1f7a2e] text-white rounded-3xl p-6 sm:p-8 shadow-lg">
+    <p class="text-sm font-bold uppercase tracking-wider text-green-100 mb-2">Verified Circle Neighbors Only</p>
+    <h1 id="page-heading" tabindex="-1" class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight mb-3">
+      Neighbors Helping Neighbors
+    </h1>
+    <p class="text-lg sm:text-xl text-green-50 leading-relaxed mb-6">
+      Need help freeing up phone storage, checking a suspicious message, setting up Wi-Fi or Smart TV, or running a quick errand? Ask a neighbor in your Circle — always free.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-3">
+      <button type="button" id="open-ask-wizard-btn" class="senior-tap bg-white text-[#0d631b] hover:bg-green-50 font-extrabold text-xl px-7 py-4 rounded-2xl shadow-md flex items-center justify-center gap-3 cursor-pointer transition-transform active:scale-[0.98]">
+        <span class="material-symbols-outlined text-3xl" aria-hidden="true">volunteer_activism</span>
+        <span>Ask a Neighbor for Help</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- No-Circle Gate (only shown if user hasn't joined a Circle yet) -->
+  <section id="no-circles-notice" hidden class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-6 space-y-4">
+    <h2 class="text-2xl font-bold text-amber-950 flex items-center gap-2">
+      <span class="material-symbols-outlined text-3xl text-amber-700" aria-hidden="true">groups</span>
+      <span>Join a Neighborhood Circle First</span>
+    </h2>
+    <p class="text-lg text-amber-900">
+      To keep everyone safe, Neighbor Help is only shared inside verified neighborhood Circles. Join your apartment or neighborhood Circle to ask for help or lend a hand.
+    </p>
+    <a href="circles.html" class="senior-tap inline-flex items-center justify-center gap-2 bg-[#0d631b] text-white font-bold text-lg px-6 py-3 rounded-xl">
+      <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+      <span>Go to My Circles</span>
+    </a>
+  </section>
+
+  <!-- Tabs & Filters -->
+  <section id="help-board-section" class="space-y-5">
+    <div role="tablist" aria-label="Help request views" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-stone-100 p-2 rounded-2xl">
+      <button type="button" role="tab" aria-selected="true" data-tab="open" class="help-tab senior-tap rounded-xl px-4 py-3 text-base font-bold bg-[#0d631b] text-white shadow-sm cursor-pointer">
+        Needs Help
+      </button>
+      <button type="button" role="tab" aria-selected="false" data-tab="mine" class="help-tab senior-tap rounded-xl px-4 py-3 text-base font-bold text-stone-800 hover:bg-white cursor-pointer">
+        My Requests
+      </button>
+      <button type="button" role="tab" aria-selected="false" data-tab="helping" class="help-tab senior-tap rounded-xl px-4 py-3 text-base font-bold text-stone-800 hover:bg-white cursor-pointer">
+        I'm Helping
+      </button>
+      <button type="button" role="tab" aria-selected="false" data-tab="resolved" class="help-tab senior-tap rounded-xl px-4 py-3 text-base font-bold text-stone-800 hover:bg-white cursor-pointer">
+        Completed
+      </button>
+    </div>
+
+    <!-- Category filter row -->
+    <div id="category-filter-row" class="flex gap-2.5 overflow-x-auto pb-1 hide-scrollbar" aria-label="Filter by category">
+      <button type="button" data-cat="all" aria-pressed="true" class="cat-filter-btn senior-tap shrink-0 px-5 py-2.5 rounded-full text-base font-bold bg-stone-900 text-white cursor-pointer">
+        All Topics
+      </button>
+    </div>
+
+    <!-- Circle filter (shown only if user belongs to >1 circle) -->
+    <div id="circle-filter-wrap" hidden class="flex flex-col sm:flex-row sm:items-center gap-2">
+      <label for="circle-filter-select" class="text-base font-bold text-stone-800">Showing Circle:</label>
+      <select id="circle-filter-select" class="senior-tap rounded-xl border-2 border-stone-300 bg-white px-4 py-2.5 text-base font-semibold text-stone-900">
+        <option value="all">All My Circles</option>
+      </select>
+    </div>
+
+    <!-- Requests Feed (Single-column calm layout) -->
+    <div id="help-requests-list" class="space-y-5">
+      <div class="bg-white rounded-2xl border border-stone-200 p-8 text-center text-stone-600 text-lg">
+        Loading neighborhood help requests...
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 2-Step Senior-Friendly "Ask for Help" Native Modal Dialog -->
+<dialog id="ask-help-dialog" aria-labelledby="ask-dialog-title" closedby="none">
+  <div class="p-6 sm:p-8 overflow-y-auto flex-1 space-y-6">
+    <!-- Dialog Header -->
+    <div class="flex items-start justify-between gap-4 border-b border-stone-200 pb-4">
+      <div>
+        <h2 id="ask-dialog-title" class="text-2xl sm:text-3xl font-extrabold text-stone-900">Ask a Neighbor for Help</h2>
+        <nav aria-label="Progress" class="mt-2">
+          <ol class="flex items-center gap-3 text-base font-bold">
+            <li id="step-indicator-1" aria-current="step" class="px-3 py-1 rounded-full bg-[#0d631b] text-white">1. Topic</li>
+            <li aria-hidden="true" class="text-stone-400">→</li>
+            <li id="step-indicator-2" class="px-3 py-1 rounded-full bg-stone-200 text-stone-700">2. Details</li>
+          </ol>
+        </nav>
+      </div>
+      <button type="button" id="close-ask-dialog-btn" class="senior-tap px-4 py-2 rounded-xl border-2 border-stone-300 bg-white text-stone-800 font-bold text-base hover:bg-stone-100 cursor-pointer flex items-center gap-1.5">
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        <span>Cancel</span>
+      </button>
+    </div>
+
+    <!-- Form Error Summary -->
+    <div id="wizard-error" role="alert" hidden class="bg-red-50 border-2 border-red-400 text-red-900 rounded-xl p-4 text-base font-semibold"></div>
+
+    <form id="ask-help-form" novalidate>
+      <!-- STEP 1: Circle, Category, Help Mode -->
+      <div id="wizard-step-1" class="space-y-6">
+        <h3 id="step-1-heading" tabindex="-1" class="text-xl font-bold text-stone-900">Step 1: What do you need help with?</h3>
+
+        <!-- Circle Picker -->
+        <div id="wizard-circle-group" class="space-y-2">
+          <label for="wizard-circle-select" class="block text-lg font-bold text-stone-900">Which Circle should see this? <span aria-hidden="true" class="text-red-700">*</span></label>
+          <select id="wizard-circle-select" name="circle_id" required class="senior-tap w-full rounded-xl border-2 border-stone-400 bg-white px-4 py-3 text-lg font-semibold text-stone-900">
+            <option value="">Choose your Circle...</option>
+          </select>
+        </div>
+
+        <!-- Category Radio Cards -->
+        <fieldset class="space-y-3">
+          <legend class="text-lg font-bold text-stone-900 mb-2">Choose a topic <span aria-hidden="true" class="text-red-700">*</span></legend>
+          <div id="wizard-category-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- Populated dynamically from window.db.HELP_CATEGORIES -->
+          </div>
+        </fieldset>
+
+        <!-- Help Mode: Quick Question vs In-Person Visit -->
+        <fieldset class="space-y-3">
+          <legend class="text-lg font-bold text-stone-900 mb-2">How can a neighbor help? <span aria-hidden="true" class="text-red-700">*</span></legend>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <input type="radio" id="mode-remote" name="help_mode" value="remote" class="radio-card-input visually-hidden" checked>
+              <label for="mode-remote" class="radio-card-label senior-tap flex items-start gap-3 p-4 rounded-2xl border-2 border-stone-300 bg-white cursor-pointer transition-colors">
+                <span class="material-symbols-outlined text-3xl text-[#0d631b] mt-0.5" aria-hidden="true">chat</span>
+                <span>
+                  <span class="block text-lg font-bold text-stone-900">Quick Question / Photo</span>
+                  <span class="block text-sm text-stone-600">Solved via reply or screenshot (e.g. spam check)</span>
+                </span>
+              </label>
+            </div>
+            <div>
+              <input type="radio" id="mode-in-person" name="help_mode" value="in_person" class="radio-card-input visually-hidden">
+              <label for="mode-in-person" class="radio-card-label senior-tap flex items-start gap-3 p-4 rounded-2xl border-2 border-stone-300 bg-white cursor-pointer transition-colors">
+                <span class="material-symbols-outlined text-3xl text-[#0d631b] mt-0.5" aria-hidden="true">home</span>
+                <span>
+                  <span class="block text-lg font-bold text-stone-900">In-Person Visit</span>
+                  <span class="block text-sm text-stone-600">Neighbor stops by (e.g. Wi-Fi, TV, errands)</span>
+                </span>
+              </label>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Preferred Time Window (shown only for In-Person Visit) -->
+        <fieldset id="preferred-time-group" hidden class="space-y-3 bg-stone-50 p-4 rounded-2xl border border-stone-200">
+          <legend class="text-lg font-bold text-stone-900">When works best for a visit?</legend>
+          <div id="wizard-time-grid" class="grid grid-cols-2 gap-2.5">
+            <!-- Populated dynamically -->
+          </div>
+        </fieldset>
+
+        <!-- Contextual Safety Reminder -->
+        <div id="wizard-safety-tip" class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex items-start gap-3 text-base text-amber-950">
+          <span class="material-symbols-outlined text-2xl text-amber-700 shrink-0 mt-0.5" aria-hidden="true">verified_user</span>
+          <p id="wizard-safety-tip-text" class="font-medium"></p>
+        </div>
+
+        <div class="pt-2">
+          <button type="button" id="wizard-next-btn" enterkeyhint="next" class="senior-tap w-full bg-[#0d631b] hover:bg-[#0a4f15] text-white font-extrabold text-xl py-4 px-6 rounded-2xl shadow-md flex items-center justify-center gap-2 cursor-pointer">
+            <span>Next: Describe Your Request</span>
+            <span class="material-symbols-outlined text-2xl" aria-hidden="true">arrow_forward</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 2: Speak or Type + Add Screenshot/Photo -->
+      <div id="wizard-step-2" hidden class="space-y-6">
+        <h3 id="step-2-heading" tabindex="-1" class="text-xl font-bold text-stone-900">Step 2: Tell your neighbors</h3>
+
+        <!-- Voice-to-Text Big Button -->
+        <div class="bg-green-50 border-2 border-green-300 rounded-2xl p-4 space-y-2">
+          <button type="button" id="voice-dictate-btn" aria-pressed="false" class="senior-tap w-full bg-white hover:bg-green-100 border-2 border-[#0d631b] text-[#0d631b] font-extrabold text-lg py-3.5 px-5 rounded-xl flex items-center justify-center gap-3 cursor-pointer">
+            <span id="voice-icon" class="material-symbols-outlined text-3xl" aria-hidden="true">mic</span>
+            <span id="voice-btn-label">Tap to Speak Instead of Typing</span>
+          </button>
+          <p id="voice-status-text" class="text-sm text-green-900 text-center font-medium">
+            Tap the microphone and speak naturally — we will type it for you below.
+          </p>
+        </div>
+
+        <!-- Description Textarea -->
+        <div class="space-y-2">
+          <label for="help-description" class="block text-lg font-bold text-stone-900">
+            What do you need help with? <span aria-hidden="true" class="text-red-700">*</span>
+          </label>
+          <p id="help-description-hint" class="text-base text-stone-600">
+            Example: "My phone says storage is full and I can't take photos" or "Got this SMS about my bank, is it fake?"
+          </p>
+          <textarea id="help-description" name="description" rows="4" required maxlength="1500" aria-describedby="help-description-hint" class="w-full rounded-2xl border-2 border-stone-400 bg-white p-4 text-lg text-stone-900 leading-relaxed" placeholder="Type or speak here..."></textarea>
+        </div>
+
+        <!-- Photo / Screenshot Upload -->
+        <div class="space-y-3">
+          <span class="block text-lg font-bold text-stone-900">Add a Photo or Screenshot (Optional)</span>
+          <p class="text-base text-stone-600">Helpful for checking suspicious messages, error screens, or Wi-Fi routers (up to 3 photos).</p>
+          <input type="file" id="help-photo-input" accept="image/*" multiple class="visually-hidden">
+          <label for="help-photo-input" class="senior-tap inline-flex items-center justify-center gap-3 bg-white hover:bg-stone-100 border-2 border-dashed border-stone-500 text-stone-900 font-bold text-lg px-6 py-4 rounded-2xl cursor-pointer w-full">
+            <span class="material-symbols-outlined text-3xl text-[#0d631b]" aria-hidden="true">add_a_photo</span>
+            <span>Choose Photo or Screenshot</span>
+          </label>
+          <div id="photo-previews" class="grid grid-cols-3 gap-3"></div>
+        </div>
+
+        <!-- Step 2 Actions -->
+        <div class="flex flex-col sm:flex-row gap-3 pt-2">
+          <button type="button" id="wizard-back-btn" enterkeyhint="previous" class="senior-tap sm:w-1/3 border-2 border-stone-400 bg-white hover:bg-stone-100 text-stone-900 font-bold text-lg py-4 px-5 rounded-2xl flex items-center justify-center gap-2 cursor-pointer">
+            <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+            <span>Back</span>
+          </button>
+          <button type="submit" id="wizard-submit-btn" class="senior-tap sm:flex-1 bg-[#0d631b] hover:bg-[#0a4f15] text-white font-extrabold text-xl py-4 px-6 rounded-2xl shadow-md flex items-center justify-center gap-2 cursor-pointer">
+            <span class="material-symbols-outlined text-2xl" aria-hidden="true">send</span>
+            <span id="wizard-submit-label">Post to My Circle</span>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<!-- BottomNavBar (Mobile) -->
+<nav aria-label="Mobile" class="fixed bottom-0 left-0 w-full flex justify-around items-center px-2 pb-5 pt-2.5 bg-[#fbf9f6]/95 backdrop-blur-xl z-40 rounded-t-3xl shadow-[0_-8px_30px_rgba(51,51,51,0.08)] md:hidden border-t border-stone-200">
+  <a class="flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl text-stone-600 hover:text-primary" href="index.html">
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">home</span>
+    <span class="text-xs font-bold">Home</span>
+  </a>
+  <a class="flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl text-stone-600 hover:text-primary" href="circles.html">
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">groups</span>
+    <span class="text-xs font-bold">Circles</span>
+  </a>
+  <a class="flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl text-[#0d631b] bg-green-100 font-bold" href="help.html" aria-current="page">
+    <span class="material-symbols-outlined mb-0.5" style="font-variation-settings: 'FILL' 1;" aria-hidden="true">volunteer_activism</span>
+    <span class="text-xs font-bold">Help</span>
+  </a>
+  <a class="flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl text-stone-600 hover:text-primary relative" href="messages.html">
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">chat_bubble</span>
+    <span class="unread-badge-el absolute top-0.5 right-1 bg-red-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center hidden">0</span>
+    <span class="text-xs font-bold">Inbox</span>
+  </a>
+  <a class="flex flex-col items-center justify-center py-1.5 px-2.5 rounded-xl text-stone-600 hover:text-primary" href="profile.html">
+    <span class="material-symbols-outlined mb-0.5" aria-hidden="true">person</span>
+    <span class="text-xs font-bold">Profile</span>
+  </a>
+</nav>
+
+<script>
+  let currentUser = null;
+  let userCircles = [];
+  let circlesById = {};
+  let allHelpRequests = [];
+  let activeTab = 'open';
+  let activeCategory = 'all';
+  let activeCircleFilter = 'all';
+  let selectedPhotos = []; // Array of { file, previewUrl }
+  let speechRecognition = null;
+  let isListening = false;
+
+  const askDialog = document.getElementById('ask-help-dialog');
+  const announcer = document.getElementById('status-announcer');
+
+  function announce(msg) {
+    if (!announcer) return;
+    announcer.textContent = '';
+    setTimeout(() => { announcer.textContent = msg; }, 50);
+  }
+
+  function escapeHtml(str) {
+    return window.db.escapeHtml(str || '');
+  }
+
+  function formatRelativeTime(ts) {
+    if (!ts) return 'Just now';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    const diffMs = Date.now() - d.getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins} min ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs} hr${hrs === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function getStatusBadge(req) {
+    if (req.status === 'open') {
+      return { text: 'Waiting for a neighbor', cls: 'bg-amber-100 text-amber-900 border border-amber-300', icon: 'hourglass_top' };
+    }
+    if (req.status === 'claimed') {
+      const helper = req.helper_name ? `${req.helper_name} is helping` : 'Neighbor is helping';
+      return { text: helper, cls: 'bg-blue-100 text-blue-900 border border-blue-300', icon: 'handshake' };
+    }
+    if (req.status === 'resolved') {
+      return { text: 'All Done!', cls: 'bg-green-100 text-green-900 border border-green-300', icon: 'check_circle' };
+    }
+    return { text: 'Cancelled', cls: 'bg-stone-200 text-stone-700', icon: 'cancel' };
+  }
+
+  // --- Profile dropdown ---
+  const profileBtn = document.getElementById('profile-menu-btn');
+  const profileDropdown = document.getElementById('profile-dropdown');
+  profileBtn.addEventListener('click', () => {
+    const isHidden = profileDropdown.classList.toggle('hidden');
+    profileBtn.setAttribute('aria-expanded', String(!isHidden));
+  });
+  document.getElementById('logout-btn').addEventListener('click', () => {
+    firebase.auth().signOut().then(() => { window.location.href = 'index.html'; });
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!profileDropdown.classList.contains('hidden') && !e.target.closest('#profile-dropdown') && !e.target.closest('#profile-menu-btn')) {
+      profileDropdown.classList.add('hidden');
+      profileBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  // --- Build Category Filter Chips & Wizard Radio Cards ---
+  function initCategoriesUI() {
+    const filterRow = document.getElementById('category-filter-row');
+    const wizardGrid = document.getElementById('wizard-category-grid');
+    const timeGrid = document.getElementById('wizard-time-grid');
+
+    window.db.HELP_CATEGORIES.forEach((cat, idx) => {
+      // Filter chip
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.dataset.cat = cat.key;
+      chip.setAttribute('aria-pressed', 'false');
+      chip.className = 'cat-filter-btn senior-tap shrink-0 px-5 py-2.5 rounded-full text-base font-bold bg-white border-2 border-stone-300 text-stone-800 hover:bg-stone-100 flex items-center gap-2 cursor-pointer';
+      chip.innerHTML = `<span class="material-symbols-outlined text-xl" aria-hidden="true">${cat.icon}</span><span>${escapeHtml(cat.label)}</span>`;
+      filterRow.appendChild(chip);
+
+      // Wizard radio card
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `
+        <input type="radio" id="cat-${cat.key}" name="category" value="${cat.key}" class="radio-card-input visually-hidden" ${idx === 0 ? 'checked' : ''}>
+        <label for="cat-${cat.key}" class="radio-card-label senior-tap flex items-start gap-3 p-4 rounded-2xl border-2 border-stone-300 bg-white cursor-pointer transition-colors h-full">
+          <span class="material-symbols-outlined text-3xl text-[#0d631b] mt-0.5 shrink-0" aria-hidden="true">${cat.icon}</span>
+          <span>
+            <span class="block text-lg font-bold text-stone-900">${escapeHtml(cat.label)}</span>
+            <span class="block text-sm text-stone-600 mt-0.5">${escapeHtml(cat.description)}</span>
+          </span>
+        </label>
+      `;
+      wizardGrid.appendChild(wrap);
+    });
+
+    // Time window radios
+    window.db.HELP_TIME_WINDOWS.forEach((tw, idx) => {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `
+        <input type="radio" id="time-${tw.key}" name="preferred_time" value="${tw.key}" class="radio-card-input visually-hidden" ${idx === 3 ? 'checked' : ''}>
+        <label for="time-${tw.key}" class="radio-card-label senior-tap flex items-center justify-center text-center p-3 rounded-xl border-2 border-stone-300 bg-white font-bold text-base text-stone-900 cursor-pointer">
+          ${escapeHtml(tw.label)}
+        </label>
+      `;
+      timeGrid.appendChild(wrap);
+    });
+
+    // Category filter click delegation
+    filterRow.addEventListener('click', (e) => {
+      const btn = e.target.closest('.cat-filter-btn');
+      if (!btn) return;
+      activeCategory = btn.dataset.cat;
+      filterRow.querySelectorAll('.cat-filter-btn').forEach(b => {
+        const isSelected = b.dataset.cat === activeCategory;
+        b.setAttribute('aria-pressed', String(isSelected));
+        b.className = isSelected
+          ? 'cat-filter-btn senior-tap shrink-0 px-5 py-2.5 rounded-full text-base font-bold bg-stone-900 text-white flex items-center gap-2 cursor-pointer'
+          : 'cat-filter-btn senior-tap shrink-0 px-5 py-2.5 rounded-full text-base font-bold bg-white border-2 border-stone-300 text-stone-800 hover:bg-stone-100 flex items-center gap-2 cursor-pointer';
+      });
+      renderHelpList();
+    });
+
+    // Update default help mode & safety tip when category changes
+    wizardGrid.addEventListener('change', (e) => {
+      if (e.target.name === 'category') {
+        const meta = window.db.getHelpCategoryMeta(e.target.value);
+        if (meta.defaultMode === 'remote') {
+          document.getElementById('mode-remote').checked = true;
+        } else {
+          document.getElementById('mode-in-person').checked = true;
+        }
+        updateWizardModeAndSafety();
+      }
+    });
+
+    document.querySelectorAll('input[name="help_mode"]').forEach(radio => {
+      radio.addEventListener('change', updateWizardModeAndSafety);
+    });
+
+    updateWizardModeAndSafety();
+  }
+
+  function updateWizardModeAndSafety() {
+    const selectedCat = document.querySelector('input[name="category"]:checked')?.value || 'tech';
+    const selectedMode = document.querySelector('input[name="help_mode"]:checked')?.value || 'remote';
+    const catMeta = window.db.getHelpCategoryMeta(selectedCat);
+
+    const timeGroup = document.getElementById('preferred-time-group');
+    timeGroup.hidden = selectedMode !== 'in_person';
+
+    const tipText = document.getElementById('wizard-safety-tip-text');
+    if (catMeta.isSensitive && selectedMode === 'in_person') {
+      tipText.textContent = 'Safety tip: Never share your bank OTP, ATM PIN, or passwords out loud — a good neighbor will guide you while you type it yourself. Keep your flat/door number for private chat.';
+    } else if (catMeta.isSensitive) {
+      tipText.textContent = 'Safety tip: Never share your bank OTP, ATM PIN, or passwords — even in a screenshot. Only verified neighbors in your Circle can see this post.';
+    } else if (selectedMode === 'in_person') {
+      tipText.textContent = 'Privacy tip: Keep your flat or door number private here — share it only in private chat once you accept a neighbor\'s offer.';
+    } else {
+      tipText.textContent = 'Only verified members of your selected Circle can see and reply to your request.';
+    }
+  }
+
+  // --- Wizard Step Navigation ---
+  function goToWizardStep(stepNum) {
+    const s1 = document.getElementById('wizard-step-1');
+    const s2 = document.getElementById('wizard-step-2');
+    const ind1 = document.getElementById('step-indicator-1');
+    const ind2 = document.getElementById('step-indicator-2');
+    const errBox = document.getElementById('wizard-error');
+    errBox.hidden = true;
+
+    if (stepNum === 1) {
+      s1.hidden = false;
+      s2.hidden = true;
+      ind1.setAttribute('aria-current', 'step');
+      ind1.className = 'px-3 py-1 rounded-full bg-[#0d631b] text-white';
+      ind2.removeAttribute('aria-current');
+      ind2.className = 'px-3 py-1 rounded-full bg-stone-200 text-stone-700';
+      document.getElementById('step-1-heading').focus();
+    } else {
+      s1.hidden = true;
+      s2.hidden = false;
+      ind1.removeAttribute('aria-current');
+      ind1.className = 'px-3 py-1 rounded-full bg-green-100 text-green-900';
+      ind2.setAttribute('aria-current', 'step');
+      ind2.className = 'px-3 py-1 rounded-full bg-[#0d631b] text-white';
+      document.getElementById('step-2-heading').focus();
+    }
+  }
+
+  function showWizardError(msg) {
+    const errBox = document.getElementById('wizard-error');
+    errBox.textContent = msg;
+    errBox.hidden = false;
+    errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  document.getElementById('open-ask-wizard-btn').addEventListener('click', () => {
+    if (userCircles.length === 0) {
+      document.getElementById('no-circles-notice').scrollIntoView({ behavior: 'smooth' });
+      announce('Please join a Circle first before asking for help.');
+      return;
+    }
+    goToWizardStep(1);
+    askDialog.showModal();
+  });
+
+  document.getElementById('close-ask-dialog-btn').addEventListener('click', () => {
+    stopVoiceDictation();
+    askDialog.close('cancel');
+  });
+
+  askDialog.addEventListener('close', () => {
+    stopVoiceDictation();
+    askDialog.returnValue = '';
+  });
+
+  document.getElementById('wizard-next-btn').addEventListener('click', () => {
+    const circleVal = document.getElementById('wizard-circle-select').value;
+    if (!circleVal) {
+      showWizardError('Please choose which Circle should see your request.');
+      document.getElementById('wizard-circle-select').focus();
+      return;
+    }
+    goToWizardStep(2);
+  });
+
+  document.getElementById('wizard-back-btn').addEventListener('click', () => {
+    stopVoiceDictation();
+    goToWizardStep(1);
+  });
+
+  // --- Voice-to-Text (Web Speech API) ---
+  function initVoiceDictation() {
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const btn = document.getElementById('voice-dictate-btn');
+    const statusText = document.getElementById('voice-status-text');
+
+    if (!SpeechRec) {
+      btn.disabled = true;
+      btn.classList.add('opacity-60', 'cursor-not-allowed');
+      document.getElementById('voice-btn-label').textContent = 'Voice typing not supported on this browser';
+      statusText.textContent = 'You can type your message in the box below, or use your phone keyboard\'s microphone.';
+      return;
+    }
+
+    speechRecognition = new SpeechRec();
+    speechRecognition.lang = navigator.language || 'en-IN';
+    speechRecognition.interimResults = false;
+    speechRecognition.continuous = false;
+
+    speechRecognition.onstart = () => {
+      isListening = true;
+      btn.setAttribute('aria-pressed', 'true');
+      btn.classList.add('bg-red-600', 'text-white', 'border-red-700');
+      btn.classList.remove('bg-white', 'text-[#0d631b]', 'border-[#0d631b]');
+      document.getElementById('voice-icon').textContent = 'stop_circle';
+      document.getElementById('voice-btn-label').textContent = 'Listening... Tap to Stop';
+      statusText.textContent = 'Speak clearly now — your words will appear in the box below.';
+    };
+
+    speechRecognition.onresult = (event) => {
+      const transcript = Array.from(event.results).map(r => r[0].transcript).join(' ').trim();
+      if (transcript) {
+        const descEl = document.getElementById('help-description');
+        descEl.value = descEl.value ? `${descEl.value.trim()} ${transcript}` : transcript;
+        announce('Added spoken text to your request.');
+      }
+    };
+
+    speechRecognition.onerror = (event) => {
+      statusText.textContent = event.error === 'not-allowed'
+        ? 'Microphone permission was blocked. You can still type below.'
+        : 'Could not hear clearly. Tap the microphone to try again, or type below.';
+      stopVoiceDictation();
+    };
+
+    speechRecognition.onend = () => {
+      stopVoiceDictation();
+    };
+
+    btn.addEventListener('click', () => {
+      if (isListening) {
+        speechRecognition.stop();
+      } else {
+        try {
+          speechRecognition.start();
+        } catch (e) {
+          console.warn('Speech start error:', e);
+        }
+      }
+    });
+  }
+
+  function stopVoiceDictation() {
+    if (isListening && speechRecognition) {
+      try { speechRecognition.stop(); } catch (e) {}
+    }
+    isListening = false;
+    const btn = document.getElementById('voice-dictate-btn');
+    if (btn && !btn.disabled) {
+      btn.setAttribute('aria-pressed', 'false');
+      btn.classList.remove('bg-red-600', 'text-white', 'border-red-700');
+      btn.classList.add('bg-white', 'text-[#0d631b]', 'border-[#0d631b]');
+      document.getElementById('voice-icon').textContent = 'mic';
+      document.getElementById('voice-btn-label').textContent = 'Tap to Speak Instead of Typing';
+    }
+  }
+
+  // --- Photo Selection & Preview ---
+  document.getElementById('help-photo-input').addEventListener('change', (e) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      if (selectedPhotos.length >= 3) return;
+      if (!file.type.startsWith('image/')) return;
+      const previewUrl = URL.createObjectURL(file);
+      selectedPhotos.push({ file, previewUrl });
+    });
+    e.target.value = '';
+    renderPhotoPreviews();
+  });
+
+  function renderPhotoPreviews() {
+    const container = document.getElementById('photo-previews');
+    container.innerHTML = '';
+    selectedPhotos.forEach((item, index) => {
+      const card = document.createElement('div');
+      card.className = 'relative rounded-xl overflow-hidden border-2 border-stone-300 bg-stone-100 aspect-square';
+      card.innerHTML = `
+        <img src="${item.previewUrl}" alt="Selected photo ${index + 1}" class="w-full h-full object-cover"/>
+        <button type="button" data-remove-idx="${index}" class="absolute top-1.5 right-1.5 bg-red-700 text-white rounded-full px-2.5 py-1 text-xs font-bold shadow cursor-pointer">
+          Remove
+        </button>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  document.getElementById('photo-previews').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-remove-idx]');
+    if (!btn) return;
+    const idx = Number(btn.dataset.removeIdx);
+    if (!Number.isNaN(idx) && selectedPhotos[idx]) {
+      URL.revokeObjectURL(selectedPhotos[idx].previewUrl);
+      selectedPhotos.splice(idx, 1);
+      renderPhotoPreviews();
+    }
+  });
+
+  // --- Submit Help Request ---
+  document.getElementById('ask-help-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    stopVoiceDictation();
+
+    const circleId = document.getElementById('wizard-circle-select').value;
+    const category = document.querySelector('input[name="category"]:checked')?.value || 'other';
+    const helpMode = document.querySelector('input[name="help_mode"]:checked')?.value || 'remote';
+    const preferredTime = document.querySelector('input[name="preferred_time"]:checked')?.value || 'flexible';
+    const descEl = document.getElementById('help-description');
+    const description = descEl.value.trim();
+
+    if (!circleId) {
+      goToWizardStep(1);
+      showWizardError('Please select a Circle.');
+      return;
+    }
+    if (!description) {
+      descEl.setAttribute('aria-invalid', 'true');
+      showWizardError('Please tell your neighbors what you need help with (you can type or use the microphone).');
+      descEl.focus();
+      return;
+    }
+    descEl.removeAttribute('aria-invalid');
+
+    const submitBtn = document.getElementById('wizard-submit-btn');
+    const submitLabel = document.getElementById('wizard-submit-label');
+    submitBtn.disabled = true;
+    submitLabel.textContent = 'Posting...';
+
+    try {
+      const uploadedUrls = [];
+      for (let i = 0; i < selectedPhotos.length; i++) {
+        const f = selectedPhotos[i].file;
+        const path = `help_requests/${currentUser.uid}/${Date.now()}_${i}.jpg`;
+        const url = await window.db.uploadFile(path, f);
+        if (url) uploadedUrls.push(url);
+      }
+
+      const created = await window.db.createHelpRequest({
+        circle_id: circleId,
+        category,
+        help_mode: helpMode,
+        preferred_time: preferredTime,
+        description,
+        photo_urls: uploadedUrls
+      });
+
+      // Reset form & close dialog
+      descEl.value = '';
+      selectedPhotos.forEach(p => URL.revokeObjectURL(p.previewUrl));
+      selectedPhotos = [];
+      renderPhotoPreviews();
+      askDialog.close('submitted');
+      announce('Your help request has been posted to your Circle!');
+
+      // Open detail view immediately so the senior sees their confirmation & status tracker
+      window.location.href = window.db.urls.help(created);
+    } catch (err) {
+      console.error('Error posting help request:', err);
+      showWizardError(err.message || 'Could not post your request. Please try again.');
+      submitBtn.disabled = false;
+      submitLabel.textContent = 'Post to My Circle';
+    }
+  });
+
+  document.getElementById('help-description').addEventListener('input', (e) => {
+    if (e.target.value.trim()) {
+      e.target.removeAttribute('aria-invalid');
+      document.getElementById('wizard-error').hidden = true;
+    }
+  });
+
+  // --- Tabs & Circle Filter ---
+  document.querySelectorAll('.help-tab').forEach(tabBtn => {
+    tabBtn.addEventListener('click', () => {
+      activeTab = tabBtn.dataset.tab;
+      document.querySelectorAll('.help-tab').forEach(b => {
+        const sel = b.dataset.tab === activeTab;
+        b.setAttribute('aria-selected', String(sel));
+        b.className = sel
+          ? 'help-tab senior-tap rounded-xl px-4 py-3 text-base font-bold bg-[#0d631b] text-white shadow-sm cursor-pointer'
+          : 'help-tab senior-tap rounded-xl px-4 py-3 text-base font-bold text-stone-800 hover:bg-white cursor-pointer';
+      });
+      renderHelpList();
+    });
+  });
+
+  document.getElementById('circle-filter-select').addEventListener('change', (e) => {
+    activeCircleFilter = e.target.value;
+    renderHelpList();
+  });
+
+  // --- Render Requests List ---
+  function renderHelpList() {
+    const listEl = document.getElementById('help-requests-list');
+    let filtered = allHelpRequests.filter(req => req.status !== 'cancelled');
+
+    if (activeCircleFilter !== 'all') {
+      filtered = filtered.filter(req => req.circle_id === activeCircleFilter);
+    }
+    if (activeCategory !== 'all') {
+      filtered = filtered.filter(req => req.category === activeCategory);
+    }
+
+    if (activeTab === 'open') {
+      filtered = filtered.filter(req => req.status === 'open');
+    } else if (activeTab === 'mine') {
+      filtered = filtered.filter(req => req.requester_id === currentUser.uid);
+    } else if (activeTab === 'helping') {
+      filtered = filtered.filter(req => req.helper_id === currentUser.uid && req.status !== 'resolved');
+    } else if (activeTab === 'resolved') {
+      filtered = filtered.filter(req => req.status === 'resolved');
+    }
+
+    if (filtered.length === 0) {
+      const emptyMessages = {
+        open: 'No open help requests right now. Everything is calm in your Circle!',
+        mine: 'You haven\'t asked for help yet. Tap "Ask a Neighbor for Help" anytime you need a hand.',
+        helping: 'You aren\'t currently signed up to help with an active request.',
+        resolved: 'No completed help requests yet.'
+      };
+      listEl.innerHTML = `
+        <div class="bg-white rounded-3xl border-2 border-stone-200 p-8 text-center space-y-3">
+          <span class="material-symbols-outlined text-5xl text-stone-400" aria-hidden="true">volunteer_activism</span>
+          <p class="text-xl font-bold text-stone-800">${emptyMessages[activeTab]}</p>
+        </div>
+      `;
+      return;
+    }
+
+    listEl.innerHTML = filtered.map(req => {
+      const cat = window.db.getHelpCategoryMeta(req.category);
+      const status = getStatusBadge(req);
+      const circleName = (circlesById[req.circle_id] && circlesById[req.circle_id].name) || 'My Circle';
+      const isMine = req.requester_id === currentUser.uid;
+      const modeBadge = req.help_mode === 'in_person'
+        ? `<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-100 text-purple-900 text-sm font-bold"><span class="material-symbols-outlined text-base" aria-hidden="true">home</span>In-Person • ${escapeHtml(window.db.getHelpTimeLabel(req.preferred_time))}</span>`
+        : `<span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-teal-100 text-teal-900 text-sm font-bold"><span class="material-symbols-outlined text-base" aria-hidden="true">chat</span>Quick Question</span>`;
+
+      const thumbHtml = Array.isArray(req.photo_urls) && req.photo_urls.length > 0
+        ? `<div class="mt-3 flex gap-2.5 overflow-x-auto">
+             ${req.photo_urls.map((u, i) => `<img src="${u}" alt="Attached photo ${i + 1}" class="w-24 h-24 rounded-xl object-cover border border-stone-300 shrink-0"/>`).join('')}
+           </div>`
+        : '';
+
+      const primaryActionLabel = isMine
+        ? 'Open My Request'
+        : (req.status === 'open'
+            ? (req.help_mode === 'remote' ? 'View & Answer' : 'View & Offer Help')
+            : 'Open Details');
+
+      return `
+        <article class="bg-white rounded-3xl border-2 border-stone-200 hover:border-[#0d631b]/50 p-6 shadow-sm space-y-4 transition-colors">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-3">
+              <img src="${req.requester_avatar || 'https://i.pravatar.cc/100?u=' + req.requester_id}" alt="" class="w-12 h-12 rounded-full object-cover border border-stone-200"/>
+              <div>
+                <p class="text-lg font-bold text-stone-900 leading-tight">${escapeHtml(req.requester_name || 'Neighbor')}${isMine ? ' (You)' : ''}</p>
+                <p class="text-sm font-medium text-stone-600">${escapeHtml(circleName)} • ${formatRelativeTime(req.created_at)}</p>
+              </div>
+            </div>
+            <span class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-bold ${status.cls}">
+              <span class="material-symbols-outlined text-lg" aria-hidden="true">${status.icon}</span>
+              <span>${escapeHtml(status.text)}</span>
+            </span>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-100 text-green-900 text-sm font-bold">
+              <span class="material-symbols-outlined text-base" aria-hidden="true">${cat.icon}</span>
+              <span>${escapeHtml(cat.label)}</span>
+            </span>
+            ${modeBadge}
+          </div>
+
+          <p class="text-xl font-semibold text-stone-900 leading-relaxed whitespace-pre-line">${escapeHtml(req.description)}</p>
+          ${thumbHtml}
+
+          <div class="pt-2 flex flex-col sm:flex-row gap-3">
+            <a href="${window.db.escapeAttr(window.db.urls.help(req))}" class="senior-tap flex-1 bg-[#0d631b] hover:bg-[#0a4f15] text-white font-bold text-lg px-6 py-3.5 rounded-2xl flex items-center justify-center gap-2 text-center shadow-sm">
+              <span>${primaryActionLabel}</span>
+              <span class="material-symbols-outlined text-xl" aria-hidden="true">arrow_forward</span>
+            </a>
+          </div>
+        </article>
+      `;
+    }).join('');
+  }
+
+  // --- Initial Data Load ---
+  async function loadHelpPage() {
+    initCategoriesUI();
+    initVoiceDictation();
+
+    const session = await requireAuth();
+    if (!session) return;
+    currentUser = session.user;
+
+    // Header avatar
+    const profile = await window.db.getProfile(currentUser.uid);
+    const avatarUrl = (profile && profile.avatar_url) || currentUser.photoURL || `https://i.pravatar.cc/150?u=${currentUser.uid}`;
+    document.getElementById('header-avatar').src = avatarUrl;
+
+    // Load user's Circles
+    const memberships = await window.db.getMyMemberships(currentUser.uid);
+    const circleIds = [...new Set(memberships.map(m => m.circle_id).filter(Boolean))];
+
+    if (circleIds.length === 0) {
+      document.getElementById('no-circles-notice').hidden = false;
+      document.getElementById('help-board-section').hidden = true;
+      return;
+    }
+
+    const circleDocs = await Promise.all(
+      circleIds.map(cid =>
+        firebase.firestore().collection('circles').doc(cid).get()
+          .then(d => d.exists ? { id: d.id, ...d.data() } : null)
+          .catch(() => null)
+      )
+    );
+    userCircles = circleDocs.filter(c => c && !(c.features && c.features.neighbor_help === false));
+    if (userCircles.length === 0) {
+      document.getElementById('no-circles-notice').hidden = false;
+      document.getElementById('help-board-section').hidden = true;
+      return;
+    }
+    userCircles.forEach(c => { circlesById[c.id] = c; });
+
+    // Populate Circle dropdowns
+    const wizardSelect = document.getElementById('wizard-circle-select');
+    const filterSelect = document.getElementById('circle-filter-select');
+    wizardSelect.innerHTML = '';
+    userCircles.forEach(c => {
+      const opt1 = document.createElement('option');
+      opt1.value = c.id;
+      opt1.textContent = c.name || 'My Circle';
+      wizardSelect.appendChild(opt1);
+
+      const opt2 = document.createElement('option');
+      opt2.value = c.id;
+      opt2.textContent = c.name || 'My Circle';
+      filterSelect.appendChild(opt2);
+    });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    let preselectedCircle = urlParams.get('circleId');
+    const circleSlugParam = urlParams.get('circle');
+    if (!preselectedCircle && circleSlugParam) {
+      const matched = userCircles.find(c => c.slug === circleSlugParam || window.db.slugify(c.name, 'circle') === circleSlugParam);
+      if (matched) {
+        preselectedCircle = matched.id;
+      } else {
+        preselectedCircle = await window.db.resolveEntityId('circle', { name: circleSlugParam });
+      }
+    }
+    if (preselectedCircle && circlesById[preselectedCircle]) {
+      wizardSelect.value = preselectedCircle;
+      filterSelect.value = preselectedCircle;
+      activeCircleFilter = preselectedCircle;
+    }
+
+    if (userCircles.length > 1) {
+      document.getElementById('circle-filter-wrap').hidden = false;
+    }
+
+    // Fetch help requests across joined Circles
+    allHelpRequests = await window.db.getHelpRequestsForCircles(userCircles.map(c => c.id));
+    renderHelpList();
+
+    // Auto-open wizard if ?ask=1
+    if (urlParams.get('ask') === '1') {
+      goToWizardStep(1);
+      askDialog.showModal();
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadHelpPage);
+  } else {
+    loadHelpPage();
+  }
+</script>
+</body>
+</html>

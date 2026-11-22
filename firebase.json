@@ -37,6 +37,15 @@
     ],
     "headers": [
       {
+        "source": "/@(firebase-client|config).js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "**",
         "headers": [
           {
@@ -53,7 +62,7 @@
           },
           {
             "key": "Permissions-Policy",
-            "value": "geolocation=(self), camera=(), microphone=()"
+            "value": "geolocation=(self), camera=(), microphone=(self)"
           },
           {
             "key": "Content-Security-Policy",

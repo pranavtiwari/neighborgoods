@@ -579,7 +579,7 @@
                                 <button onclick="handleWithdrawCopy('${db.escapeAttr(copy.id)}')" class="p-2 text-stone-400 hover:text-red-600 rounded-lg transition-colors flex items-center justify-center cursor-pointer" title="Withdraw Copy">
                                     <span class="material-symbols-outlined text-[18px]">archive</span>
                                 </button>
-                                <a href="add-item.html?id=${encodeURIComponent(copy.id)}" class="text-xs font-bold text-primary dark:text-emerald-400 hover:underline flex items-center gap-1">
+                                <a href="${db.escapeAttr(db.urls.editItem(copy))}" class="text-xs font-bold text-primary dark:text-emerald-400 hover:underline flex items-center gap-1">
                                     <span class="material-symbols-outlined text-sm">edit</span> Edit Listing
                                 </a>
                             </div>
@@ -600,7 +600,7 @@
                             ${db.escapeHtml(reason)}
                         </button>`;
                     } else {
-                        primaryAction = `<a href="request-borrow.html?id=${encodeURIComponent(copy.id)}" class="flex-1 py-2.5 px-3 bg-primary text-white text-xs font-bold rounded-xl text-center active:scale-95 transition-all shadow-sm hover:opacity-90">
+                        primaryAction = `<a href="${db.escapeAttr(db.urls.borrow(copy))}" class="flex-1 py-2.5 px-3 bg-primary text-white text-xs font-bold rounded-xl text-center active:scale-95 transition-all shadow-sm hover:opacity-90">
                             ${requestBtnText}
                         </a>`;
                     }
@@ -608,10 +608,10 @@
                     actionsHtml = `
                         <div class="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/15">
                             ${primaryAction}
-                            <a href="chat.html?userId=${encodeURIComponent(copy.owner_id)}&itemId=${encodeURIComponent(copy.id)}" title="Message Owner" class="p-2.5 bg-surface-container hover:bg-surface-container-high rounded-xl text-on-surface active:scale-95 transition-all flex items-center justify-center">
+                            <a href="${db.escapeAttr(db.urls.chat({ userId: copy.owner_id, userName: copy.owner_name, item: copy }))}" title="Message Owner" class="p-2.5 bg-surface-container hover:bg-surface-container-high rounded-xl text-on-surface active:scale-95 transition-all flex items-center justify-center">
                                 <span class="material-symbols-outlined text-base">chat_bubble</span>
                             </a>
-                            <a href="item-details.html?id=${encodeURIComponent(copy.id)}" title="Copy details" class="p-2.5 bg-surface-container hover:bg-surface-container-high rounded-xl text-stone-500 active:scale-95 transition-all flex items-center justify-center">
+                            <a href="${db.escapeAttr(db.urls.item(copy))}" title="Copy details" class="p-2.5 bg-surface-container hover:bg-surface-container-high rounded-xl text-stone-500 active:scale-95 transition-all flex items-center justify-center">
                                 <span class="material-symbols-outlined text-base">info</span>
                             </a>
                             ${isUserLibrarian ? `
@@ -713,7 +713,9 @@
 
         async function initBookDetail() {
             const urlParams = new URLSearchParams(window.location.search);
-            const bookId = urlParams.get('id') || urlParams.get('book_id');
+            const rawBookName = urlParams.get('name');
+            const rawBookId = urlParams.get('id') || urlParams.get('book_id');
+            const bookId = await window.db.resolveEntityId('book', { name: rawBookName, id: rawBookId });
             const isbnQuery = urlParams.get('isbn');
 
             const loadingEl = document.getElementById('loading-state');
@@ -724,7 +726,7 @@
                 if (loadingEl) loadingEl.classList.add('hidden');
                 if (errorEl) errorEl.classList.remove('hidden');
                 const errMsg = document.getElementById('error-message');
-                if (errMsg) errMsg.textContent = "Please provide a valid book ID or ISBN in the URL.";
+                if (errMsg) errMsg.textContent = "Please provide a valid book name, ID, or ISBN in the URL.";
                 return;
             }
 
@@ -738,6 +740,14 @@
                 if (!book && (isbnQuery || (bookId && bookId.startsWith('isbn_')))) {
                     const isbn = isbnQuery || bookId.replace('isbn_', '');
                     book = await window.db.findBook({ isbn });
+                }
+
+                if (book) {
+                    const resolvedSlug = await window.db.ensureEntitySlug('book', book);
+                    if (resolvedSlug) {
+                        book.slug = book.slug || resolvedSlug;
+                        window.db.replaceUrlWithSlug('book-detail', book.slug);
+                    }
                 }
 
                 if (!book) {
@@ -806,8 +816,8 @@
                     }
                 }
 
-                // CTAs pointing to add-item.html?book_id=...
-                const listUrl = `add-item.html?book_id=${encodeURIComponent(book.id)}`;
+                // CTAs pointing to add-item?book=...
+                const listUrl = window.db.urls.addItemForBook(book);
                 const listBtn = document.getElementById('list-copy-btn');
                 if (listBtn) listBtn.href = listUrl;
                 const bottomListBtn = document.getElementById('bottom-list-btn');

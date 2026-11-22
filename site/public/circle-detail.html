@@ -9,7 +9,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="firebase-client.js"></script>
+    <script src="firebase-client.js?v=20261122"></script>
     
     <!-- Fuzzy Search -->
     <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
@@ -59,25 +59,50 @@
 <body class="bg-surface font-sans text-on-surface antialiased min-h-screen pb-20">
 
     <!-- Premium Glass Header -->
-    <header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
-        <div class="flex justify-between items-center w-full px-6 py-4 max-w-7xl mx-auto">
-            <div class="flex items-center gap-6">
+    <header class="bg-[#fbf9f6]/90 dark:bg-stone-900/90 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_6px_24px_rgba(51,51,51,0.06)] border-b border-outline-variant/15">
+        <div class="flex justify-between items-center w-full px-4 sm:px-6 py-3.5 max-w-6xl mx-auto">
+            <div class="flex items-center gap-4">
                 <a href="circles.html" class="group flex items-center gap-2 text-primary dark:text-primary-fixed-dim font-bold transition-all active:scale-95">
                     <span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
                     <span class="label-md">All Circles</span>
                 </a>
             </div>
-            <div class="flex items-center gap-3">
-                <!-- Admin: Edit Circle -->
-                <button id="edit-circle-btn" class="hidden items-center gap-2 px-4 py-2 rounded-xl border border-outline-variant text-on-surface-variant font-semibold text-sm hover:bg-surface-container transition-colors active:scale-95">
-                    <span class="material-symbols-outlined text-base">edit</span>
-                    <span class="hidden sm:inline">Edit Circle</span>
-                </button>
-                <!-- Member: Leave Circle -->
-                <button id="leave-circle-btn" class="hidden items-center gap-2 px-4 py-2 rounded-xl border border-error/30 text-error font-semibold text-sm hover:bg-error-container transition-colors active:scale-95">
-                    <span class="material-symbols-outlined text-base">logout</span>
-                    <span class="hidden sm:inline">Leave</span>
-                </button>
+            <div class="flex items-center gap-2.5">
+                <!-- Single Overflow Menu for Secondary & Admin Actions -->
+                <div class="relative" id="circle-more-wrapper">
+                    <button type="button" id="circle-more-btn" onclick="document.getElementById('circle-more-dropdown').classList.toggle('hidden')" aria-label="More circle actions" aria-haspopup="true" class="w-10 h-10 rounded-xl border border-outline-variant/40 bg-surface-container-low hover:bg-surface-container text-on-surface flex items-center justify-center transition-colors active:scale-95 cursor-pointer" title="More options">
+                        <span class="material-symbols-outlined text-[22px]">more_horiz</span>
+                    </button>
+                    <div id="circle-more-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-surface rounded-2xl shadow-xl border border-outline-variant/30 z-50 py-2">
+                        <button type="button" id="share-circle-btn" onclick="handleShareCircle(); document.getElementById('circle-more-dropdown').classList.add('hidden');" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-container-high text-on-surface text-sm font-medium text-left cursor-pointer">
+                            <span class="material-symbols-outlined text-[18px] text-primary">share</span>
+                            <span id="share-btn-text">Share Circle Link</span>
+                        </button>
+                        <div id="member-actions" class="hidden flex-col">
+                            <button type="button" id="menu-share-item-btn" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-container-high text-on-surface text-sm font-medium text-left cursor-pointer">
+                                <span class="material-symbols-outlined text-[18px] text-primary">add_box</span>
+                                <span>Share an Item</span>
+                            </button>
+                            <button type="button" id="menu-post-update-btn" onclick="openPostModal(); document.getElementById('circle-more-dropdown').classList.add('hidden');" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-container-high text-on-surface text-sm font-medium text-left cursor-pointer">
+                                <span class="material-symbols-outlined text-[18px] text-primary">edit_note</span>
+                                <span>Post to Bulletin</span>
+                            </button>
+                            <button type="button" onclick="openSeedFeedbackModal(); document.getElementById('circle-more-dropdown').classList.add('hidden');" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-container-high text-on-surface text-sm font-medium text-left cursor-pointer">
+                                <span class="material-symbols-outlined text-[18px] text-amber-500">rate_review</span>
+                                <span>Give Feedback</span>
+                            </button>
+                        </div>
+                        <button type="button" id="edit-circle-btn" class="hidden w-full items-center gap-3 px-4 py-2.5 hover:bg-surface-container-high text-on-surface text-sm font-medium text-left cursor-pointer border-t border-outline-variant/15 mt-1 pt-2.5">
+                            <span class="material-symbols-outlined text-[18px] text-on-surface-variant">edit</span>
+                            <span>Edit Circle</span>
+                        </button>
+                        <button type="button" id="leave-circle-btn" class="hidden w-full items-center gap-3 px-4 py-2.5 hover:bg-error-container text-error text-sm font-semibold text-left cursor-pointer">
+                            <span class="material-symbols-outlined text-[18px]">logout</span>
+                            <span>Leave Circle</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div id="header-profile-btn" class="relative">
                     <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
                         <img id="header-avatar" src="https://i.pravatar.cc/150?u=me" class="w-full h-full object-cover">
@@ -98,220 +123,253 @@
     </header>
 
     <!-- Main Content Layout -->
-    <main class="pt-32 px-8 max-w-[1400px] mx-auto">
-        
-        <!-- Hero Section -->
-        <div class="mb-20">
-            <div class="flex flex-col md:flex-row md:items-end justify-between gap-8">
-                <div class="max-w-2xl">
-                    <div class="flex items-center gap-3 mb-4">
+    <main class="pt-7 sm:pt-10 px-4 sm:px-8 max-w-6xl mx-auto">
+
+        <!-- Compact Circle Header -->
+        <section class="mb-7">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2.5 mb-1.5">
                         <span class="label-md text-primary">Neighborhood Circle</span>
-                        <span id="privacy-badge" class="hidden items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-stone-100 text-stone-600">
+                        <span id="privacy-badge" class="hidden items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">
                             <span class="material-symbols-outlined text-xs" style="font-size:14px">lock</span>
                             Private
                         </span>
                     </div>
-                    <h1 id="circle-name" class="text-display-lg font-black text-on-surface mb-6">Loading...</h1>
-                    <p id="circle-description" class="text-xl text-on-surface-variant leading-relaxed max-w-xl">...</p>
+                    <h1 id="circle-name" class="text-3xl sm:text-4xl font-black text-on-surface tracking-tight leading-tight">Loading...</h1>
+                    <p id="circle-description" class="text-sm sm:text-base text-on-surface-variant mt-1.5 max-w-2xl leading-relaxed"></p>
                 </div>
-                <div class="flex flex-col items-start md:items-end gap-6">
-                    <div class="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" onclick="openMembersModal()">
-                        <div id="member-avatars" class="flex -space-x-3"><!-- Avatars --></div>
-                        <span id="member-count-text" class="label-md text-on-surface-variant hover:underline">Neighbors</span>
-                    </div>
-                    <!-- Action buttons area -->
-                    <div class="flex items-center gap-3 w-full md:w-auto flex-wrap justify-start md:justify-end">
-                        <button id="share-circle-btn" onclick="handleShareCircle()" class="px-5 py-4 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-bold shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5" title="Share this Circle">
-                            <span class="material-symbols-outlined text-[16px] text-primary">share</span>
-                            <span id="share-btn-text">Share Circle</span>
-                        </button>
-                        <!-- Member action buttons (shown when user is a member) -->
-                        <div id="member-actions" class="hidden flex gap-3 w-full md:w-auto">
-                            <button onclick="openSeedFeedbackModal()" class="flex-1 md:flex-none px-4 py-4 rounded-lg bg-surface-container-high text-on-surface text-xs font-bold shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5" title="Give Feedback on this Circle Soft Launch">
-                                <span class="material-symbols-outlined text-[16px] text-amber-500">rate_review</span>
-                                Feedback
-                            </button>
-                            <button onclick="openPostModal()" class="flex-1 md:flex-none px-6 py-4 rounded-lg bg-surface-container-lowest text-primary font-bold shadow-sm hover:shadow-md transition-all active:scale-95">
-                                Post Update
-                            </button>
-                            <button id="share-item-btn" class="flex-1 md:flex-none px-6 py-4 rounded-lg bg-forest-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all active:scale-95">
-                                Share Item
-                            </button>
+
+                <div class="flex items-center gap-3 flex-wrap shrink-0">
+                    <!-- Clickable Neighbors Pill -->
+                    <button type="button" onclick="openMembersModal()" class="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-full bg-surface-container-low hover:bg-surface-container border border-outline-variant/25 transition-colors cursor-pointer active:scale-95">
+                        <div id="member-avatars" class="flex -space-x-2"></div>
+                        <span id="member-count-text" class="text-xs font-bold text-on-surface">Neighbors</span>
+                        <span class="material-symbols-outlined text-sm text-on-surface-variant">chevron_right</span>
+                    </button>
+
+                    <!-- Non-member: public join -->
+                    <button id="join-btn" class="hidden px-6 py-2.5 rounded-xl bg-forest-gradient text-white font-bold text-sm shadow-md shadow-primary/20 hover:opacity-95 transition-all active:scale-95 cursor-pointer" onclick="handleJoin()">
+                        Join Circle
+                    </button>
+                    <!-- Non-member: private request to join -->
+                    <button id="request-join-btn" class="hidden px-6 py-2.5 rounded-xl bg-primary/10 border-2 border-primary text-primary font-bold text-sm hover:bg-primary/20 transition-all active:scale-95 cursor-pointer" onclick="handleRequestJoin()">
+                        <span class="material-symbols-outlined text-base align-middle mr-1">person_add</span>
+                        Request to Join
+                    </button>
+                    <!-- Non-member: request pending -->
+                    <div id="request-pending-ui" class="hidden flex-col items-end gap-1">
+                        <div class="px-4 py-2 rounded-xl bg-stone-100 text-stone-600 font-bold text-xs">
+                            <span class="material-symbols-outlined text-sm align-middle mr-1" style="font-variation-settings:'FILL' 1">schedule</span>
+                            Request Pending
                         </div>
-                        <!-- Non-member: public join -->
-                        <button id="join-btn" class="hidden px-8 py-4 rounded-lg bg-forest-gradient text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all active:scale-95 w-full md:w-auto" onclick="handleJoin()">
-                            Join Circle
-                        </button>
-                        <!-- Non-member: private request to join -->
-                        <button id="request-join-btn" class="hidden px-8 py-4 rounded-lg bg-primary/10 border-2 border-primary text-primary font-bold hover:bg-primary/20 transition-all active:scale-95 w-full md:w-auto" onclick="handleRequestJoin()">
-                            <span class="material-symbols-outlined text-base align-middle mr-1">person_add</span>
-                            Request to Join
-                        </button>
-                        <!-- Non-member: request pending -->
-                        <div id="request-pending-ui" class="hidden flex-col items-end gap-2 w-full md:w-auto">
-                            <div class="px-8 py-4 rounded-lg bg-stone-100 text-stone-500 font-bold text-center w-full md:w-auto">
-                                <span class="material-symbols-outlined text-base align-middle mr-1" style="font-variation-settings:'FILL' 1">schedule</span>
-                                Request Pending
-                            </div>
-                            <button onclick="handleCancelRequest()" class="text-xs text-error hover:underline font-medium">Cancel request</button>
-                        </div>
+                        <button onclick="handleCancelRequest()" class="text-xs text-error hover:underline font-medium">Cancel request</button>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <!-- Admin: Pending Join Requests (Near Top, Responsive Grid) -->
-        <div id="join-requests-panel" class="hidden bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-6 shadow-sm mb-8">
-            <h3 class="label-md text-amber-700 dark:text-amber-400 mb-4 flex items-center gap-2 font-bold">
-                <span class="material-symbols-outlined text-base text-amber-600 dark:text-amber-500">pending</span>
-                Pending Join Requests
-                <span id="request-count-badge" class="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full"></span>
-            </h3>
-            <div id="join-requests-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
-        </div>
-
-        <!-- Admin: Circle Transaction Ledger -->
-        <div id="circle-admin-ledger-panel" class="hidden bg-surface-container-low border border-outline-variant/30 rounded-2xl p-6 shadow-sm mb-12">
-            <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <h3 class="label-md text-primary flex items-center gap-2 font-bold">
-                    <span class="material-symbols-outlined text-base">receipt_long</span>
-                    Circle Transaction Ledger
-                    <span id="circle-ledger-count-badge" class="bg-primary/20 text-primary text-xs font-bold px-2 py-0.5 rounded-full">0</span>
-                </h3>
-                <span class="text-xs text-on-surface-variant">Admin view of circle transactions</span>
-            </div>
-            <div id="circle-admin-ledger-list" class="space-y-3">
-                <div class="text-center py-4 text-stone-500 animate-pulse">Loading circle ledger...</div>
-            </div>
-        </div>
+        </section>
 
         <!-- View-Only Landing Banner (Shown when visitor is not signed in) -->
-        <div id="view-only-banner" class="hidden bg-primary/10 border border-primary/20 rounded-2xl p-5 mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+        <div id="view-only-banner" class="hidden bg-primary/10 border border-primary/20 rounded-2xl p-4 sm:p-5 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
             <div class="flex items-center gap-3.5">
                 <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary flex-shrink-0">
                     <span class="material-symbols-outlined text-2xl">visibility</span>
                 </div>
                 <div>
                     <h4 class="font-bold text-sm text-on-surface">Previewing this circle in view-only mode</h4>
-                    <p class="text-xs text-on-surface-variant">Sign up or log in to borrow items, post updates, and connect with neighbors.</p>
+                    <p class="text-xs text-on-surface-variant">Sign in to borrow items, ask neighbors for help, and post updates.</p>
                 </div>
             </div>
-            <button onclick="handleJoin()" class="px-6 py-3 rounded-xl bg-forest-gradient text-white font-bold text-xs shadow-md hover:scale-[1.02] active:scale-95 transition-all whitespace-nowrap">
+            <button onclick="handleJoin()" class="px-5 py-2.5 rounded-xl bg-forest-gradient text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all whitespace-nowrap cursor-pointer">
                 Join Circle
             </button>
         </div>
 
-        <!-- Asymmetric Content Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12">
-            
-            <!-- Left Column (col-span-8): Circle Inventory -->
-            <div id="inventory-section-wrapper" class="lg:col-span-8 space-y-8">
-                <div class="bg-surface-container-low rounded-2xl p-8 flex flex-col border border-outline-variant/10 shadow-sm">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                        <div>
-                            <h2 class="text-headline-sm font-bold text-on-surface flex items-center gap-2">
-                                <span class="material-symbols-outlined text-primary text-3xl">grid_view</span>
-                                Circle Inventory
-                            </h2>
-                            <p class="text-xs text-stone-500 mt-1">Shared goods and resources in this Commons</p>
-                        </div>
-                        <div class="flex items-center gap-3 self-start sm:self-auto">
-                            <span id="inventory-count" class="text-xs font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20"></span>
-                            
-                            <div class="relative w-48 sm:w-64">
-                                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-[20px]">search</span>
-                                <input type="text" id="inventory-search" placeholder="Search items..." class="w-full pl-10 pr-10 py-2 rounded-xl border border-outline-variant/20 bg-surface-container-high focus:ring-2 focus:ring-primary text-sm shadow-inner">
-                            </div>
-                            <button id="location-sort-btn" onclick="toggleLocationSort()" class="w-10 h-10 rounded-xl border border-outline-variant/20 flex items-center justify-center text-stone-500 hover:text-primary hover:bg-primary/10 hover:border-primary/30 transition-all shadow-sm" title="Sort by distance">
-                                <span class="material-symbols-outlined text-[20px]">location_on</span>
-                            </button>
-                        </div>
-                    </div>
+        <!-- Private circle non-member gate -->
+        <div id="private-gate" class="hidden bg-surface-container-low border border-outline-variant/15 rounded-2xl p-10 text-center shadow-sm mb-8">
+            <span class="material-symbols-outlined text-5xl text-on-surface-variant/30 mb-3 block">lock</span>
+            <h3 class="text-xl font-bold mb-2 text-on-surface">Private Circle</h3>
+            <p class="text-sm text-on-surface-variant mb-6 max-w-md mx-auto">Join this circle to browse shared items, ask neighbors for help, and see updates.</p>
+            <button id="gate-request-btn" onclick="handleRequestJoin()" class="px-8 py-3 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-transform shadow-md cursor-pointer">Request to Join</button>
+            <div id="gate-pending" class="hidden mt-4 text-stone-500 text-sm">
+                Your request is pending admin approval.
+                <button onclick="handleCancelRequest()" class="text-error underline ml-1 font-semibold">Cancel</button>
+            </div>
+        </div>
 
-                    <!-- Scrollable Top-Used Categories Filter Chips -->
-                    <div class="mb-6">
-                        <p class="text-xs font-bold text-on-surface-variant/70 mb-2 uppercase tracking-wider">Top Categories</p>
-                        <div id="category-filter-chips-container" class="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
-                            <!-- Category Filter Chips rendered dynamically -->
-                        </div>
-                    </div>
-
-                    <div id="circle-inventory" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                        <!-- Inventory grid rendered dynamically -->
-                    </div>
+        <!-- Primary Action Hub: Two Side-by-Side Action Cards (Find Shared Item + Ask for Help) -->
+        <section id="circle-action-hub" class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 mb-8">
+            <!-- Card 1: Find a Shared Item -->
+            <div id="action-card-listings" class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-extrabold text-on-surface flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary text-2xl" aria-hidden="true">search</span>
+                        <span>Find a Shared Item</span>
+                    </h2>
+                    <p class="text-sm text-on-surface-variant mt-1">Search tools, books, kitchen gear, and more shared by neighbors.</p>
+                </div>
+                <div class="relative">
+                    <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-[22px]" aria-hidden="true">search</span>
+                    <input type="search" id="inventory-search" placeholder="Search items (e.g. drill, ladder, books)..." class="w-full pl-11 pr-4 py-3.5 rounded-xl border border-outline-variant/30 bg-surface text-on-surface focus:ring-2 focus:ring-primary focus:border-primary text-base shadow-inner">
                 </div>
             </div>
 
-            <!-- Right Column (col-span-4): Recent Activity, About -->
-            <div class="lg:col-span-4 space-y-8">
-
-                <!-- Private circle non-member gate -->
-                <div id="private-gate" class="hidden bg-surface-container-low border border-outline-variant/10 rounded-2xl p-8 text-center shadow-sm">
-                    <span class="material-symbols-outlined text-5xl text-on-surface-variant/30 mb-4 block">lock</span>
-                    <h3 class="text-lg font-bold mb-2 text-on-surface">Private Circle</h3>
-                    <p class="text-sm text-on-surface-variant mb-6">Join this circle to see posts and shared items.</p>
-                    <button id="gate-request-btn" onclick="handleRequestJoin()" class="w-full py-3 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-transform shadow-md">Request to Join</button>
-                    <div id="gate-pending" class="hidden mt-4 text-stone-500 text-sm">
-                        Your request is pending admin approval.
-                        <button onclick="handleCancelRequest()" class="text-error underline ml-1 font-semibold">Cancel</button>
-                    </div>
-                </div>
-
-                <!-- Recent Activity Feed -->
-                <div id="feed-section" class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-sm">
-                    <h2 class="text-lg font-bold text-on-surface mb-6 flex items-center gap-2">
-                        <span class="material-symbols-outlined text-primary">forum</span>
-                        Recent Activity
+            <!-- Card 2: Ask a Neighbor for Help -->
+            <div id="action-card-help" class="bg-green-50/80 dark:bg-green-950/25 border-2 border-green-200/90 dark:border-green-900/50 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-extrabold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary text-2xl" aria-hidden="true">volunteer_activism</span>
+                        <span>Need a Hand?</span>
                     </h2>
-                    <div id="circle-feed" class="space-y-6">
-                        <div class="animate-pulse space-y-4">
-                            <div class="h-24 bg-surface-container rounded-xl"></div>
-                            <div class="h-24 bg-surface-container rounded-xl"></div>
-                        </div>
+                    <p class="text-sm text-stone-700 dark:text-stone-300 mt-1">Phone or Wi-Fi help, spam checks, home tasks, or quick errands — always free.</p>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <a id="circle-ask-help-btn" href="help.html?ask=1" class="flex-1 py-3.5 px-5 rounded-xl bg-forest-gradient text-white font-bold text-base shadow-sm hover:opacity-95 transition-opacity flex items-center justify-center gap-2 text-center">
+                        <span class="material-symbols-outlined text-xl" aria-hidden="true">front_hand</span>
+                        <span>Ask a Neighbor for Help</span>
+                    </a>
+                    <button type="button" id="action-hub-open-help-link" onclick="setActiveCircleTab('help')" class="hidden text-xs font-bold text-primary hover:underline whitespace-nowrap cursor-pointer px-1">
+                        View open requests →
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tabbed Circle Content: Listings | Neighbourhood Help | Bulletin -->
+        <section id="circle-tabs-wrapper" class="space-y-5">
+            <div role="tablist" aria-label="Circle sections" class="flex items-center gap-2 border-b border-outline-variant/25 pb-3 overflow-x-auto hide-scrollbar">
+                <button type="button" role="tab" aria-selected="true" id="tab-btn-inventory" data-circle-tab="inventory" onclick="setActiveCircleTab('inventory')" class="circle-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white shadow-sm cursor-pointer transition-colors">
+                    <span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_view</span>
+                    <span>Listings</span>
+                    <span id="inventory-count" class="hidden text-[11px] font-extrabold bg-white/20 text-white px-2 py-0.5 rounded-full">0</span>
+                </button>
+                <button type="button" role="tab" aria-selected="false" id="tab-btn-help" data-circle-tab="help" onclick="setActiveCircleTab('help')" class="circle-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer transition-colors">
+                    <span class="material-symbols-outlined text-[18px]" aria-hidden="true">volunteer_activism</span>
+                    <span>Neighbourhood Help</span>
+                    <span id="help-tab-badge" class="hidden text-[11px] font-extrabold bg-primary/15 text-primary px-2 py-0.5 rounded-full">0</span>
+                </button>
+                <button type="button" role="tab" aria-selected="false" id="tab-btn-updates" data-circle-tab="updates" onclick="setActiveCircleTab('updates')" class="circle-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer transition-colors">
+                    <span class="material-symbols-outlined text-[18px]" aria-hidden="true">campaign</span>
+                    <span>Bulletin</span>
+                </button>
+            </div>
+
+            <!-- Tab 1: Shared Items (Full-Width Inventory) -->
+            <div id="inventory-section-wrapper" role="tabpanel" class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div id="category-filter-chips-container" class="flex gap-2 overflow-x-auto pb-1 hide-scrollbar flex-1 min-w-[200px]">
+                        <!-- Category Filter Chips rendered dynamically -->
                     </div>
-                    <div id="feed-load-more" class="hidden pt-6 text-center">
-                        <button id="feed-load-more-btn" onclick="fetchMoreFeed()" class="px-5 py-2.5 text-xs font-bold rounded-xl border border-outline-variant/30 hover:bg-surface-container transition-all text-on-surface">
-                            Load More Activity
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button type="button" id="location-sort-btn" onclick="toggleLocationSort()" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-outline-variant/30 bg-surface-container-low text-xs font-bold text-stone-600 hover:text-primary hover:bg-primary/10 hover:border-primary/30 transition-all cursor-pointer" title="Sort items by distance from you">
+                            <span class="material-symbols-outlined text-[16px]">location_on</span>
+                            <span>Near me</span>
+                        </button>
+                        <button type="button" id="share-item-btn" class="hidden inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all cursor-pointer">
+                            <span class="material-symbols-outlined text-[16px]">add</span>
+                            <span>Share Item</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Commons Stats -->
-                <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-sm">
-                    <h3 class="text-sm font-bold text-on-surface mb-4 uppercase tracking-wider flex items-center gap-2">
-                        <span class="material-symbols-outlined text-primary text-base">analytics</span>
-                        Commons Stats
-                    </h3>
-                    <div class="grid grid-cols-3 gap-2 text-center">
-                        <div class="bg-surface-container rounded-xl p-3 border border-outline-variant/5">
-                            <p id="circle-stats-listings" class="text-lg font-black text-primary">...</p>
-                            <p class="text-[9px] font-bold text-stone-500 uppercase tracking-tight mt-0.5">Listings</p>
-                        </div>
-                        <div class="bg-surface-container rounded-xl p-3 border border-outline-variant/5">
-                            <p id="circle-stats-transactions" class="text-lg font-black text-primary">...</p>
-                            <p class="text-[9px] font-bold text-stone-500 uppercase tracking-tight mt-0.5">Completed</p>
-                        </div>
-                        <div class="bg-surface-container rounded-xl p-3 border border-outline-variant/5">
-                            <p id="circle-stats-chats" class="text-lg font-black text-primary">...</p>
-                            <p class="text-[9px] font-bold text-stone-500 uppercase tracking-tight mt-0.5">Chats</p>
-                        </div>
-                    </div>
+                <div id="circle-inventory" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                    <!-- Inventory grid rendered dynamically -->
                 </div>
-
-                <!-- About this Circle -->
-                <div class="bg-surface-container-low border border-outline-variant/10 rounded-2xl p-6 shadow-sm">
-                    <h3 class="text-sm font-bold text-on-surface mb-4 uppercase tracking-wider flex items-center gap-2">
-                        <span class="material-symbols-outlined text-primary text-base">info</span>
-                        About this Commons
-                    </h3>
-                    <div class="space-y-4 text-sm text-on-surface-variant leading-relaxed">
-                        <p>This is a shared space for neighbors to lend, borrow, and build together.</p>
-                        <p><strong>Rules:</strong> Be kind, return items in original condition, and communicate clearly.</p>
-                    </div>
-                </div>
-
             </div>
+
+            <!-- Tab 2: Neighbor Help Requests -->
+            <div id="circle-neighbor-help-panel" role="tabpanel" class="hidden space-y-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <p class="text-sm text-on-surface-variant">Open help requests from verified neighbors in this Circle.</p>
+                    <a id="circle-help-view-all" href="help.html" class="text-sm font-bold text-primary hover:underline inline-flex items-center gap-1">
+                        <span>Open Full Help Board</span>
+                        <span class="material-symbols-outlined text-base" aria-hidden="true">arrow_forward</span>
+                    </a>
+                </div>
+                <div id="circle-help-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <p class="text-sm text-stone-500 col-span-full py-6 text-center">Join this Circle to view and respond to Neighbor Help requests.</p>
+                </div>
+            </div>
+
+            <!-- Tab 3: Circle Updates & Activity -->
+            <div id="feed-section" role="tabpanel" class="hidden space-y-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <p class="text-sm text-on-surface-variant">Notes, announcements, and community updates from neighbors.</p>
+                    <button type="button" id="tab-post-update-btn" onclick="openPostModal()" class="hidden inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-all cursor-pointer">
+                        <span class="material-symbols-outlined text-[16px]">edit_note</span>
+                        <span>Post Update</span>
+                    </button>
+                </div>
+                <div id="circle-feed" class="space-y-4">
+                    <div class="animate-pulse space-y-4">
+                        <div class="h-24 bg-surface-container rounded-xl"></div>
+                        <div class="h-24 bg-surface-container rounded-xl"></div>
+                    </div>
+                </div>
+                <div id="feed-load-more" class="hidden pt-2 text-center">
+                    <button id="feed-load-more-btn" onclick="fetchMoreFeed()" class="px-5 py-2.5 text-xs font-bold rounded-xl border border-outline-variant/30 hover:bg-surface-container transition-all text-on-surface cursor-pointer">
+                        Load More Updates
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quiet Footer: About & Commons Stats -->
+        <section class="mt-12 bg-surface-container-low border border-outline-variant/15 rounded-2xl p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div class="space-y-1.5 max-w-xl">
+                <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-primary text-base">info</span>
+                    About this Commons
+                </h3>
+                <p class="text-sm text-on-surface-variant leading-relaxed">
+                    A shared space for neighbors to lend, borrow, and help each other. <strong>Rules:</strong> Be kind, return items in original condition, and communicate clearly.
+                </p>
+            </div>
+            <div class="grid grid-cols-3 gap-2.5 shrink-0 min-w-[240px] text-center">
+                <div class="bg-surface-container rounded-xl px-3 py-2.5 border border-outline-variant/10">
+                    <p id="circle-stats-listings" class="text-lg font-black text-primary">0</p>
+                    <p class="text-[10px] font-bold text-stone-500 uppercase tracking-tight">Listings</p>
+                </div>
+                <div class="bg-surface-container rounded-xl px-3 py-2.5 border border-outline-variant/10">
+                    <p id="circle-stats-transactions" class="text-lg font-black text-primary">0</p>
+                    <p class="text-[10px] font-bold text-stone-500 uppercase tracking-tight">Completed</p>
+                </div>
+                <div class="bg-surface-container rounded-xl px-3 py-2.5 border border-outline-variant/10">
+                    <p id="circle-stats-chats" class="text-lg font-black text-primary">0</p>
+                    <p class="text-[10px] font-bold text-stone-500 uppercase tracking-tight">Chats</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Admin: Pending Join Requests (Shown only when admins have pending requests) -->
+        <div id="join-requests-panel" class="hidden bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-5 sm:p-6 shadow-sm mt-6">
+            <h3 class="label-md text-amber-700 dark:text-amber-400 mb-4 flex items-center gap-2 font-bold">
+                <span class="material-symbols-outlined text-base text-amber-600 dark:text-amber-500">pending</span>
+                Pending Join Requests
+                <span id="request-count-badge" class="bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full"></span>
+            </h3>
+            <div id="join-requests-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </div>
+
+        <!-- Admin: Circle Transaction Ledger (Collapsed at the bottom by default) -->
+        <details id="circle-admin-ledger-panel" class="hidden group bg-surface-container-low border border-outline-variant/25 rounded-2xl shadow-sm mt-6 mb-10">
+            <summary class="list-none cursor-pointer p-5 sm:p-6 flex items-center justify-between gap-3 select-none">
+                <div class="flex items-center gap-2.5">
+                    <span class="material-symbols-outlined text-primary text-lg">receipt_long</span>
+                    <span class="label-md text-primary font-bold">Circle Transaction Ledger</span>
+                    <span id="circle-ledger-count-badge" class="bg-primary/15 text-primary text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-on-surface-variant">
+                    <span class="hidden sm:inline">Admin view</span>
+                    <span class="material-symbols-outlined text-base transition-transform group-open:rotate-180">expand_more</span>
+                </div>
+            </summary>
+            <div class="px-5 sm:px-6 pb-6 pt-1 border-t border-outline-variant/15">
+                <div id="circle-admin-ledger-list" class="space-y-3 pt-4">
+                    <div class="text-center py-4 text-stone-500 animate-pulse">Loading circle ledger...</div>
+                </div>
+            </div>
+        </details>
     </main>
 
     <!-- Post Modal -->
@@ -380,6 +438,43 @@
                         <input type="checkbox" id="edit-circle-private" class="sr-only peer">
                         <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                     </label>
+                </div>
+                <!-- Circle Functions / Enabled Capabilities -->
+                <div class="space-y-2.5 bg-surface-container p-4 rounded-xl">
+                    <div>
+                        <p class="font-bold text-sm">Circle Functions</p>
+                        <p class="text-xs text-stone-500">Choose which features are enabled for this Circle.</p>
+                    </div>
+                    <div class="flex items-center justify-between gap-3 pt-1">
+                        <div>
+                            <p class="font-semibold text-sm">Listings</p>
+                            <p class="text-xs text-stone-500">Share, search, and borrow items &amp; books</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input type="checkbox" id="edit-feature-listings" checked class="sr-only peer">
+                            <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between gap-3 pt-2 border-t border-outline-variant/15">
+                        <div>
+                            <p class="font-semibold text-sm">Neighbourhood Help</p>
+                            <p class="text-xs text-stone-500">Ask and offer free volunteer help</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input type="checkbox" id="edit-feature-help" checked class="sr-only peer">
+                            <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between gap-3 pt-2 border-t border-outline-variant/15">
+                        <div>
+                            <p class="font-semibold text-sm">Bulletin</p>
+                            <p class="text-xs text-stone-500">Community updates, notes, and posts</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input type="checkbox" id="edit-feature-bulletin" checked class="sr-only peer">
+                            <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                    </div>
                 </div>
                 <!-- Category Restrictions -->
                 <div class="relative">
@@ -748,7 +843,11 @@
         // Render Inventory items
         function renderInventory(items) {
             const inventoryContainer = document.getElementById('circle-inventory');
-            document.getElementById('inventory-count').textContent = `${items.length} items`;
+            const countEl = document.getElementById('inventory-count');
+            if (countEl) {
+                countEl.textContent = String(items.length);
+                countEl.classList.toggle('hidden', items.length === 0);
+            }
 
             if (items.length === 0) {
                 inventoryContainer.innerHTML = `<div class="col-span-full py-12 text-center text-stone-500 italic">No matching items found in this category.</div>`;
@@ -775,7 +874,7 @@
                 }
 
                 return `
-                <div onclick="window.location.href='item-details.html?id=${item.id}'" class="group bg-surface rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 border border-outline-variant/10 cursor-pointer flex flex-col h-full">
+                <div onclick="window.location.href='${window.db.escapeAttr(window.db.urls.item(item))}'" class="group bg-surface rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 border border-outline-variant/10 cursor-pointer flex flex-col h-full">
                     <div class="relative aspect-square w-full overflow-hidden bg-surface-container-low flex-shrink-0 flex items-center justify-center p-4">
                         <img src="${db.sanitizeUrl(item.image_url) || 'https://placehold.co/300x300?text=Item'}" class="w-full h-full object-contain rounded-xl bg-stone-50 dark:bg-stone-900 group-hover:scale-105 transition-transform duration-500">
                     </div>
@@ -853,21 +952,102 @@
             renderInventory(results);
         }
 
+        function getCircleFeatures(circle) {
+            const f = (circle && circle.features) || {};
+            return {
+                listings: f.listings !== false,
+                neighbor_help: f.neighbor_help !== false,
+                bulletin: f.bulletin !== false
+            };
+        }
+
+        function applyCircleFeaturesUI() {
+            const features = getCircleFeatures(currentCircle);
+            const cardListings = document.getElementById('action-card-listings');
+            const cardHelp = document.getElementById('action-card-help');
+            const actionHub = document.getElementById('circle-action-hub');
+            const tabListings = document.getElementById('tab-btn-inventory');
+            const tabHelp = document.getElementById('tab-btn-help');
+            const tabBulletin = document.getElementById('tab-btn-updates');
+            const tabsWrapper = document.getElementById('circle-tabs-wrapper');
+            const menuShareItem = document.getElementById('menu-share-item-btn');
+            const menuPostUpdate = document.getElementById('menu-post-update-btn');
+            const shareItemBtn = document.getElementById('share-item-btn');
+            const tabPostBtn = document.getElementById('tab-post-update-btn');
+
+            if (cardListings) cardListings.classList.toggle('hidden', !features.listings);
+            if (cardHelp) cardHelp.classList.toggle('hidden', !features.neighbor_help);
+
+            // Adjust action hub layout based on enabled action cards
+            if (actionHub && (!currentCircle?.is_private || currentUserIsMember)) {
+                const visibleCards = (features.listings ? 1 : 0) + (features.neighbor_help ? 1 : 0);
+                actionHub.classList.toggle('hidden', visibleCards === 0);
+                actionHub.classList.toggle('md:grid-cols-2', visibleCards === 2);
+            }
+
+            if (tabListings) tabListings.classList.toggle('hidden', !features.listings);
+            if (tabHelp) tabHelp.classList.toggle('hidden', !features.neighbor_help);
+            if (tabBulletin) tabBulletin.classList.toggle('hidden', !features.bulletin);
+
+            if (menuShareItem) menuShareItem.classList.toggle('hidden', !features.listings);
+            if (menuPostUpdate) menuPostUpdate.classList.toggle('hidden', !features.bulletin);
+            if (shareItemBtn && currentUserIsMember) shareItemBtn.classList.toggle('hidden', !features.listings);
+            if (tabPostBtn && currentUserIsMember) tabPostBtn.classList.toggle('hidden', !features.bulletin);
+
+            // Pick first enabled tab if the currently active tab was disabled
+            const enabledTabs = [];
+            if (features.listings) enabledTabs.push('inventory');
+            if (features.neighbor_help) enabledTabs.push('help');
+            if (features.bulletin) enabledTabs.push('updates');
+
+            if (tabsWrapper && (!currentCircle?.is_private || currentUserIsMember)) {
+                tabsWrapper.classList.toggle('hidden', enabledTabs.length === 0);
+            }
+            if (enabledTabs.length > 0) {
+                const targetTab = enabledTabs.includes(activeCircleTab) ? activeCircleTab : enabledTabs[0];
+                setActiveCircleTab(targetTab);
+            }
+        }
+
+        let activeCircleTab = 'inventory';
+        function setActiveCircleTab(tabName) {
+            activeCircleTab = tabName;
+            document.querySelectorAll('.circle-tab-btn').forEach(btn => {
+                const isSelected = btn.dataset.circleTab === tabName;
+                btn.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+                if (isSelected) {
+                    btn.classList.add('bg-primary', 'text-white', 'shadow-sm');
+                    btn.classList.remove('text-on-surface-variant', 'hover:bg-surface-container');
+                } else {
+                    btn.classList.remove('bg-primary', 'text-white', 'shadow-sm');
+                    btn.classList.add('text-on-surface-variant', 'hover:bg-surface-container');
+                }
+            });
+            const invPanel = document.getElementById('inventory-section-wrapper');
+            const helpPanel = document.getElementById('circle-neighbor-help-panel');
+            const feedPanel = document.getElementById('feed-section');
+            if (invPanel) invPanel.classList.toggle('hidden', tabName !== 'inventory');
+            if (helpPanel) helpPanel.classList.toggle('hidden', tabName !== 'help');
+            if (feedPanel) feedPanel.classList.toggle('hidden', tabName !== 'updates');
+        }
+        window.setActiveCircleTab = setActiveCircleTab;
+
         function toggleLocationSort() {
             const btn = document.getElementById('location-sort-btn');
             
             if (isLocationSortActive) {
                 // Turn off
                 isLocationSortActive = false;
-                btn.classList.remove('text-primary', 'bg-primary/10');
-                btn.classList.add('text-stone-400');
+                btn.classList.remove('text-primary', 'bg-primary/10', 'border-primary/30');
+                btn.classList.add('text-stone-600');
+                btn.innerHTML = `<span class="material-symbols-outlined text-[16px]">location_on</span><span>Near me</span>`;
                 handleInventorySearch();
                 return;
             }
 
             // Turn on - request location if we don't have it
             if (!userLocation) {
-                btn.innerHTML = `<span class="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>`;
+                btn.innerHTML = `<span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span><span>Locating...</span>`;
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         userLocation = {
@@ -875,22 +1055,22 @@
                             lng: position.coords.longitude
                         };
                         isLocationSortActive = true;
-                        btn.innerHTML = `<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">location_on</span>`;
-                        btn.classList.remove('text-stone-400');
-                        btn.classList.add('text-primary', 'bg-primary/10');
+                        btn.innerHTML = `<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">location_on</span><span>Near me</span>`;
+                        btn.classList.remove('text-stone-600');
+                        btn.classList.add('text-primary', 'bg-primary/10', 'border-primary/30');
                         handleInventorySearch();
                     },
                     (error) => {
                         console.error("Error getting location", error);
                         alert("Could not get your location. Please ensure location services are enabled.");
-                        btn.innerHTML = `<span class="material-symbols-outlined text-[18px]">location_on</span>`;
+                        btn.innerHTML = `<span class="material-symbols-outlined text-[16px]">location_on</span><span>Near me</span>`;
                     }
                 );
             } else {
                 isLocationSortActive = true;
-                btn.classList.remove('text-stone-400');
-                btn.classList.add('text-primary', 'bg-primary/10');
-                btn.innerHTML = `<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">location_on</span>`;
+                btn.classList.remove('text-stone-600');
+                btn.classList.add('text-primary', 'bg-primary/10', 'border-primary/30');
+                btn.innerHTML = `<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">location_on</span><span>Near me</span>`;
                 handleInventorySearch();
             }
         }
@@ -898,7 +1078,9 @@
 
         async function loadCircleDetails() {
             const urlParams = new URLSearchParams(window.location.search);
-            currentCircleId = urlParams.get('id');
+            const rawName = urlParams.get('name');
+            const rawId = urlParams.get('id');
+            currentCircleId = await window.db.resolveEntityId('circle', { name: rawName, id: rawId });
             
             if (!currentCircleId) {
                 window.location.href = 'circles.html';
@@ -915,6 +1097,13 @@
                 // 1. Fetch Circle Metadata
                 currentCircle = await window.db.getCircle(currentCircleId);
                 if (!currentCircle) { window.location.href = 'circles.html'; return; }
+
+                // Ensure kebab-case slug & canonicalize address bar to ?name=<slug>
+                const resolvedSlug = await window.db.ensureEntitySlug('circle', currentCircle);
+                if (resolvedSlug) {
+                    currentCircle.slug = currentCircle.slug || resolvedSlug;
+                    window.db.replaceUrlWithSlug('circle-detail', currentCircle.slug);
+                }
 
                 document.title = `${currentCircle.name} - Share, Instead.`;
                 document.getElementById('circle-name').textContent = currentCircle.name;
@@ -1017,8 +1206,9 @@
                         });
                     }
                     
-                    // Bind search listener
+                    // Bind search listener (auto-switches to Listings tab on input)
                     document.getElementById('inventory-search').addEventListener('input', () => {
+                        if (activeCircleTab !== 'inventory') setActiveCircleTab('inventory');
                         handleInventorySearch();
                     });
 
@@ -1066,12 +1256,17 @@
         }
 
         async function renderRoleUI() {
+            const goShareItem = () => {
+                window.location.href = window.db.urls.addItemForCircle(currentCircle || currentCircleId);
+            };
             const shareItemBtn = document.getElementById('share-item-btn');
-            if (shareItemBtn) {
-                shareItemBtn.onclick = () => {
-                    const addUrl = window.location.pathname.endsWith('.html') ? 'add-item.html' : 'add-item';
-                    window.location.href = `${addUrl}?circleId=${currentCircleId}`;
-                };
+            if (shareItemBtn) shareItemBtn.onclick = goShareItem;
+            const menuShareItemBtn = document.getElementById('menu-share-item-btn');
+            if (menuShareItemBtn) menuShareItemBtn.onclick = goShareItem;
+
+            const askHelpBtn = document.getElementById('circle-ask-help-btn');
+            if (askHelpBtn) {
+                askHelpBtn.href = window.db.urls.helpBoard(currentCircle || currentCircleId, { ask: true });
             }
 
             const viewOnlyBanner = document.getElementById('view-only-banner');
@@ -1081,36 +1276,50 @@
                 if (viewOnlyBanner) viewOnlyBanner.classList.add('hidden');
             }
 
+            const actionHub = document.getElementById('circle-action-hub');
+            const tabsWrapper = document.getElementById('circle-tabs-wrapper');
+            const tabPostBtn = document.getElementById('tab-post-update-btn');
+
             if (currentUserIsMember) {
-                // Show member actions (Post + Share Item)
-                document.getElementById('member-actions').classList.remove('hidden');
-                document.getElementById('member-actions').classList.add('flex');
+                // Show member actions inside overflow menu & subtle inline buttons
+                const memberActions = document.getElementById('member-actions');
+                if (memberActions) { memberActions.classList.remove('hidden'); memberActions.classList.add('flex'); }
+                if (shareItemBtn) shareItemBtn.classList.remove('hidden');
+                if (tabPostBtn) tabPostBtn.classList.remove('hidden');
 
-                // Show Leave button
-                document.getElementById('leave-circle-btn').classList.remove('hidden');
-                document.getElementById('leave-circle-btn').classList.add('flex');
+                // Show Leave button in overflow menu
+                const leaveBtn = document.getElementById('leave-circle-btn');
+                if (leaveBtn) { leaveBtn.classList.remove('hidden'); leaveBtn.classList.add('flex'); }
 
-                // Admin: show Edit button
+                // Admin: show Edit button in overflow menu
                 if (currentUserRole === 'admin') {
-                    document.getElementById('edit-circle-btn').classList.remove('hidden');
-                    document.getElementById('edit-circle-btn').classList.add('flex');
+                    const editBtn = document.getElementById('edit-circle-btn');
+                    if (editBtn) { editBtn.classList.remove('hidden'); editBtn.classList.add('flex'); }
                 }
 
-                // Show feed and inventory
+                // Show action hub & tabs (respecting Circle feature toggles)
                 document.getElementById('private-gate').classList.add('hidden');
-                document.getElementById('feed-section').classList.remove('hidden');
-                document.getElementById('inventory-section-wrapper').classList.remove('hidden');
+                if (actionHub) actionHub.classList.remove('hidden');
+                if (tabsWrapper) tabsWrapper.classList.remove('hidden');
+                applyCircleFeaturesUI();
+
+                // Load Neighbor Help requests for verified members if enabled
+                if (getCircleFeatures(currentCircle).neighbor_help) {
+                    loadCircleNeighborHelp(currentCircleId);
+                }
 
             } else {
                 // Non-member or unauthenticated visitor
-                document.getElementById('member-actions').classList.add('hidden');
-                document.getElementById('member-actions').classList.remove('flex');
-                document.getElementById('leave-circle-btn').classList.add('hidden');
-                document.getElementById('leave-circle-btn').classList.remove('flex');
+                const memberActions = document.getElementById('member-actions');
+                if (memberActions) { memberActions.classList.add('hidden'); memberActions.classList.remove('flex'); }
+                if (shareItemBtn) shareItemBtn.classList.add('hidden');
+                if (tabPostBtn) tabPostBtn.classList.add('hidden');
+                const leaveBtn = document.getElementById('leave-circle-btn');
+                if (leaveBtn) { leaveBtn.classList.add('hidden'); leaveBtn.classList.remove('flex'); }
 
                 if (currentCircle.is_private) {
-                    document.getElementById('feed-section').classList.add('hidden');
-                    document.getElementById('inventory-section-wrapper').classList.add('hidden');
+                    if (actionHub) actionHub.classList.add('hidden');
+                    if (tabsWrapper) tabsWrapper.classList.add('hidden');
                     document.getElementById('private-gate').classList.remove('hidden');
 
                     if (currentUser) {
@@ -1135,13 +1344,14 @@
                         document.getElementById('request-join-btn').innerHTML = `<span class="material-symbols-outlined text-base align-middle mr-1">login</span>Sign In to Request Access`;
                     }
                 } else {
-                    // Public circle — show Join button
+                    // Public circle — show Join button & allow browsing
                     document.getElementById('private-gate').classList.add('hidden');
                     document.getElementById('join-btn').classList.remove('hidden');
                     document.getElementById('join-btn').classList.add('flex');
                     document.getElementById('join-btn').textContent = 'Join Circle';
-                    document.getElementById('feed-section').classList.remove('hidden');
-                    document.getElementById('inventory-section-wrapper').classList.remove('hidden');
+                    if (actionHub) actionHub.classList.remove('hidden');
+                    if (tabsWrapper) tabsWrapper.classList.remove('hidden');
+                    applyCircleFeaturesUI();
                 }
             }
         }
@@ -1329,7 +1539,7 @@
 
         async function handleJoin() {
             if (!currentUser) {
-                const returnUrl = `circle-detail.html?id=${encodeURIComponent(currentCircleId)}`;
+                const returnUrl = window.db.urls.circle(currentCircle || currentCircleId);
                 window.location.href = `join-community.html?redirect=${encodeURIComponent(returnUrl)}`;
                 return;
             }
@@ -1353,7 +1563,7 @@
 
         function handleRequestJoin() {
             if (!currentUser) {
-                const returnUrl = `circle-detail.html?id=${encodeURIComponent(currentCircleId)}`;
+                const returnUrl = window.db.urls.circle(currentCircle || currentCircleId);
                 window.location.href = `join-community.html?redirect=${encodeURIComponent(returnUrl)}`;
                 return;
             }
@@ -1364,6 +1574,7 @@
             const shareBtnText = document.getElementById('share-btn-text');
             const res = await window.shareCircle({
                 circleId: currentCircleId,
+                slug: currentCircle ? currentCircle.slug : '',
                 name: currentCircle ? currentCircle.name : '',
                 description: currentCircle ? currentCircle.description : ''
             });
@@ -1460,14 +1671,22 @@
             }
         }
 
-        document.getElementById('leave-circle-btn').addEventListener('click', openLeaveModal);
+        document.getElementById('leave-circle-btn').addEventListener('click', () => {
+            document.getElementById('circle-more-dropdown')?.classList.add('hidden');
+            openLeaveModal();
+        });
 
         // --- Edit Circle ---
         function openEditModal() {
             if (!currentCircle) return;
+            document.getElementById('circle-more-dropdown')?.classList.add('hidden');
             document.getElementById('edit-circle-name').value = currentCircle.name || '';
             document.getElementById('edit-circle-description').value = currentCircle.description || '';
             document.getElementById('edit-circle-private').checked = currentCircle.is_private || false;
+            const features = getCircleFeatures(currentCircle);
+            document.getElementById('edit-feature-listings').checked = features.listings;
+            document.getElementById('edit-feature-help').checked = features.neighbor_help;
+            document.getElementById('edit-feature-bulletin').checked = features.bulletin;
             document.getElementById('edit-image-preview').src = currentCircle.image_url || '';
             editSelectedCategories = currentCircle.allowed_categories ? [...currentCircle.allowed_categories] : [];
             renderEditCategoryChips();
@@ -1510,6 +1729,11 @@
                     name: document.getElementById('edit-circle-name').value.trim(),
                     description: document.getElementById('edit-circle-description').value.trim(),
                     is_private: document.getElementById('edit-circle-private').checked,
+                    features: {
+                        listings: document.getElementById('edit-feature-listings').checked,
+                        neighbor_help: document.getElementById('edit-feature-help').checked,
+                        bulletin: document.getElementById('edit-feature-bulletin').checked
+                    },
                     allowed_categories: editSelectedCategories,
                     image_url: imageUrl
                 };
@@ -1521,6 +1745,10 @@
                 document.getElementById('circle-name').textContent = updatedData.name;
                 document.getElementById('circle-description').textContent = updatedData.description || 'A neighborhood community circle.';
                 document.title = `${updatedData.name} - Share, Instead.`;
+                applyCircleFeaturesUI();
+                if (updatedData.features.neighbor_help && currentUserIsMember) {
+                    loadCircleNeighborHelp(currentCircleId);
+                }
                 
                 const badge = document.getElementById('privacy-badge');
                 if (updatedData.is_private) {
@@ -1968,11 +2196,70 @@
         window.handleSetMemberRole = handleSetMemberRole;
         window.handleToggleLibrarianRole = handleToggleLibrarianRole;
 
-        // Close dropdown on outside click
+        async function loadCircleNeighborHelp(circleId) {
+            const listEl = document.getElementById('circle-help-list');
+            const viewAllLink = document.getElementById('circle-help-view-all');
+            const askBtn = document.getElementById('circle-ask-help-btn');
+            const tabBadge = document.getElementById('help-tab-badge');
+            const hubOpenLink = document.getElementById('action-hub-open-help-link');
+            if (!listEl || !window.db || !window.db.getHelpRequestsForCircles) return;
+
+            if (viewAllLink) viewAllLink.href = window.db.urls.helpBoard(currentCircle || circleId);
+            if (askBtn) askBtn.href = window.db.urls.helpBoard(currentCircle || circleId, { ask: true });
+
+            try {
+                const reqs = await window.db.getHelpRequestsForCircles([circleId]);
+                const openReqs = reqs.filter(r => r.status === 'open');
+
+                if (tabBadge) {
+                    tabBadge.textContent = String(openReqs.length);
+                    tabBadge.classList.toggle('hidden', openReqs.length === 0);
+                }
+                if (hubOpenLink) {
+                    if (openReqs.length > 0) {
+                        hubOpenLink.textContent = `${openReqs.length} open request${openReqs.length === 1 ? '' : 's'} →`;
+                        hubOpenLink.classList.remove('hidden');
+                    } else {
+                        hubOpenLink.classList.add('hidden');
+                    }
+                }
+
+                if (openReqs.length === 0) {
+                    listEl.innerHTML = `<p class="text-sm text-stone-500 col-span-full text-center py-8">No open help requests right now. Need a hand? Tap "Ask a Neighbor for Help" above!</p>`;
+                    return;
+                }
+                listEl.innerHTML = openReqs.map(r => {
+                    const cat = window.db.getHelpCategoryMeta(r.category);
+                    const safeDesc = window.db.escapeHtml((r.description || '').slice(0, 120) + ((r.description || '').length > 120 ? '…' : ''));
+                    const safeName = window.db.escapeHtml(r.requester_name || 'Neighbor');
+                    const helpUrl = window.db.escapeAttr(window.db.urls.help(r));
+                    return `
+                        <a href="${helpUrl}" class="block bg-white dark:bg-stone-900 rounded-2xl p-4 border border-green-200 dark:border-green-900/50 hover:border-primary transition-colors shadow-sm">
+                            <div class="flex items-center justify-between gap-2 mb-1.5">
+                                <span class="text-xs font-bold text-primary flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-sm" aria-hidden="true">${cat.icon}</span>
+                                    ${window.db.escapeHtml(cat.label)}
+                                </span>
+                                <span class="text-xs font-semibold text-stone-500">${safeName}</span>
+                            </div>
+                            <p class="text-sm font-medium text-stone-800 dark:text-stone-200 leading-snug">${safeDesc}</p>
+                        </a>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.warn('Error loading circle neighbor help:', err);
+            }
+        }
+
+        // Close dropdowns on outside click
         document.addEventListener('pointerdown', (e) => {
             const dropdown = document.getElementById('profile-dropdown');
             if (dropdown && !dropdown.classList.contains('hidden') && !e.target.closest('#profile-dropdown') && !e.target.closest('[onclick*="profile-dropdown"]')) {
                 setTimeout(() => dropdown.classList.add('hidden'), 150);
+            }
+            const moreDropdown = document.getElementById('circle-more-dropdown');
+            if (moreDropdown && !moreDropdown.classList.contains('hidden') && !e.target.closest('#circle-more-wrapper')) {
+                setTimeout(() => moreDropdown.classList.add('hidden'), 150);
             }
         });
 

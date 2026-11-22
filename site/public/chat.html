@@ -149,7 +149,9 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         let targetUserId = urlParams.get('userId');
+        const targetUserSlug = urlParams.get('user');
         let contextItemId = urlParams.get('itemId');
+        const contextItemSlug = urlParams.get('item');
         const contextRequestId = urlParams.get('requestId') || urlParams.get('request_id') || null;
         const escapeHtml = window.db.escapeHtml;
 
@@ -174,6 +176,13 @@
             const session = await requireAuth();
             if (!session) return;
             currentUser = session.user;
+
+            if (!targetUserId && targetUserSlug) {
+                targetUserId = await window.db.resolveEntityId('profile', { name: targetUserSlug });
+            }
+            if (!contextItemId && contextItemSlug) {
+                contextItemId = await window.db.resolveEntityId('item', { name: contextItemSlug });
+            }
 
             if (contextRequestId) {
                 try {
