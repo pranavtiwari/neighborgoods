@@ -9,3 +9,4 @@ dist/
 scratch/
 *.log
 tests/last-run.txt
+shareinstead-service-account-key.json
