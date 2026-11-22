@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Circle - Share, Instead.</title>
+
+    <script src="config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-client.js?v=20261122"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-forest-gradient {
+            background: linear-gradient(135deg, #0d631b 0%, #2e7d32 100%);
+        }
+        .label-md {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.95) translateY(8px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .modal-content { animation: modalIn 0.2s ease-out; }
+    </style>
+    <link rel="stylesheet" href="/style.css">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+</head>
+<body class="bg-surface font-sans text-on-surface antialiased min-h-screen pb-20">
+
+    <!-- Header -->
+    <header class="bg-[#fbf9f6]/90 dark:bg-stone-900/90 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_6px_24px_rgba(51,51,51,0.06)] border-b border-outline-variant/15">
+        <div class="flex justify-between items-center w-full px-4 sm:px-6 py-3.5 max-w-6xl mx-auto">
+            <div class="flex items-center gap-4 min-w-0">
+                <a id="back-to-circle-link" href="circles.html" class="group flex items-center gap-2 text-primary dark:text-primary-fixed-dim font-bold transition-all active:scale-95 shrink-0">
+                    <span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
+                    <span class="label-md">Back to Circle</span>
+                </a>
+            </div>
+            <div class="flex items-center gap-2.5">
+                <a id="superadmin-header-link" href="admin.html" class="hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 text-xs font-bold transition-colors">
+                    <span class="material-symbols-outlined text-[16px]">admin_panel_settings</span>
+                    <span class="hidden sm:inline">App Admin</span>
+                </a>
+                <div id="header-profile-btn" class="relative">
+                    <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden active:scale-95 transition-transform duration-200 cursor-pointer border-2 border-primary/20">
+                        <img id="header-avatar" src="https://i.pravatar.cc/150?u=me" class="w-full h-full object-cover">
+                    </div>
+                    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2">
+                        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">person</span>
+                            <span class="text-sm font-medium">My Profile</span>
+                        </a>
+                        <a id="dropdown-admin-link" href="admin.html" class="hidden items-center gap-3 px-4 py-2 hover:bg-surface-container-high text-purple-700 dark:text-purple-300 transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">admin_panel_settings</span>
+                            <span class="text-sm font-semibold">Superadmin</span>
+                        </a>
+                        <button onclick="event.stopPropagation(); firebase.auth().signOut().then(function(){window.location.href='index.html'});" class="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-error-container text-error transition-colors cursor-pointer">
+                            <span class="material-symbols-outlined text-[20px]">logout</span>
+                            <span class="text-sm font-bold text-left">Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="pt-7 sm:pt-10 px-4 sm:px-8 max-w-6xl mx-auto">
+
+        <!-- Loading State -->
+        <div id="loading-state" class="py-16 text-center space-y-3">
+            <div class="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto"></div>
+            <p class="text-sm font-semibold text-on-surface-variant">Loading circle management...</p>
+        </div>
+
+        <!-- Access Denied State -->
+        <div id="access-denied-state" class="hidden bg-surface-container-low border border-outline-variant/20 rounded-2xl p-10 text-center max-w-lg mx-auto mt-8 shadow-sm">
+            <span class="material-symbols-outlined text-5xl text-error mb-3 block">gpp_bad</span>
+            <h2 class="text-2xl font-black text-on-surface mb-2">Manager Access Required</h2>
+            <p id="access-denied-msg" class="text-sm text-on-surface-variant mb-6">
+                Only the circle creator, circle managers, or app superadmins can access this page.
+            </p>
+            <div class="flex justify-center gap-3">
+                <a id="denied-back-link" href="circles.html" class="px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm shadow-sm">Return to Circles</a>
+            </div>
+        </div>
+
+        <!-- Toast Feedback -->
+        <div id="toast-banner" class="hidden fixed bottom-6 right-6 z-[200] max-w-sm px-4 py-3 rounded-xl shadow-2xl border text-sm font-bold flex items-center gap-2.5"></div>
+
+        <!-- Management Shell -->
+        <div id="manage-shell" class="hidden space-y-7">
+
+            <!-- Title Bar -->
+            <section class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2.5 mb-1.5 flex-wrap">
+                        <span class="label-md text-primary">Circle Management</span>
+                        <span id="viewer-role-badge" class="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary uppercase tracking-wider">Manager</span>
+                        <span id="circle-privacy-pill" class="hidden items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full bg-stone-100 text-stone-600">
+                            <span class="material-symbols-outlined text-[14px]">lock</span> Private
+                        </span>
+                    </div>
+                    <h1 id="manage-circle-title" class="text-3xl sm:text-4xl font-black text-on-surface tracking-tight leading-tight">Circle</h1>
+                </div>
+                <div class="flex items-center gap-2.5 shrink-0">
+                    <a id="view-circle-btn" href="circles.html" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-outline-variant/40 bg-surface-container-low hover:bg-surface-container text-sm font-bold transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">open_in_new</span>
+                        <span>View Circle</span>
+                    </a>
+                </div>
+            </section>
+
+            <!-- Summary Metrics -->
+            <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-4">
+                    <p class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Members</p>
+                    <p id="stat-members" class="text-2xl font-black text-primary mt-1">0</p>
+                </div>
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-4">
+                    <p class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Managers</p>
+                    <p id="stat-managers" class="text-2xl font-black text-amber-600 mt-1">0</p>
+                </div>
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-4">
+                    <p class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Pending Joins</p>
+                    <p id="stat-requests" class="text-2xl font-black text-on-surface mt-1">0</p>
+                </div>
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-4">
+                    <p class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Banned Users</p>
+                    <p id="stat-bans" class="text-2xl font-black text-error mt-1">0</p>
+                </div>
+            </section>
+
+            <!-- Navigation Tabs -->
+            <div role="tablist" aria-label="Circle management sections" class="flex items-center gap-2 border-b border-outline-variant/25 pb-3 overflow-x-auto hide-scrollbar">
+                <button type="button" role="tab" data-tab="members" onclick="setManageTab('members')" class="manage-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white shadow-sm cursor-pointer transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">groups</span>
+                    <span>Members &amp; Managers</span>
+                    <span id="tab-badge-members" class="text-[11px] font-extrabold bg-white/20 text-white px-2 py-0.5 rounded-full">0</span>
+                </button>
+                <button type="button" role="tab" data-tab="settings" onclick="setManageTab('settings')" class="manage-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">tune</span>
+                    <span>Circle Properties</span>
+                </button>
+                <button type="button" role="tab" data-tab="requests" onclick="setManageTab('requests')" class="manage-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">person_add</span>
+                    <span>Join Requests</span>
+                    <span id="tab-badge-requests" class="hidden text-[11px] font-extrabold bg-amber-500 text-white px-2 py-0.5 rounded-full">0</span>
+                </button>
+                <button type="button" role="tab" data-tab="moderation" onclick="setManageTab('moderation')" class="manage-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">shield</span>
+                    <span>Moderation</span>
+                    <span id="tab-badge-reports" class="hidden text-[11px] font-extrabold bg-error text-white px-2 py-0.5 rounded-full">0</span>
+                </button>
+                <button type="button" role="tab" data-tab="ledger" onclick="setManageTab('ledger')" class="manage-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer transition-colors">
+                    <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                    <span>Ledger</span>
+                </button>
+            </div>
+
+            <!-- TAB 1: MEMBERS & MANAGERS -->
+            <section id="panel-members" class="manage-panel space-y-6">
+                <!-- Controls + Add Member/Manager -->
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-extrabold text-on-surface">Circle Members</h2>
+                            <p class="text-xs text-on-surface-variant">View all members, appoint additional managers or librarians, and remove or ban users.</p>
+                        </div>
+                        <button type="button" onclick="openAddMemberModal()" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-forest-gradient text-white font-bold text-xs shadow-sm hover:opacity-95 active:scale-95 transition-all cursor-pointer shrink-0">
+                            <span class="material-symbols-outlined text-[18px]">person_add</span>
+                            <span>Add Member / Manager</span>
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <div class="relative flex-1">
+                            <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-[20px]">search</span>
+                            <input type="search" id="member-search-input" oninput="renderMembersTable()" placeholder="Search members by name or ID..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-outline-variant/30 bg-surface text-sm focus:ring-2 focus:ring-primary">
+                        </div>
+                        <div class="flex items-center gap-1.5 overflow-x-auto hide-scrollbar">
+                            <button type="button" onclick="setMemberRoleFilter('all')" data-role-filter="all" class="role-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-primary text-white cursor-pointer">All</button>
+                            <button type="button" onclick="setMemberRoleFilter('admin')" data-role-filter="admin" class="role-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-surface border border-outline-variant/30 text-on-surface-variant cursor-pointer">Managers</button>
+                            <button type="button" onclick="setMemberRoleFilter('librarian')" data-role-filter="librarian" class="role-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-surface border border-outline-variant/30 text-on-surface-variant cursor-pointer">Librarians</button>
+                            <button type="button" onclick="setMemberRoleFilter('member')" data-role-filter="member" class="role-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-surface border border-outline-variant/30 text-on-surface-variant cursor-pointer">Members</button>
+                        </div>
+                    </div>
+
+                    <div id="members-table-list" class="divide-y divide-outline-variant/15">
+                        <p class="text-sm text-stone-500 py-6 text-center">Loading members...</p>
+                    </div>
+                </div>
+
+                <!-- Banned Users Panel -->
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <h3 class="text-base font-extrabold text-on-surface flex items-center gap-2">
+                            <span class="material-symbols-outlined text-error text-[20px]">block</span>
+                            <span>Banned Users</span>
+                            <span id="bans-count-badge" class="text-xs font-bold px-2 py-0.5 rounded-full bg-error/10 text-error">0</span>
+                        </h3>
+                        <p class="text-xs text-on-surface-variant">Banned users cannot rejoin or request to join this circle.</p>
+                    </div>
+                    <div id="banned-users-list" class="divide-y divide-outline-variant/15">
+                        <p class="text-sm text-stone-500 py-4 text-center">No banned users in this circle.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: CIRCLE PROPERTIES (SETTINGS) -->
+            <section id="panel-settings" class="manage-panel hidden space-y-6">
+                <form id="settings-form" class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-6 space-y-5">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-on-surface">Circle Properties</h2>
+                        <p class="text-xs text-on-surface-variant">Update your circle's name, banner, description, community rules, privacy, and enabled capabilities.</p>
+                    </div>
+
+                    <!-- Banner -->
+                    <div>
+                        <label class="block text-sm font-bold mb-2">Circle Banner</label>
+                        <div class="relative w-full max-w-xl aspect-video rounded-xl overflow-hidden bg-stone-100 border-2 border-stone-200 mb-2 group cursor-pointer" onclick="document.getElementById('settings-image-upload').click()">
+                            <img id="settings-image-preview" src="" class="w-full h-full object-cover">
+                            <div class="absolute inset-0 bg-black/40 hidden group-hover:flex items-center justify-center transition-all">
+                                <span class="material-symbols-outlined text-white text-3xl">edit</span>
+                            </div>
+                        </div>
+                        <input type="file" id="settings-image-upload" accept="image/*" class="hidden">
+                        <p class="text-xs text-stone-400">Click banner to upload a new image</p>
+                    </div>
+
+                    <!-- Name & Description -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold mb-2" for="settings-name">Circle Name</label>
+                            <input type="text" id="settings-name" required maxlength="120" class="w-full bg-surface rounded-xl border border-outline-variant/30 focus:ring-2 focus:ring-primary py-3 px-4 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-2" for="settings-location">Neighborhood / Location (optional)</label>
+                            <input type="text" id="settings-location" maxlength="120" placeholder="e.g. Indiranagar, Bengaluru" class="w-full bg-surface rounded-xl border border-outline-variant/30 focus:ring-2 focus:ring-primary py-3 px-4 text-sm">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold mb-2" for="settings-description">Description</label>
+                        <textarea id="settings-description" rows="3" maxlength="2000" class="w-full bg-surface rounded-xl border border-outline-variant/30 focus:ring-2 focus:ring-primary py-3 px-4 text-sm resize-none"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold mb-2" for="settings-rules">Community Rules &amp; Guidelines</label>
+                        <textarea id="settings-rules" rows="3" maxlength="5000" placeholder="Be kind, return items in original condition, and communicate clearly." class="w-full bg-surface rounded-xl border border-outline-variant/30 focus:ring-2 focus:ring-primary py-3 px-4 text-sm resize-none"></textarea>
+                    </div>
+
+                    <!-- Privacy Toggle -->
+                    <div class="flex items-center gap-3 bg-surface p-4 rounded-xl border border-outline-variant/20">
+                        <div class="flex-1">
+                            <p class="font-bold text-sm">Private Circle</p>
+                            <p class="text-xs text-stone-500">New members must request to join and be approved by a manager.</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="settings-private" class="sr-only peer">
+                            <div class="w-11 h-6 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                    </div>
+
+                    <!-- Circle Functions -->
+                    <div class="space-y-3 bg-surface p-4 rounded-xl border border-outline-variant/20">
+                        <div>
+                            <p class="font-bold text-sm">Circle Functions</p>
+                            <p class="text-xs text-stone-500">Choose which features are enabled for this Circle.</p>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 pt-1">
+                            <div>
+                                <p class="font-semibold text-sm">Listings</p>
+                                <p class="text-xs text-stone-500">Share, search, and borrow items &amp; books</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                                <input type="checkbox" id="settings-feature-listings" checked class="sr-only peer">
+                                <div class="w-11 h-6 bg-stone-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 pt-2 border-t border-outline-variant/15">
+                            <div>
+                                <p class="font-semibold text-sm">Neighbourhood Help</p>
+                                <p class="text-xs text-stone-500">Ask and offer free volunteer help</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                                <input type="checkbox" id="settings-feature-help" checked class="sr-only peer">
+                                <div class="w-11 h-6 bg-stone-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between gap-3 pt-2 border-t border-outline-variant/15">
+                            <div>
+                                <p class="font-semibold text-sm">Bulletin</p>
+                                <p class="text-xs text-stone-500">Community updates, notes, and posts</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                                <input type="checkbox" id="settings-feature-bulletin" checked class="sr-only peer">
+                                <div class="w-11 h-6 bg-stone-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Allowed Categories -->
+                    <div class="relative">
+                        <label class="block text-sm font-bold mb-2">Allowed Categories (Empty = Allow all)</label>
+                        <div class="flex flex-wrap gap-2 mb-2 min-h-[42px] p-2 bg-surface rounded-xl border border-outline-variant/25" id="settings-categories-chips">
+                            <span class="text-stone-400 self-center text-sm px-2 select-none" id="settings-no-categories-placeholder">Allows all categories</span>
+                        </div>
+                        <div class="relative">
+                            <input type="text" id="settings-category-search" placeholder="Search categories to restrict..." class="w-full bg-surface rounded-xl border border-outline-variant/30 focus:ring-2 focus:ring-primary py-2.5 px-4 text-sm" autocomplete="off">
+                            <div id="settings-category-dropdown" class="hidden absolute left-0 right-0 mt-1 max-h-44 overflow-y-auto bg-surface rounded-xl border border-outline-variant/30 shadow-2xl z-40 py-1"></div>
+                        </div>
+                    </div>
+
+                    <div id="settings-error" class="hidden bg-error/10 text-error p-3.5 rounded-xl text-sm font-semibold"></div>
+
+                    <div class="flex justify-end pt-2">
+                        <button type="submit" id="settings-save-btn" class="px-7 py-3 rounded-xl bg-forest-gradient text-white font-bold text-sm shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer">
+                            Save Circle Properties
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Danger Zone (Creator or Superadmin only) -->
+                <div id="danger-zone-panel" class="hidden bg-error/5 border border-error/25 rounded-2xl p-6 space-y-3">
+                    <h3 class="text-base font-extrabold text-error flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[20px]">warning</span>
+                        <span>Danger Zone</span>
+                    </h3>
+                    <p class="text-xs text-on-surface-variant">Deleting this circle removes the circle record permanently. Only the circle creator or a superadmin can perform this action.</p>
+                    <button type="button" onclick="handleDeleteCircle()" class="px-5 py-2.5 rounded-xl bg-error text-on-error text-xs font-bold hover:opacity-90 active:scale-95 transition-all cursor-pointer">
+                        Delete Circle Permanently
+                    </button>
+                </div>
+            </section>
+
+            <!-- TAB 3: JOIN REQUESTS -->
+            <section id="panel-requests" class="manage-panel hidden space-y-4">
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-4">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-on-surface">Pending Join Requests</h2>
+                        <p class="text-xs text-on-surface-variant">Approve or deny neighbors requesting to join this private circle.</p>
+                    </div>
+                    <div id="manage-join-requests-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <p class="text-sm text-stone-500 col-span-full py-6 text-center">No pending join requests.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: MODERATION -->
+            <section id="panel-moderation" class="manage-panel hidden space-y-6">
+                <!-- Reports Queue -->
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-4">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                            <h2 class="text-lg font-extrabold text-on-surface">Circle Reports</h2>
+                            <p class="text-xs text-on-surface-variant">Review reports filed by members in this circle.</p>
+                        </div>
+                    </div>
+                    <div id="circle-reports-list" class="space-y-3">
+                        <p class="text-sm text-stone-500 py-4 text-center">No reports for this circle.</p>
+                    </div>
+                </div>
+
+                <!-- Content Moderation: Bulletin Posts & Help Requests -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-3">
+                        <h3 class="text-base font-extrabold text-on-surface flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-[20px]">campaign</span>
+                            <span>Recent Bulletin Posts</span>
+                        </h3>
+                        <div id="mod-posts-list" class="space-y-3">
+                            <p class="text-sm text-stone-500 py-4 text-center">Loading posts...</p>
+                        </div>
+                    </div>
+                    <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-3">
+                        <h3 class="text-base font-extrabold text-on-surface flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-[20px]">volunteer_activism</span>
+                            <span>Recent Help Requests</span>
+                        </h3>
+                        <div id="mod-help-list" class="space-y-3">
+                            <p class="text-sm text-stone-500 py-4 text-center">Loading help requests...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Audit Trail -->
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-3">
+                    <h3 class="text-base font-extrabold text-on-surface flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary text-[20px]">history</span>
+                        <span>Moderation Audit Log</span>
+                    </h3>
+                    <div id="circle-mod-events-list" class="divide-y divide-outline-variant/15">
+                        <p class="text-sm text-stone-500 py-4 text-center">No moderation events yet.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 5: TRANSACTION LEDGER -->
+            <section id="panel-ledger" class="manage-panel hidden space-y-4">
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-4">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-on-surface">Circle Transaction Ledger</h2>
+                        <p class="text-xs text-on-surface-variant">Recent borrowing, swaps, and giveaways inside this circle.</p>
+                    </div>
+                    <div id="manage-ledger-list" class="space-y-3">
+                        <p class="text-sm text-stone-500 py-6 text-center">Loading ledger...</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Add Member / Manager Modal -->
+    <div id="add-member-modal" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-4 bg-on-surface/30 backdrop-blur-sm">
+        <div class="modal-content bg-surface w-full max-w-lg rounded-2xl shadow-2xl border border-outline-variant/20 flex flex-col max-h-[85vh]">
+            <div class="p-5 border-b border-outline-variant/20 flex items-center justify-between">
+                <h3 class="text-lg font-extrabold flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">person_add</span>
+                    <span>Add Member or Manager</span>
+                </h3>
+                <button type="button" onclick="closeAddMemberModal()" class="w-9 h-9 rounded-full hover:bg-surface-container flex items-center justify-center cursor-pointer">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+            <div class="p-5 space-y-4 overflow-y-auto">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">Role to Assign</label>
+                    <select id="add-member-role-select" class="w-full bg-surface-container rounded-xl py-2.5 px-3 text-sm font-semibold border border-outline-variant/25 focus:ring-2 focus:ring-primary">
+                        <option value="admin">Manager (Admin) — can edit circle, manage members &amp; moderate</option>
+                        <option value="librarian">Librarian — can curate catalog &amp; handle reports</option>
+                        <option value="member">Member — standard neighbor membership</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">Search Neighbor by Name, Email, or User ID</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="add-member-search-input" placeholder="Type name, email, or UID..." class="flex-1 bg-surface-container rounded-xl py-2.5 px-3.5 text-sm border border-outline-variant/25 focus:ring-2 focus:ring-primary">
+                        <button type="button" onclick="searchUsersToAdd()" class="px-4 py-2.5 rounded-xl bg-primary text-on-primary text-xs font-bold cursor-pointer">Search</button>
+                    </div>
+                </div>
+                <div id="add-member-results" class="space-y-2">
+                    <p class="text-xs text-stone-500 text-center py-4">Search for a registered user to add them to this circle.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ban User Modal -->
+    <div id="ban-user-modal" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-4 bg-on-surface/30 backdrop-blur-sm">
+        <div class="modal-content bg-surface w-full max-w-md rounded-2xl shadow-2xl border border-outline-variant/20 p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-extrabold text-error flex items-center gap-2">
+                    <span class="material-symbols-outlined">block</span>
+                    <span>Ban User from Circle</span>
+                </h3>
+                <button type="button" onclick="closeBanModal()" class="w-8 h-8 rounded-full hover:bg-surface-container flex items-center justify-center cursor-pointer">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+            <p class="text-sm text-on-surface-variant">
+                Banning <strong id="ban-target-name">this user</strong> will immediately remove them from the circle and block them from rejoining.
+            </p>
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">Reason (optional)</label>
+                <textarea id="ban-reason-input" rows="3" maxlength="500" placeholder="e.g. Repeated no-shows or violating circle guidelines" class="w-full bg-surface-container rounded-xl p-3 text-sm border border-outline-variant/25 focus:ring-2 focus:ring-error resize-none"></textarea>
+            </div>
+            <div class="flex gap-3 pt-1">
+                <button type="button" onclick="closeBanModal()" class="flex-1 py-2.5 rounded-xl border border-outline-variant text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer">Cancel</button>
+                <button type="button" id="confirm-ban-btn" onclick="confirmBanUser()" class="flex-1 py-2.5 rounded-xl bg-error text-on-error text-sm font-bold hover:opacity-90 cursor-pointer">Ban User</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const escapeHtml = window.db.escapeHtml;
+        const escapeAttr = window.db.escapeAttr;
+        const sanitizeUrl = window.db.sanitizeUrl;
+
+        let currentUser = null;
+        let currentCircleId = null;
+        let currentCircle = null;
+        let viewerAccess = null;
+        let allMembers = [];
+        let allBans = [];
+        let memberRoleFilter = 'all';
+        let selectedCategories = [];
+        let selectedBannerFile = null;
+        let pendingBanTarget = null;
+
+        function showToast(message, type = 'success') {
+            const el = document.getElementById('toast-banner');
+            if (!el) return;
+            const styles = type === 'error'
+                ? 'bg-error text-on-error border-error'
+                : 'bg-primary text-on-primary border-primary';
+            el.className = `fixed bottom-6 right-6 z-[200] max-w-sm px-4 py-3 rounded-xl shadow-2xl border text-sm font-bold flex items-center gap-2.5 ${styles}`;
+            el.innerHTML = `<span class="material-symbols-outlined text-[18px]">${type === 'error' ? 'error' : 'check_circle'}</span><span>${escapeHtml(message)}</span>`;
+            el.classList.remove('hidden');
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => el.classList.add('hidden'), 3500);
+        }
+
+        function setManageTab(tabName) {
+            document.querySelectorAll('.manage-panel').forEach(p => p.classList.add('hidden'));
+            const activePanel = document.getElementById(`panel-${tabName}`);
+            if (activePanel) activePanel.classList.remove('hidden');
+
+            document.querySelectorAll('.manage-tab-btn').forEach(btn => {
+                const isSelected = btn.dataset.tab === tabName;
+                btn.setAttribute('aria-selected', String(isSelected));
+                if (isSelected) {
+                    btn.className = 'manage-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white shadow-sm cursor-pointer transition-colors';
+                } else {
+                    btn.className = 'manage-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer transition-colors';
+                }
+            });
+        }
+        window.setManageTab = setManageTab;
+
+        function setMemberRoleFilter(role) {
+            memberRoleFilter = role;
+            document.querySelectorAll('.role-filter-btn').forEach(btn => {
+                const active = btn.dataset.roleFilter === role;
+                btn.className = active
+                    ? 'role-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-primary text-white cursor-pointer'
+                    : 'role-filter-btn px-3 py-2 rounded-xl text-xs font-bold bg-surface border border-outline-variant/30 text-on-surface-variant cursor-pointer';
+            });
+            renderMembersTable();
+        }
+        window.setMemberRoleFilter = setMemberRoleFilter;
+
+        // --- Category Chip Picker ---
+        function renderCategoryChips() {
+            const container = document.getElementById('settings-categories-chips');
+            const placeholder = document.getElementById('settings-no-categories-placeholder');
+            container.querySelectorAll('.cat-chip').forEach(el => el.remove());
+
+            const CATEGORIES = window.db.getCategoryOptions();
+            if (selectedCategories.length === 0) {
+                placeholder.classList.remove('hidden');
+                return;
+            }
+            placeholder.classList.add('hidden');
+            selectedCategories.forEach(catVal => {
+                const catObj = CATEGORIES.find(c => c.value === catVal);
+                const label = catObj ? catObj.label : catVal;
+                const chip = document.createElement('span');
+                chip.className = 'cat-chip inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold';
+                chip.innerHTML = `${escapeHtml(label)} <button type="button" class="hover:text-error cursor-pointer" aria-label="Remove category">&times;</button>`;
+                chip.querySelector('button').onclick = () => {
+                    selectedCategories = selectedCategories.filter(c => c !== catVal);
+                    renderCategoryChips();
+                };
+                container.appendChild(chip);
+            });
+        }
+
+        function initCategoryAutocomplete() {
+            const input = document.getElementById('settings-category-search');
+            const dropdown = document.getElementById('settings-category-dropdown');
+            const CATEGORIES = window.db.getCategoryOptions();
+
+            const renderMatches = () => {
+                const q = input.value.trim().toLowerCase();
+                const matches = CATEGORIES.filter(c =>
+                    !selectedCategories.includes(c.value) &&
+                    (!q || c.label.toLowerCase().includes(q) || c.value.toLowerCase().includes(q))
+                );
+                if (matches.length === 0) {
+                    dropdown.classList.add('hidden');
+                    return;
+                }
+                dropdown.innerHTML = matches.map(c => `
+                    <button type="button" data-cat="${escapeAttr(c.value)}" class="w-full text-left px-4 py-2 text-sm hover:bg-surface-container font-medium cursor-pointer">
+                        ${escapeHtml(c.label)}
+                    </button>
+                `).join('');
+                dropdown.querySelectorAll('button').forEach(btn => {
+                    btn.onclick = () => {
+                        const val = btn.dataset.cat;
+                        if (!selectedCategories.includes(val)) {
+                            selectedCategories.push(val);
+                            renderCategoryChips();
+                        }
+                        input.value = '';
+                        dropdown.classList.add('hidden');
+                    };
+                });
+                dropdown.classList.remove('hidden');
+            };
+
+            input.addEventListener('focus', renderMatches);
+            input.addEventListener('input', renderMatches);
+            document.addEventListener('pointerdown', (e) => {
+                if (!e.target.closest('#settings-category-search') && !e.target.closest('#settings-category-dropdown')) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+        }
+
+        // --- Load Circle & Access Check ---
+        async function initManagePage() {
+            const loadingEl = document.getElementById('loading-state');
+            const deniedEl = document.getElementById('access-denied-state');
+            const shellEl = document.getElementById('manage-shell');
+
+            if (!currentUser) {
+                loadingEl.classList.add('hidden');
+                deniedEl.classList.remove('hidden');
+                document.getElementById('access-denied-msg').textContent = 'Please sign in to manage this circle.';
+                return;
+            }
+
+            // Update header profile avatar
+            try {
+                const profile = await window.db.getProfile(currentUser.uid);
+                if (profile && profile.avatar_url) {
+                    document.getElementById('header-avatar').src = sanitizeUrl(profile.avatar_url);
+                }
+            } catch (_) {}
+
+            const params = new URLSearchParams(window.location.search);
+            const rawId = params.get('id');
+            const rawName = params.get('name');
+
+            let circle = null;
+            if (rawName && window.db.resolveEntityBySlug) {
+                circle = await window.db.resolveEntityBySlug('circle', rawName);
+            }
+            if (!circle && rawId) {
+                circle = await window.db.getCircle(rawId);
+            }
+
+            if (!circle) {
+                loadingEl.classList.add('hidden');
+                deniedEl.classList.remove('hidden');
+                document.getElementById('access-denied-msg').textContent = 'Circle not found.';
+                return;
+            }
+
+            currentCircle = circle;
+            currentCircleId = circle.id;
+
+            const circleUrl = window.db.urls.circle(circle);
+            document.getElementById('back-to-circle-link').href = circleUrl;
+            document.getElementById('view-circle-btn').href = circleUrl;
+            document.getElementById('denied-back-link').href = circleUrl;
+
+            viewerAccess = await window.db.canManageCircle(currentCircleId, currentUser.uid);
+
+            if (viewerAccess.isSuperAdmin) {
+                document.getElementById('superadmin-header-link').classList.remove('hidden');
+                document.getElementById('dropdown-admin-link').classList.remove('hidden');
+                document.getElementById('dropdown-admin-link').classList.add('flex');
+            }
+
+            if (!viewerAccess.canManage) {
+                loadingEl.classList.add('hidden');
+                deniedEl.classList.remove('hidden');
+                return;
+            }
+
+            // Authorized!
+            document.title = `Manage ${circle.name || 'Circle'} - Share, Instead.`;
+            document.getElementById('manage-circle-title').textContent = circle.name || 'Untitled Circle';
+
+            const roleBadge = document.getElementById('viewer-role-badge');
+            if (viewerAccess.role === 'creator') {
+                roleBadge.textContent = 'Creator';
+                roleBadge.className = 'text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-700 dark:text-purple-300 uppercase tracking-wider';
+            } else if (viewerAccess.role === 'superadmin') {
+                roleBadge.textContent = 'Superadmin';
+                roleBadge.className = 'text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-purple-600 text-white uppercase tracking-wider';
+            } else {
+                roleBadge.textContent = 'Circle Manager';
+                roleBadge.className = 'text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 uppercase tracking-wider';
+            }
+
+            if (viewerAccess.isCreator || viewerAccess.isSuperAdmin) {
+                document.getElementById('danger-zone-panel').classList.remove('hidden');
+            }
+
+            populateSettingsForm(circle);
+
+            loadingEl.classList.add('hidden');
+            shellEl.classList.remove('hidden');
+
+            // Load all data panels in parallel
+            await Promise.all([
+                loadMembersAndBans(),
+                loadJoinRequests(),
+                loadModerationData(),
+                loadCircleLedger()
+            ]);
+        }
+
+        function populateSettingsForm(circle) {
+            document.getElementById('settings-name').value = circle.name || '';
+            document.getElementById('settings-location').value = circle.location || '';
+            document.getElementById('settings-description').value = circle.description || '';
+            document.getElementById('settings-rules').value = circle.rules || '';
+            document.getElementById('settings-private').checked = !!circle.is_private;
+
+            const privacyPill = document.getElementById('circle-privacy-pill');
+            if (circle.is_private) {
+                privacyPill.classList.remove('hidden');
+                privacyPill.classList.add('inline-flex');
+            } else {
+                privacyPill.classList.add('hidden');
+                privacyPill.classList.remove('inline-flex');
+            }
+
+            const features = circle.features || {};
+            document.getElementById('settings-feature-listings').checked = features.listings !== false;
+            document.getElementById('settings-feature-help').checked = features.neighbor_help !== false;
+            document.getElementById('settings-feature-bulletin').checked = features.bulletin !== false;
+
+            const preview = document.getElementById('settings-image-preview');
+            preview.src = sanitizeUrl(circle.image_url) || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1000&q=80';
+
+            selectedCategories = Array.isArray(circle.allowed_categories) ? [...circle.allowed_categories] : [];
+            renderCategoryChips();
+        }
+
+        document.getElementById('settings-image-upload').addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            selectedBannerFile = file;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                document.getElementById('settings-image-preview').src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        document.getElementById('settings-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('settings-save-btn');
+            const errEl = document.getElementById('settings-error');
+            errEl.classList.add('hidden');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                let imageUrl = currentCircle.image_url || '';
+                if (selectedBannerFile) {
+                    const fileExt = selectedBannerFile.name.split('.').pop();
+                    const fileName = `${Math.random()}.${fileExt}`;
+                    imageUrl = await window.db.uploadFile(`circles/${fileName}`, selectedBannerFile);
+                }
+
+                const patch = {
+                    name: document.getElementById('settings-name').value.trim(),
+                    location: document.getElementById('settings-location').value.trim(),
+                    description: document.getElementById('settings-description').value.trim(),
+                    rules: document.getElementById('settings-rules').value.trim(),
+                    is_private: document.getElementById('settings-private').checked,
+                    image_url: imageUrl,
+                    allowed_categories: selectedCategories,
+                    features: {
+                        listings: document.getElementById('settings-feature-listings').checked,
+                        neighbor_help: document.getElementById('settings-feature-help').checked,
+                        bulletin: document.getElementById('settings-feature-bulletin').checked
+                    }
+                };
+
+                await window.db.updateCircle(currentCircleId, patch);
+                currentCircle = { ...currentCircle, ...patch };
+                selectedBannerFile = null;
+                document.getElementById('manage-circle-title').textContent = currentCircle.name;
+                populateSettingsForm(currentCircle);
+                showToast('Circle properties saved!');
+            } catch (err) {
+                console.error(err);
+                errEl.textContent = err.message || 'Failed to save circle properties.';
+                errEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Save Circle Properties';
+            }
+        });
+
+        async function handleDeleteCircle() {
+            const expected = currentCircle?.name || '';
+            const typed = prompt(`This permanently deletes "${expected}". Type the circle name to confirm:`);
+            if (typed === null) return;
+            if (typed.trim() !== expected.trim()) {
+                showToast('Circle name did not match. Deletion cancelled.', 'error');
+                return;
+            }
+            try {
+                await window.db.deleteCircle(currentCircleId);
+                alert('Circle deleted.');
+                window.location.href = 'circles.html';
+            } catch (err) {
+                showToast('Failed to delete circle: ' + err.message, 'error');
+            }
+        }
+        window.handleDeleteCircle = handleDeleteCircle;
+
+        // --- Members & Bans ---
+        async function loadMembersAndBans() {
+            const [members, bans] = await Promise.all([
+                window.db.getCircleMembers(currentCircleId),
+                window.db.getCircleBans(currentCircleId)
+            ]);
+            allMembers = Array.isArray(members) ? members : [];
+            allBans = Array.isArray(bans) ? bans : [];
+
+            // Sort: Creator first, then admins, then librarians, then members
+            const rank = (m) => {
+                if (currentCircle && m.id === currentCircle.created_by) return 0;
+                if (m.role === 'admin') return 1;
+                if (m.role === 'librarian') return 2;
+                return 3;
+            };
+            allMembers.sort((a, b) => rank(a) - rank(b));
+
+            const managerCount = allMembers.filter(m => m.role === 'admin' || (currentCircle && m.id === currentCircle.created_by)).length;
+            document.getElementById('stat-members').textContent = String(allMembers.length);
+            document.getElementById('tab-badge-members').textContent = String(allMembers.length);
+            document.getElementById('stat-managers').textContent = String(managerCount);
+            document.getElementById('stat-bans').textContent = String(allBans.length);
+            document.getElementById('bans-count-badge').textContent = String(allBans.length);
+
+            renderMembersTable();
+            renderBannedUsers();
+        }
+
+        function renderMembersTable() {
+            const listEl = document.getElementById('members-table-list');
+            const query = (document.getElementById('member-search-input')?.value || '').trim().toLowerCase();
+
+            const filtered = allMembers.filter(m => {
+                const isCreator = currentCircle && m.id === currentCircle.created_by;
+                const effRole = isCreator ? 'admin' : (m.role || 'member');
+                if (memberRoleFilter !== 'all' && effRole !== memberRoleFilter) return false;
+                if (query) {
+                    const nameMatch = (m.full_name || '').toLowerCase().includes(query);
+                    const idMatch = (m.id || '').toLowerCase().includes(query);
+                    const emailMatch = (m.email || '').toLowerCase().includes(query);
+                    if (!nameMatch && !idMatch && !emailMatch) return false;
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = '<p class="text-sm text-stone-500 py-6 text-center">No members match your filter.</p>';
+                return;
+            }
+
+            listEl.innerHTML = filtered.map(m => {
+                const isMe = currentUser && m.id === currentUser.uid;
+                const isCreator = currentCircle && m.id === currentCircle.created_by;
+                const isAdmin = m.role === 'admin';
+                const isLibrarian = m.role === 'librarian';
+                const canActOn = !isMe && !isCreator;
+                const joinedStr = m.joined_at ? new Date(m.joined_at).toLocaleDateString() : '—';
+                const profileUrl = escapeAttr(window.db.urls.profile(m));
+
+                return `
+                    <div class="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <a href="${profileUrl}" class="shrink-0">
+                                <img class="h-11 w-11 rounded-full object-cover border border-outline-variant/25" src="${sanitizeUrl(m.avatar_url) || 'https://i.pravatar.cc/150?u=' + escapeAttr(m.id)}">
+                            </a>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <a href="${profileUrl}" class="font-bold text-sm text-on-surface hover:text-primary truncate">${escapeHtml(m.full_name || 'Unknown Neighbor')}</a>
+                                    ${isMe ? '<span class="text-[10px] bg-primary/10 text-primary font-extrabold px-1.5 py-0.5 rounded uppercase">You</span>' : ''}
+                                    ${isCreator ? '<span class="text-[10px] bg-purple-500/15 text-purple-700 dark:text-purple-300 font-extrabold px-1.5 py-0.5 rounded uppercase">Creator</span>' : ''}
+                                    ${isAdmin && !isCreator ? '<span class="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300 font-extrabold px-1.5 py-0.5 rounded uppercase">Manager</span>' : ''}
+                                    ${isLibrarian ? '<span class="text-[10px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-extrabold px-1.5 py-0.5 rounded uppercase">Librarian</span>' : ''}
+                                    ${m.is_suspended ? '<span class="text-[10px] bg-error/15 text-error font-extrabold px-1.5 py-0.5 rounded uppercase">Suspended</span>' : ''}
+                                </div>
+                                <p class="text-xs text-stone-500 truncate">Joined ${escapeHtml(joinedStr)} &middot; <span class="font-mono text-[11px]">${escapeHtml(m.id)}</span></p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-wrap shrink-0">
+                            ${canActOn ? `
+                                <button type="button" onclick="handleChangeRole('${escapeAttr(m.id)}', '${isAdmin ? 'member' : 'admin'}')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg border ${isAdmin ? 'border-amber-500/40 text-amber-700 hover:bg-amber-50' : 'border-outline-variant/40 text-on-surface hover:bg-surface-container'} cursor-pointer">
+                                    ${isAdmin ? 'Remove Manager' : 'Make Manager'}
+                                </button>
+                                <button type="button" onclick="handleChangeRole('${escapeAttr(m.id)}', '${isLibrarian ? 'member' : 'librarian'}')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-emerald-500/35 text-emerald-700 hover:bg-emerald-50 cursor-pointer">
+                                    ${isLibrarian ? 'Remove Librarian' : 'Make Librarian'}
+                                </button>
+                                <button type="button" onclick="handleRemoveMember('${escapeAttr(m.id)}', '${escapeAttr(m.full_name || 'this member')}')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-outline-variant/40 text-on-surface-variant hover:text-error hover:border-error/40 cursor-pointer" title="Remove from circle">
+                                    Remove
+                                </button>
+                                <button type="button" onclick="openBanModal('${escapeAttr(m.id)}', '${escapeAttr(m.full_name || 'this member')}')" class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-error/10 text-error hover:bg-error/20 cursor-pointer" title="Ban from circle">
+                                    Ban
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        window.renderMembersTable = renderMembersTable;
+
+        function renderBannedUsers() {
+            const el = document.getElementById('banned-users-list');
+            if (allBans.length === 0) {
+                el.innerHTML = '<p class="text-sm text-stone-500 py-4 text-center">No banned users in this circle.</p>';
+                return;
+            }
+            el.innerHTML = allBans.map(b => {
+                const name = b.profile?.full_name || b.profile_name || b.profile_id;
+                const dateStr = b.banned_at?.toDate ? b.banned_at.toDate().toLocaleDateString() : '';
+                return `
+                    <div class="py-3 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="font-bold text-sm text-on-surface truncate">${escapeHtml(name)}</p>
+                            <p class="text-xs text-stone-500">${b.reason ? escapeHtml(b.reason) : 'No reason provided'}${dateStr ? ' &middot; ' + escapeHtml(dateStr) : ''}</p>
+                        </div>
+                        <button type="button" onclick="handleUnbanUser('${escapeAttr(b.profile_id)}', '${escapeAttr(name)}')" class="px-3 py-1.5 rounded-lg border border-primary/40 text-primary text-xs font-bold hover:bg-primary/10 cursor-pointer shrink-0">
+                            Unban
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function handleChangeRole(profileId, newRole) {
+            try {
+                await window.db.setCircleMemberRole(currentCircleId, profileId, newRole, currentUser.uid);
+                showToast(`Updated member role to ${newRole}.`);
+                await loadMembersAndBans();
+                loadModerationData();
+            } catch (err) {
+                showToast('Failed to update role: ' + err.message, 'error');
+            }
+        }
+        window.handleChangeRole = handleChangeRole;
+
+        async function handleRemoveMember(profileId, name) {
+            if (!confirm(`Remove ${name} from this circle?`)) return;
+            try {
+                await window.db.leaveCircle(currentCircleId, profileId);
+                showToast(`${name} removed from circle.`);
+                await loadMembersAndBans();
+            } catch (err) {
+                showToast('Failed to remove member: ' + err.message, 'error');
+            }
+        }
+        window.handleRemoveMember = handleRemoveMember;
+
+        function openBanModal(profileId, name) {
+            pendingBanTarget = { profileId, name };
+            document.getElementById('ban-target-name').textContent = name;
+            document.getElementById('ban-reason-input').value = '';
+            document.getElementById('ban-user-modal').classList.remove('hidden');
+        }
+        window.openBanModal = openBanModal;
+
+        function closeBanModal() {
+            pendingBanTarget = null;
+            document.getElementById('ban-user-modal').classList.add('hidden');
+        }
+        window.closeBanModal = closeBanModal;
+
+        async function confirmBanUser() {
+            if (!pendingBanTarget) return;
+            const btn = document.getElementById('confirm-ban-btn');
+            btn.disabled = true;
+            btn.textContent = 'Banning...';
+            try {
+                const reason = document.getElementById('ban-reason-input').value.trim();
+                await window.db.banCircleMember(currentCircleId, pendingBanTarget.profileId, reason);
+                showToast(`${pendingBanTarget.name} has been banned from this circle.`);
+                closeBanModal();
+                await Promise.all([loadMembersAndBans(), loadJoinRequests(), loadModerationData()]);
+            } catch (err) {
+                showToast('Failed to ban user: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Ban User';
+            }
+        }
+        window.confirmBanUser = confirmBanUser;
+
+        async function handleUnbanUser(profileId, name) {
+            if (!confirm(`Unban ${name} so they can rejoin this circle?`)) return;
+            try {
+                await window.db.unbanCircleMember(currentCircleId, profileId);
+                showToast(`${name} has been unbanned.`);
+                await Promise.all([loadMembersAndBans(), loadModerationData()]);
+            } catch (err) {
+                showToast('Failed to unban user: ' + err.message, 'error');
+            }
+        }
+        window.handleUnbanUser = handleUnbanUser;
+
+        // --- Add Member / Manager Modal ---
+        function openAddMemberModal() {
+            document.getElementById('add-member-search-input').value = '';
+            document.getElementById('add-member-results').innerHTML = '<p class="text-xs text-stone-500 text-center py-4">Search for a registered user to add them to this circle.</p>';
+            document.getElementById('add-member-modal').classList.remove('hidden');
+            document.getElementById('add-member-search-input').focus();
+        }
+        window.openAddMemberModal = openAddMemberModal;
+
+        function closeAddMemberModal() {
+            document.getElementById('add-member-modal').classList.add('hidden');
+        }
+        window.closeAddMemberModal = closeAddMemberModal;
+
+        async function searchUsersToAdd() {
+            const q = document.getElementById('add-member-search-input').value.trim();
+            const resultsEl = document.getElementById('add-member-results');
+            resultsEl.innerHTML = '<p class="text-xs text-stone-500 text-center py-4">Searching...</p>';
+
+            try {
+                const matches = await window.db.searchProfiles(q, 20);
+                const memberIds = new Set(allMembers.map(m => m.id));
+                if (matches.length === 0) {
+                    resultsEl.innerHTML = '<p class="text-xs text-stone-500 text-center py-4">No matching users found.</p>';
+                    return;
+                }
+                resultsEl.innerHTML = matches.map(u => {
+                    const alreadyMember = memberIds.has(u.id);
+                    return `
+                        <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/15">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <img class="w-9 h-9 rounded-full object-cover shrink-0" src="${sanitizeUrl(u.avatar_url) || 'https://i.pravatar.cc/150?u=' + escapeAttr(u.id)}">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-bold truncate">${escapeHtml(u.full_name || 'Unnamed User')}</p>
+                                    <p class="text-[11px] text-stone-500 truncate font-mono">${escapeHtml(u.email || u.id)}</p>
+                                </div>
+                            </div>
+                            ${alreadyMember
+                                ? '<span class="text-[11px] font-bold text-stone-400 px-2.5 py-1">Already Member</span>'
+                                : `<button type="button" onclick="handleAddMemberSubmit('${escapeAttr(u.id)}', '${escapeAttr(u.full_name || u.id)}')" class="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-bold cursor-pointer shrink-0">Add</button>`
+                            }
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                resultsEl.innerHTML = `<p class="text-xs text-error text-center py-4">${escapeHtml(err.message)}</p>`;
+            }
+        }
+        window.searchUsersToAdd = searchUsersToAdd;
+
+        document.getElementById('add-member-search-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchUsersToAdd();
+            }
+        });
+
+        async function handleAddMemberSubmit(profileId, name) {
+            const role = document.getElementById('add-member-role-select').value;
+            try {
+                await window.db.addCircleMemberByAdmin(currentCircleId, profileId, role);
+                showToast(`Added ${name} as ${role}.`);
+                closeAddMemberModal();
+                await Promise.all([loadMembersAndBans(), loadJoinRequests(), loadModerationData()]);
+            } catch (err) {
+                showToast('Failed to add member: ' + err.message, 'error');
+            }
+        }
+        window.handleAddMemberSubmit = handleAddMemberSubmit;
+
+        // --- Join Requests ---
+        async function loadJoinRequests() {
+            const listEl = document.getElementById('manage-join-requests-list');
+            const requests = await window.db.getJoinRequests(currentCircleId);
+            document.getElementById('stat-requests').textContent = String(requests.length);
+
+            const badge = document.getElementById('tab-badge-requests');
+            if (requests.length > 0) {
+                badge.textContent = String(requests.length);
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            if (requests.length === 0) {
+                listEl.innerHTML = '<p class="text-sm text-stone-500 col-span-full py-6 text-center">No pending join requests.</p>';
+                return;
+            }
+
+            listEl.innerHTML = requests.map(r => {
+                const name = r.profile?.full_name || 'Neighbor';
+                const avatar = sanitizeUrl(r.profile?.avatar_url) || ('https://i.pravatar.cc/150?u=' + escapeAttr(r.profile_id));
+                return `
+                    <div class="bg-surface border border-outline-variant/20 rounded-xl p-4 flex flex-col justify-between gap-3">
+                        <div class="flex items-start gap-3">
+                            <img class="w-10 h-10 rounded-full object-cover shrink-0" src="${avatar}">
+                            <div class="min-w-0">
+                                <p class="font-bold text-sm text-on-surface">${escapeHtml(name)}</p>
+                                <p class="text-xs text-on-surface-variant mt-1 leading-relaxed">${escapeHtml(r.message || 'No intro message provided.')}</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="handleApproveJoin('${escapeAttr(r.profile_id)}', '${escapeAttr(name)}')" class="flex-1 py-2 rounded-lg bg-primary text-on-primary text-xs font-bold cursor-pointer">Approve</button>
+                            <button type="button" onclick="handleDenyJoin('${escapeAttr(r.profile_id)}', '${escapeAttr(name)}')" class="flex-1 py-2 rounded-lg border border-outline-variant/40 text-error text-xs font-bold hover:bg-error/10 cursor-pointer">Deny</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function handleApproveJoin(profileId, name) {
+            try {
+                await window.db.approveJoinRequest(currentCircleId, profileId);
+                showToast(`Approved ${name}!`);
+                await Promise.all([loadJoinRequests(), loadMembersAndBans()]);
+            } catch (err) {
+                showToast('Failed to approve request: ' + err.message, 'error');
+            }
+        }
+        window.handleApproveJoin = handleApproveJoin;
+
+        async function handleDenyJoin(profileId, name) {
+            try {
+                await window.db.denyJoinRequest(currentCircleId, profileId);
+                showToast(`Denied request from ${name}.`);
+                await loadJoinRequests();
+            } catch (err) {
+                showToast('Failed to deny request: ' + err.message, 'error');
+            }
+        }
+        window.handleDenyJoin = handleDenyJoin;
+
+        // --- Moderation Data (Reports, Posts, Help Requests, Audit Log) ---
+        async function loadModerationData() {
+            const [reports, postsRes, helpReqs, modEvents] = await Promise.all([
+                window.db.getReportQueue ? window.db.getReportQueue({ circle_id: currentCircleId }) : Promise.resolve([]),
+                window.db.getCirclePosts ? window.db.getCirclePosts(currentCircleId, { pageSize: 15, paginated: true }) : Promise.resolve({ posts: [] }),
+                window.db.getHelpRequestsForCircles ? window.db.getHelpRequestsForCircles([currentCircleId]) : Promise.resolve([]),
+                window.db.getModerationEvents ? window.db.getModerationEvents({ circle_id: currentCircleId, limit: 25 }) : Promise.resolve([])
+            ]);
+
+            // Reports
+            const reportsEl = document.getElementById('circle-reports-list');
+            const circleReports = (reports || []).filter(r => r.circle_id === currentCircleId);
+            const openReports = circleReports.filter(r => !r.status || r.status === 'open');
+            const repBadge = document.getElementById('tab-badge-reports');
+            if (openReports.length > 0) {
+                repBadge.textContent = String(openReports.length);
+                repBadge.classList.remove('hidden');
+            } else {
+                repBadge.classList.add('hidden');
+            }
+
+            if (circleReports.length === 0) {
+                reportsEl.innerHTML = '<p class="text-sm text-stone-500 py-4 text-center">No reports for this circle.</p>';
+            } else {
+                reportsEl.innerHTML = circleReports.map(r => {
+                    const isOpen = !r.status || r.status === 'open';
+                    return `
+                        <div class="bg-surface border border-outline-variant/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${isOpen ? 'bg-error/15 text-error' : 'bg-emerald-500/15 text-emerald-700'}">${escapeHtml(r.status || 'open')}</span>
+                                    <span class="text-xs font-bold text-on-surface">${escapeHtml(r.target_type || 'item')} &middot; ${escapeHtml(r.reason || 'Report')}</span>
+                                </div>
+                                <p class="text-xs text-on-surface-variant">${escapeHtml(r.details || r.comment || 'No extra details.')}</p>
+                            </div>
+                            ${isOpen ? `
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <button type="button" onclick="handleResolveReport('${escapeAttr(r.id)}', 'resolved')" class="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-bold cursor-pointer">Resolve</button>
+                                    <button type="button" onclick="handleResolveReport('${escapeAttr(r.id)}', 'dismissed')" class="px-3 py-1.5 rounded-lg border border-outline-variant/40 text-xs font-bold cursor-pointer">Dismiss</button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Recent Bulletin Posts
+            const postsEl = document.getElementById('mod-posts-list');
+            const posts = postsRes?.posts || [];
+            if (posts.length === 0) {
+                postsEl.innerHTML = '<p class="text-sm text-stone-500 py-4 text-center">No bulletin posts yet.</p>';
+            } else {
+                postsEl.innerHTML = posts.slice(0, 10).map(p => `
+                    <div class="bg-surface border border-outline-variant/15 rounded-xl p-3.5 flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-xs font-bold text-on-surface">${escapeHtml(p.profiles?.full_name || 'Neighbor')}</p>
+                            <p class="text-xs text-on-surface-variant mt-1 line-clamp-2">${escapeHtml(p.content || '')}</p>
+                        </div>
+                        <button type="button" onclick="handleDeletePost('${escapeAttr(p.id)}')" class="p-1.5 rounded-lg text-stone-400 hover:text-error hover:bg-error/10 cursor-pointer shrink-0" title="Delete post">
+                            <span class="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                    </div>
+                `).join('');
+            }
+
+            // Recent Help Requests
+            const helpEl = document.getElementById('mod-help-list');
+            if (!helpReqs || helpReqs.length === 0) {
+                helpEl.innerHTML = '<p class="text-sm text-stone-500 py-4 text-center">No help requests yet.</p>';
+            } else {
+                helpEl.innerHTML = helpReqs.slice(0, 10).map(h => `
+                    <div class="bg-surface border border-outline-variant/15 rounded-xl p-3.5 flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="text-xs font-bold text-on-surface">${escapeHtml(h.requester_name || 'Neighbor')} <span class="text-[10px] font-semibold text-stone-500">(${escapeHtml(h.status || 'open')})</span></p>
+                            <p class="text-xs text-on-surface-variant mt-1 line-clamp-2">${escapeHtml(h.title || h.description || '')}</p>
+                        </div>
+                        <button type="button" onclick="handleDeleteHelpRequest('${escapeAttr(h.id)}')" class="p-1.5 rounded-lg text-stone-400 hover:text-error hover:bg-error/10 cursor-pointer shrink-0" title="Delete help request">
+                            <span class="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                    </div>
+                `).join('');
+            }
+
+            // Audit Log
+            const eventsEl = document.getElementById('circle-mod-events-list');
+            if (!modEvents || modEvents.length === 0) {
+                eventsEl.innerHTML = '<p class="text-sm text-stone-500 py-4 text-center">No moderation events yet.</p>';
+            } else {
+                eventsEl.innerHTML = modEvents.map(ev => {
+                    const ts = ev.created_at?.toDate ? ev.created_at.toDate().toLocaleString() : '';
+                    return `
+                        <div class="py-2.5 flex items-center justify-between gap-3 text-xs">
+                            <div class="min-w-0">
+                                <span class="font-bold text-on-surface">${escapeHtml(ev.action || 'action')}</span>
+                                <span class="text-on-surface-variant"> &middot; target: <span class="font-mono">${escapeHtml(ev.target_id || '—')}</span></span>
+                                ${ev.reason ? `<span class="text-stone-500"> &middot; "${escapeHtml(ev.reason)}"</span>` : ''}
+                            </div>
+                            <span class="text-[11px] text-stone-400 shrink-0">${escapeHtml(ts)}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        async function handleResolveReport(reportId, status) {
+            try {
+                await window.db.resolveReport(reportId, status, currentUser.uid, status);
+                showToast(`Report marked as ${status}.`);
+                await loadModerationData();
+            } catch (err) {
+                showToast('Failed to update report: ' + err.message, 'error');
+            }
+        }
+        window.handleResolveReport = handleResolveReport;
+
+        async function handleDeletePost(postId) {
+            if (!confirm('Delete this bulletin post permanently?')) return;
+            try {
+                await window.db.deleteCirclePost(postId, currentCircleId);
+                showToast('Post deleted.');
+                await loadModerationData();
+            } catch (err) {
+                showToast('Failed to delete post: ' + err.message, 'error');
+            }
+        }
+        window.handleDeletePost = handleDeletePost;
+
+        async function handleDeleteHelpRequest(requestId) {
+            if (!confirm('Delete this help request permanently?')) return;
+            try {
+                await firebase.firestore().collection('help_requests').doc(requestId).delete();
+                showToast('Help request deleted.');
+                await loadModerationData();
+            } catch (err) {
+                showToast('Failed to delete help request: ' + err.message, 'error');
+            }
+        }
+        window.handleDeleteHelpRequest = handleDeleteHelpRequest;
+
+        // --- Circle Transaction Ledger ---
+        async function loadCircleLedger() {
+            const listEl = document.getElementById('manage-ledger-list');
+            try {
+                const snap = await firebase.firestore().collection('requests')
+                    .where('circle_id', '==', currentCircleId)
+                    .limit(50)
+                    .get();
+                const reqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                if (reqs.length === 0) {
+                    listEl.innerHTML = '<p class="text-sm text-stone-500 py-6 text-center">No transactions recorded in this circle yet.</p>';
+                    return;
+                }
+                listEl.innerHTML = reqs.map(r => {
+                    const ts = r.created_at?.toDate ? r.created_at.toDate().toLocaleDateString() : '';
+                    return `
+                        <div class="bg-surface border border-outline-variant/15 rounded-xl p-3.5 flex items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="text-sm font-bold text-on-surface truncate">${escapeHtml(r.item_name || r.item_id || 'Item Request')}</p>
+                                <p class="text-xs text-stone-500">Status: <strong>${escapeHtml(r.status || 'pending')}</strong>${ts ? ' &middot; ' + escapeHtml(ts) : ''}</p>
+                            </div>
+                            <span class="text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-primary/10 text-primary shrink-0">${escapeHtml(r.status || 'pending')}</span>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                listEl.innerHTML = `<p class="text-sm text-error py-4 text-center">Could not load ledger: ${escapeHtml(err.message)}</p>`;
+            }
+        }
+
+        // Close profile dropdown on outside click
+        document.addEventListener('pointerdown', (e) => {
+            const dropdown = document.getElementById('profile-dropdown');
+            if (dropdown && !dropdown.classList.contains('hidden') && !e.target.closest('#header-profile-btn')) {
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initCategoryAutocomplete();
+            firebase.auth().onAuthStateChanged((user) => {
+                currentUser = user || null;
+                initManagePage();
+            });
+        });
+    </script>
+</body>
+</html>

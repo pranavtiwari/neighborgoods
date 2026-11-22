@@ -1011,5 +1011,99 @@ await test('requests: creation governed by item request_policy and visibility', 
     }));
 });
 
+// ------------------------------------------------ circle managers & bans
+await test('circle managers: appointed admin can update circle properties, add members, and approve join requests', async () => {
+    await seed(async db => {
+        await db.collection('circles').doc('c1').set({ name: 'Oak St', created_by: ALICE, is_private: true });
+        await db.collection('circle_members').doc('c1_' + ALICE).set({ circle_id: 'c1', profile_id: ALICE, role: 'admin' });
+        await db.collection('circle_members').doc('c1_' + BOB).set({ circle_id: 'c1', profile_id: BOB, role: 'admin' });
+        await db.collection('circle_join_requests').doc('c1_' + CAROL).set({ circle_id: 'c1', profile_id: CAROL, status: 'pending' });
+    });
+
+    // Manager (Bob) can update circle properties (cannot change created_by)
+    await assertSucceeds(dbFor(BOB).collection('circles').doc('c1').update({
+        description: 'Updated by manager', rules: 'Be kind.'
+    }));
+    await assertFails(dbFor(BOB).collection('circles').doc('c1').update({
+        created_by: BOB
+    }));
+    // Manager (Bob) cannot delete the circle (creator/superadmin only)
+    await assertFails(dbFor(BOB).collection('circles').doc('c1').delete());
+
+    // Manager (Bob) can add Carol as member & delete join request
+    await assertSucceeds(dbFor(BOB).collection('circle_members').doc('c1_' + CAROL).set({
+        circle_id: 'c1', profile_id: CAROL, role: 'member'
+    }));
+    await assertSucceeds(dbFor(BOB).collection('circle_join_requests').doc('c1_' + CAROL).delete());
+
+    // Non-manager (Carol) cannot update circle properties
+    await assertFails(dbFor(CAROL).collection('circles').doc('c1').update({ description: 'hijack' }));
+});
+
+await test('circle bans: manager can ban member, banned user cannot rejoin or request join, cannot ban creator', async () => {
+    await seed(async db => {
+        await db.collection('circles').doc('c1').set({ name: 'Oak St', created_by: ALICE, is_private: false });
+        await db.collection('circle_members').doc('c1_' + BOB).set({ circle_id: 'c1', profile_id: BOB, role: 'admin' });
+    });
+
+    // Manager cannot ban circle creator
+    await assertFails(dbFor(BOB).collection('circle_bans').doc('c1_' + ALICE).set({
+        circle_id: 'c1', profile_id: ALICE, banned_by: BOB, reason: 'nope'
+    }));
+
+    // Manager can ban Carol
+    await assertSucceeds(dbFor(BOB).collection('circle_bans').doc('c1_' + CAROL).set({
+        circle_id: 'c1', profile_id: CAROL, banned_by: BOB, reason: 'Spam'
+    }));
+
+    // Banned Carol cannot self-join or create a join request
+    await assertFails(dbFor(CAROL).collection('circle_members').doc('c1_' + CAROL).set({
+        circle_id: 'c1', profile_id: CAROL, role: 'member'
+    }));
+    await assertFails(dbFor(CAROL).collection('circle_join_requests').doc('c1_' + CAROL).set({
+        circle_id: 'c1', profile_id: CAROL, status: 'pending'
+    }));
+
+    // Manager can unban Carol, after which Carol can join
+    await assertSucceeds(dbFor(BOB).collection('circle_bans').doc('c1_' + CAROL).delete());
+    await assertSucceeds(dbFor(CAROL).collection('circle_members').doc('c1_' + CAROL).set({
+        circle_id: 'c1', profile_id: CAROL, role: 'member'
+    }));
+});
+
+// ------------------------------------------------------------ superadmins
+await test('superadmins: regular user cannot self-escalate; superadmin can manage app, circles, flags, and suspend users', async () => {
+    const SUPER = 'super-uid';
+    await seed(async db => {
+        await db.collection('superadmins').doc(SUPER).set({
+            uid: SUPER, role: 'superadmin', is_active: true, granted_by: 'cli-script'
+        });
+        await db.collection('circles').doc('c1').set({ name: 'Oak St', created_by: ALICE, is_private: true });
+        await db.collection('profiles').doc(BOB).set({ full_name: 'Bob' });
+    });
+
+    // Regular user cannot create own superadmin doc or write feature flags
+    await assertFails(dbFor(BOB).collection('superadmins').doc(BOB).set({
+        uid: BOB, role: 'superadmin', is_active: true
+    }));
+    await assertFails(dbFor(BOB).collection('feature_flags').doc('beta').set({ enabled: true }));
+    await assertFails(dbFor(BOB).collection('profiles').doc(BOB).update({ is_suspended: false }));
+
+    // Superadmin can manage feature flags, suspend users, update & delete any circle, and grant superadmin
+    await assertSucceeds(dbFor(SUPER).collection('feature_flags').doc('beta').set({ enabled: true }));
+    await assertSucceeds(dbFor(SUPER).collection('profiles').doc(BOB).update({
+        is_suspended: true, suspension_reason: 'Policy violation', suspended_by: SUPER
+    }));
+    await assertSucceeds(dbFor(SUPER).collection('circles').doc('c1').update({ description: 'Admin edit' }));
+    await assertSucceeds(dbFor(SUPER).collection('superadmins').doc(CAROL).set({
+        uid: CAROL, role: 'superadmin', is_active: true, granted_by: SUPER
+    }));
+    // Superadmin cannot deactivate themselves
+    await assertFails(dbFor(SUPER).collection('superadmins').doc(SUPER).set({
+        uid: SUPER, role: 'superadmin', is_active: false
+    }));
+    await assertSucceeds(dbFor(SUPER).collection('circles').doc('c1').delete());
+});
+
 console.log(`\nEMULATOR RULES SUITE: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

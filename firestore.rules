@@ -3,6 +3,138 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Global Role, Circle Governance & Ban Helpers
+    //
+    // Assumed Data Model (Governance additions):
+    //   - superadmins/{uid}:
+    //       uid (string, required, == docId, 1..128),
+    //       email (string|null, optional, <=254),
+    //       full_name (string|null, optional, <=120),
+    //       role (enum: 'superadmin', required),
+    //       is_active (bool, required),
+    //       granted_by (string|null, optional, <=128),
+    //       granted_at (timestamp|null, optional),
+    //       updated_at (timestamp|null, optional),
+    //       revoked_by (string|null, optional, <=128),
+    //       revoked_at (timestamp|null, optional)
+    //   - circle_bans/{banId} (banId == circle_id + '_' + profile_id):
+    //       circle_id (string, required, 1..128),
+    //       profile_id (string, required, 1..128),
+    //       profile_name (string|null, optional, <=120),
+    //       banned_by (string, required, == request.auth.uid, 1..128),
+    //       reason (string|null, optional, <=500),
+    //       banned_at (timestamp|null, optional)
+    // ─────────────────────────────────────────────────────────────────────────
+    function isSuperAdmin() {
+      return request.auth != null && (
+        (request.auth.token != null && (
+          ('superadmin' in request.auth.token && request.auth.token.superadmin == true)
+          || ('admin' in request.auth.token && request.auth.token.admin == true)
+        ))
+        || (exists(/databases/$(database)/documents/superadmins/$(request.auth.uid))
+            && get(/databases/$(database)/documents/superadmins/$(request.auth.uid)).data.is_active == true)
+      );
+    }
+
+    function isCircleCreator(circleId) {
+      return request.auth != null
+        && circleId is string
+        && circleId.size() >= 1
+        && circleId.size() <= 128
+        && exists(/databases/$(database)/documents/circles/$(circleId))
+        && get(/databases/$(database)/documents/circles/$(circleId)).data.created_by == request.auth.uid;
+    }
+
+    function isCircleManager(circleId) {
+      return request.auth != null
+        && circleId is string
+        && circleId.size() >= 1
+        && circleId.size() <= 128
+        && (
+          isSuperAdmin()
+          || isCircleCreator(circleId)
+          || (exists(/databases/$(database)/documents/circle_members/$(circleId + '_' + request.auth.uid))
+              && get(/databases/$(database)/documents/circle_members/$(circleId + '_' + request.auth.uid)).data.role == 'admin')
+        );
+    }
+
+    function isBannedFromCircle(circleId, uid) {
+      return circleId is string
+        && uid is string
+        && exists(/databases/$(database)/documents/circle_bans/$(circleId + '_' + uid));
+    }
+
+    function isValidSuperAdmin(uid, data) {
+      return data.keys().hasOnly([
+          'uid', 'email', 'full_name', 'role', 'is_active',
+          'granted_by', 'granted_at', 'updated_at', 'revoked_by', 'revoked_at'
+        ])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128
+        && data.uid == uid
+        && data.role == 'superadmin'
+        && data.is_active is bool
+        && (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 254))
+        && (!('full_name' in data) || data.full_name == null || (data.full_name is string && data.full_name.size() <= 120))
+        && (!('granted_by' in data) || data.granted_by == null || (data.granted_by is string && data.granted_by.size() <= 128))
+        && (!('revoked_by' in data) || data.revoked_by == null || (data.revoked_by is string && data.revoked_by.size() <= 128))
+        && (!('granted_at' in data) || data.granted_at == null || data.granted_at is timestamp)
+        && (!('updated_at' in data) || data.updated_at == null || data.updated_at is timestamp)
+        && (!('revoked_at' in data) || data.revoked_at == null || data.revoked_at is timestamp);
+    }
+
+    function isValidCircleBan(banId, data) {
+      return data.keys().hasOnly([
+          'circle_id', 'profile_id', 'profile_name', 'banned_by', 'reason', 'banned_at'
+        ])
+        && data.circle_id is string && data.circle_id.size() >= 1 && data.circle_id.size() <= 128
+        && data.profile_id is string && data.profile_id.size() >= 1 && data.profile_id.size() <= 128
+        && banId == data.circle_id + '_' + data.profile_id
+        && data.banned_by is string && data.banned_by.size() >= 1 && data.banned_by.size() <= 128
+        && (!('reason' in data) || data.reason == null || (data.reason is string && data.reason.size() <= 500))
+        && (!('profile_name' in data) || data.profile_name == null || (data.profile_name is string && data.profile_name.size() <= 120))
+        && (!('banned_at' in data) || data.banned_at == null || data.banned_at is timestamp);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Superadmins (Global App Governance)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /superadmins/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isSuperAdmin());
+
+      allow create: if isSuperAdmin()
+        && isValidSuperAdmin(uid, request.resource.data)
+        && !(request.auth.uid == uid && request.resource.data.is_active == false);
+
+      allow update: if isSuperAdmin()
+        && isValidSuperAdmin(uid, request.resource.data)
+        && !(request.auth.uid == uid && request.resource.data.is_active == false);
+
+      allow delete: if isSuperAdmin() && request.auth.uid != uid;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Circle Bans (banId == circle_id + '_' + profile_id)
+    // ─────────────────────────────────────────────────────────────────────────
+    match /circle_bans/{banId} {
+      allow read: if request.auth != null
+        && (resource.data.profile_id == request.auth.uid
+            || isCircleManager(resource.data.circle_id));
+
+      allow create: if request.auth != null
+        && isValidCircleBan(banId, request.resource.data)
+        && isCircleManager(request.resource.data.circle_id)
+        && request.resource.data.banned_by == request.auth.uid
+        && request.resource.data.profile_id != request.auth.uid
+        && (!exists(/databases/$(database)/documents/circles/$(request.resource.data.circle_id))
+            || request.resource.data.profile_id != get(/databases/$(database)/documents/circles/$(request.resource.data.circle_id)).data.created_by);
+
+      allow update: if false;
+
+      allow delete: if request.auth != null
+        && isCircleManager(resource.data.circle_id);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Helper: may `uid` write the lifecycle fields of `itemId`?
     //
     // Firestore security rules have NO query primitive. `get()` and `exists()`
@@ -113,6 +245,11 @@ service cloud.firestore {
         && (!('reputation_score' in request.resource.data) || request.resource.data.reputation_score == 5.0)
         // carbon_saved_kg must start at 0
         && (!('carbon_saved_kg' in request.resource.data) || request.resource.data.carbon_saved_kg == 0)
+        // Users cannot self-set suspension fields on creation
+        && (!('is_suspended' in request.resource.data) || request.resource.data.is_suspended == false)
+        && !('suspension_reason' in request.resource.data)
+        && !('suspended_at' in request.resource.data)
+        && !('suspended_by' in request.resource.data)
         // Basic field type guards
         && request.resource.data.full_name is string
         && request.resource.data.full_name.size() <= 100
@@ -122,23 +259,39 @@ service cloud.firestore {
               request.resource.data.bio is string
               && request.resource.data.bio.size() <= 2000));
 
-      allow update: if request.auth != null
-        && request.auth.uid == profileId
-        // Owner CANNOT change reputation_score directly (Cloud Function only)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['reputation_score'])
-        // FIX VULN-14: carbon_saved_kg is the same class of server-owned
-        // aggregate as reputation_score. confirmReturn used to credit BOTH
-        // the lender and the borrower, so the counterparty's write was denied
-        // by the rule above and the whole return confirmation failed in
-        // production. Impact is now recorded as an append-only `impact_events`
-        // row and folded into the profile by a trusted process.
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['carbon_saved_kg'])
-        // Basic field type guards
-        && request.resource.data.full_name is string
-        && request.resource.data.full_name.size() <= 100
-        && (!('bio' in request.resource.data) || (
-              request.resource.data.bio is string
-              && request.resource.data.bio.size() <= 2000));
+      allow update: if request.auth != null && (
+        (
+          request.auth.uid == profileId
+          // Owner CANNOT change reputation_score directly (Cloud Function only)
+          // FIX VULN-14: carbon_saved_kg is server-owned; suspension fields are superadmin-only.
+          && !request.resource.data.diff(resource.data).affectedKeys()
+               .hasAny(['reputation_score', 'carbon_saved_kg', 'is_suspended', 'suspension_reason', 'suspended_at', 'suspended_by'])
+          // Basic field type guards
+          && request.resource.data.full_name is string
+          && request.resource.data.full_name.size() <= 100
+          && (!('bio' in request.resource.data) || (
+                request.resource.data.bio is string
+                && request.resource.data.bio.size() <= 2000))
+        )
+        || (
+          isSuperAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['is_suspended', 'suspension_reason', 'suspended_at', 'suspended_by', 'updated_at'])
+          && (!('is_suspended' in request.resource.data) || request.resource.data.is_suspended is bool)
+          && (!('suspension_reason' in request.resource.data)
+              || request.resource.data.suspension_reason == null
+              || (request.resource.data.suspension_reason is string && request.resource.data.suspension_reason.size() <= 500))
+          && (!('suspended_by' in request.resource.data)
+              || request.resource.data.suspended_by == null
+              || (request.resource.data.suspended_by is string && request.resource.data.suspended_by.size() <= 128))
+          && (!('suspended_at' in request.resource.data)
+              || request.resource.data.suspended_at == null
+              || request.resource.data.suspended_at is timestamp)
+          && (!('updated_at' in request.resource.data)
+              || request.resource.data.updated_at == null
+              || request.resource.data.updated_at is timestamp)
+        )
+      );
 
       allow delete: if request.auth != null && request.auth.uid == profileId;
     }
@@ -190,15 +343,15 @@ service cloud.firestore {
     // Transaction Events (immutable audit log)
     // ─────────────────────────────────────────────────────────────────────────
     match /transaction_events/{eventId} {
-      // Participants or circle admins may read transaction events
+      // Participants, circle managers, or superadmins may read transaction events
       allow read: if request.auth != null && (
         resource.data.actor_id == request.auth.uid ||
         resource.data.borrower_id == request.auth.uid ||
         resource.data.lender_id == request.auth.uid ||
         ('participant_ids' in resource.data && request.auth.uid in resource.data.participant_ids) ||
+        isSuperAdmin() ||
         ('circle_id' in resource.data && resource.data.circle_id != null &&
-         exists(/databases/$(database)/documents/circles/$(resource.data.circle_id)) &&
-         get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid)
+         isCircleManager(resource.data.circle_id))
       );
 
       allow create: if request.auth != null
@@ -216,51 +369,57 @@ service cloud.firestore {
         && request.resource.data.created_by == request.auth.uid;
       allow update: if request.auth != null
         && (
-          (resource.data.created_by == request.auth.uid
-            && request.resource.data.created_by == resource.data.created_by)
+          (isCircleManager(circleId)
+            && request.resource.data.created_by == resource.data.created_by
+            && (!('rules' in request.resource.data)
+                || request.resource.data.rules == null
+                || (request.resource.data.rules is string && request.resource.data.rules.size() <= 5000)))
           || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['member_count', 'updated_at'])
               && request.resource.data.created_by == resource.data.created_by)
         );
       allow delete: if request.auth != null
-        && resource.data.created_by == request.auth.uid;
+        && (resource.data.created_by == request.auth.uid || isSuperAdmin());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Circle Members
     // FIX VULN-03: Replaced `allow update: if request.auth != null` (which let
     //              any user escalate their own role to admin) with a rule that
-    //              only allows the circle creator to update memberships, and
+    //              only allows circle managers to update memberships, and
     //              prevents changing identity fields.
-    // FIX VULN-09: Self-join is only permitted with role:'member' to prevent
-    //              self-assignment of admin on creation.
+    // FIX VULN-09: Self-join is only permitted with role:'member' (and when
+    //              not banned) to prevent self-assignment of admin on creation.
     // ─────────────────────────────────────────────────────────────────────────
     match /circle_members/{membershipId} {
       allow read: if request.auth != null;
 
       allow create: if request.auth != null && (
-        // Self-join: must declare role as 'member' only
+        // Self-join: must declare role as 'member' only and must not be banned
         (request.resource.data.profile_id == request.auth.uid
-          && request.resource.data.role == 'member') ||
-        // Circle creator can add anyone with any role
-        get(/databases/$(database)/documents/circles/$(request.resource.data.circle_id)).data.created_by == request.auth.uid
+          && request.resource.data.role == 'member'
+          && !isBannedFromCircle(request.resource.data.circle_id, request.auth.uid)) ||
+        // Circle manager (creator, circle admin, or superadmin) can add members with allowed roles
+        (isCircleManager(request.resource.data.circle_id)
+          && request.resource.data.role in ['member', 'librarian', 'admin'])
       );
 
       allow delete: if request.auth != null && (
         resource.data.profile_id == request.auth.uid ||
-        get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid ||
-        (exists(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid))
-         && get(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid)).data.role == 'admin'
-         && resource.data.profile_id != get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by)
+        (isCircleManager(resource.data.circle_id)
+          && (isSuperAdmin()
+              || !exists(/databases/$(database)/documents/circles/$(resource.data.circle_id))
+              || resource.data.profile_id != get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by))
       );
 
-      // Circle creator and admins may update memberships (e.g. change role)
-      // Identity fields (circle_id, profile_id) are immutable after creation
+      // Circle managers may update memberships (e.g. change role);
+      // if target is circle creator, only superadmin may update.
+      // Identity fields (circle_id, profile_id) are immutable after creation.
       allow update: if request.auth != null
+        && isCircleManager(resource.data.circle_id)
         && (
-          get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid
-          || (exists(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid))
-              && get(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid)).data.role == 'admin'
-              && resource.data.profile_id != get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by)
+          isSuperAdmin()
+          || !exists(/databases/$(database)/documents/circles/$(resource.data.circle_id))
+          || resource.data.profile_id != get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by
         )
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['circle_id', 'profile_id'])
         && (!('role' in request.resource.data) || request.resource.data.role in ['member', 'librarian', 'admin']);
@@ -273,7 +432,7 @@ service cloud.firestore {
     //              image_url (defense-in-depth alongside frontend sanitisation).
     // ─────────────────────────────────────────────────────────────────────────
     match /items/{itemId} {
-      allow read: if canUserReadItem(resource.data);
+      allow read: if canUserReadItem(resource.data) || isSuperAdmin();
 
       allow create: if request.auth != null
         && request.resource.data.owner_id == request.auth.uid
@@ -335,10 +494,10 @@ service cloud.firestore {
         && (
           // Owner may rewrite the listing freely.
           resource.data.owner_id == request.auth.uid
-          // Librarian or admin may update book_id (merge) or withdrawal fields
+          // Librarian or superadmin may update book_id (merge) or withdrawal fields
           || (
             (exists(/databases/$(database)/documents/librarians/$(request.auth.uid))
-             || (request.auth.token != null && request.auth.token.admin == true))
+             || isSuperAdmin())
             && request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['book_id', 'is_withdrawn', 'is_available', 'status', 'withdrawal_reason', 'withdrawn_by', 'withdrawn_at', 'updated_at'])
           )
@@ -357,7 +516,7 @@ service cloud.firestore {
         );
 
       allow delete: if request.auth != null
-        && resource.data.owner_id == request.auth.uid;
+        && (resource.data.owner_id == request.auth.uid || isSuperAdmin());
 
       // ───────────────────────────────────────────────────────────────────────
       // Private Location & Sensitive Pickup Details (Issue #6)
@@ -390,14 +549,14 @@ service cloud.firestore {
     //              - delete: disabled to preserve audit trail
     // ─────────────────────────────────────────────────────────────────────────
     match /requests/{requestId} {
-      // Only borrower, lender, participants or circle admin may read requests
+      // Only borrower, lender, participants, circle managers, or superadmins may read requests
       allow read: if request.auth != null && (
         resource.data.borrower_id == request.auth.uid ||
         resource.data.lender_id == request.auth.uid ||
         ('participant_ids' in resource.data && request.auth.uid in resource.data.participant_ids) ||
+        isSuperAdmin() ||
         ('circle_id' in resource.data && resource.data.circle_id != null &&
-         exists(/databases/$(database)/documents/circles/$(resource.data.circle_id)) &&
-         get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid)
+         isCircleManager(resource.data.circle_id))
       );
 
       // Only borrower/requester may create; must be pending; cannot transact with self
@@ -432,9 +591,9 @@ service cloud.firestore {
                        'shipped_at', 'delivered_at', 'timeline', 'last_event_id',
                        'last_event_type', 'updated_at', 'tracking_number', 'carrier',
                        'borrower_confirmed_at', 'requester_confirmed_at'])) ||
-          // Librarian or admin repointing book_id during book merge
+          // Librarian or superadmin repointing book_id during book merge
           ((exists(/databases/$(database)/documents/librarians/$(request.auth.uid))
-            || (request.auth.token != null && request.auth.token.admin == true)) &&
+            || isSuperAdmin()) &&
            request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['book_id', 'updated_at']))
         );
@@ -452,7 +611,8 @@ service cloud.firestore {
     match /circle_posts/{postId} {
       allow read: if !('circle_id' in resource.data)
         || !get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.is_private
-        || (request.auth != null && exists(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid)));
+        || (request.auth != null && exists(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid)))
+        || isSuperAdmin();
 
       // Only circle members may post
       allow create: if request.auth != null
@@ -468,8 +628,10 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/circle_members/$(resource.data.circle_id + '_' + request.auth.uid)))
       );
 
-      allow delete: if request.auth != null
-        && resource.data.profile_id == request.auth.uid;
+      allow delete: if request.auth != null && (
+        resource.data.profile_id == request.auth.uid
+        || isCircleManager(resource.data.circle_id)
+      );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -508,12 +670,13 @@ service cloud.firestore {
     match /circle_join_requests/{requestId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
-        && request.resource.data.profile_id == request.auth.uid;
+        && request.resource.data.profile_id == request.auth.uid
+        && !isBannedFromCircle(request.resource.data.circle_id, request.auth.uid);
       allow delete: if request.auth != null && (
         // Requester can cancel their own pending request
         resource.data.profile_id == request.auth.uid ||
-        // Circle creator can approve/deny (delete) any request for their circle
-        get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid
+        // Circle manager can approve/deny (delete) any request for their circle
+        isCircleManager(resource.data.circle_id)
       );
     }
 
@@ -599,12 +762,22 @@ service cloud.firestore {
     // Reports (Issue #20: Moderation & Report Queue)
     // ─────────────────────────────────────────────────────────────────────────
     match /reports/{reportId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && (
+        resource.data.reporter_id == request.auth.uid
+        || isSuperAdmin()
+        || exists(/databases/$(database)/documents/librarians/$(request.auth.uid))
+        || ('circle_id' in resource.data && resource.data.circle_id != null && isCircleManager(resource.data.circle_id))
+      );
       allow create: if request.auth != null
         && request.resource.data.reporter_id == request.auth.uid
         && request.resource.data.reason is string
         && request.resource.data.reason.size() >= 1;
       allow update: if request.auth != null
+        && (
+          isSuperAdmin()
+          || exists(/databases/$(database)/documents/librarians/$(request.auth.uid))
+          || ('circle_id' in resource.data && resource.data.circle_id != null && isCircleManager(resource.data.circle_id))
+        )
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['status', 'resolution', 'resolved_by', 'action_taken', 'resolved_at', 'updated_at']);
       allow delete: if false;
@@ -656,7 +829,7 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
     match /feature_flags/{flagId} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null;
+      allow create, update, delete: if isSuperAdmin();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -802,6 +975,7 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
     match /help_requests/{requestId} {
       allow read: if isHelpCircleMember(resource.data.circle_id)
+        || isSuperAdmin()
         || (request.auth != null && (
               resource.data.requester_id == request.auth.uid
               || resource.data.helper_id == request.auth.uid
@@ -872,15 +1046,14 @@ service cloud.firestore {
 
       allow delete: if request.auth != null && (
         resource.data.requester_id == request.auth.uid
-        || (resource.data.circle_id is string
-            && exists(/databases/$(database)/documents/circles/$(resource.data.circle_id))
-            && get(/databases/$(database)/documents/circles/$(resource.data.circle_id)).data.created_by == request.auth.uid)
+        || isCircleManager(resource.data.circle_id)
       );
 
       // Quick-reply thread scoped to members of the parent help request's Circle
       match /replies/{replyId} {
         allow read: if helpRequestExists(requestId)
           && (isHelpCircleMember(getHelpRequest(requestId).circle_id)
+              || isSuperAdmin()
               || (request.auth != null && getHelpRequest(requestId).requester_id == request.auth.uid));
 
         allow create: if request.auth != null
@@ -901,7 +1074,8 @@ service cloud.firestore {
         allow delete: if request.auth != null && (
           resource.data.author_id == request.auth.uid
           || (helpRequestExists(requestId)
-              && getHelpRequest(requestId).requester_id == request.auth.uid)
+              && (getHelpRequest(requestId).requester_id == request.auth.uid
+                  || isCircleManager(getHelpRequest(requestId).circle_id)))
         );
       }
     }
@@ -951,7 +1125,7 @@ service cloud.firestore {
       allow update: if false;
 
       allow delete: if request.auth != null
-        && resource.data.created_by == request.auth.uid;
+        && (resource.data.created_by == request.auth.uid || isSuperAdmin());
     }
   }
 }

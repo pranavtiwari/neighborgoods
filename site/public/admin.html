@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Superadmin Console - Share, Instead.</title>
+
+    <script src="config.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-client.js?v=20261122"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-forest-gradient {
+            background: linear-gradient(135deg, #0d631b 0%, #2e7d32 100%);
+        }
+        .label-md {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+    <link rel="stylesheet" href="/style.css">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+</head>
+<body class="bg-surface font-sans text-on-surface antialiased min-h-screen pb-20">
+
+    <!-- Header -->
+    <header class="bg-[#fbf9f6]/90 dark:bg-stone-900/90 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_6px_24px_rgba(51,51,51,0.06)] border-b border-outline-variant/15">
+        <div class="flex justify-between items-center w-full px-4 sm:px-6 py-3.5 max-w-6xl mx-auto">
+            <div class="flex items-center gap-4">
+                <a href="explore.html" class="group flex items-center gap-2 text-primary dark:text-primary-fixed-dim font-bold transition-all active:scale-95">
+                    <span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
+                    <span class="label-md">Back to App</span>
+                </a>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-600 text-white text-[11px] font-extrabold uppercase tracking-wider">
+                    <span class="material-symbols-outlined text-[14px]">admin_panel_settings</span>
+                    Superadmin
+                </span>
+                <div id="header-profile-btn" class="relative">
+                    <div onclick="document.getElementById('profile-dropdown').classList.toggle('hidden')" class="w-10 h-10 rounded-full bg-surface-container overflow-hidden cursor-pointer border-2 border-purple-500/40">
+                        <img id="header-avatar" src="https://i.pravatar.cc/150?u=admin" class="w-full h-full object-cover">
+                    </div>
+                    <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2">
+                        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">person</span>
+                            <span class="text-sm font-medium">My Profile</span>
+                        </a>
+                        <a href="circles.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">groups</span>
+                            <span class="text-sm font-medium">All Circles</span>
+                        </a>
+                        <button onclick="event.stopPropagation(); firebase.auth().signOut().then(function(){window.location.href='index.html'});" class="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-error-container text-error transition-colors cursor-pointer">
+                            <span class="material-symbols-outlined text-[20px]">logout</span>
+                            <span class="text-sm font-bold text-left">Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="pt-7 sm:pt-10 px-4 sm:px-8 max-w-6xl mx-auto">
+
+        <!-- Loading -->
+        <div id="loading-state" class="py-16 text-center space-y-3">
+            <div class="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto"></div>
+            <p class="text-sm font-semibold text-on-surface-variant">Verifying superadmin access...</p>
+        </div>
+
+        <!-- Denied -->
+        <div id="access-denied-state" class="hidden bg-surface-container-low border border-outline-variant/20 rounded-2xl p-10 text-center max-w-lg mx-auto mt-8 shadow-sm">
+            <span class="material-symbols-outlined text-5xl text-error mb-3 block">lock</span>
+            <h2 class="text-2xl font-black text-on-surface mb-2">Superadmin Access Required</h2>
+            <p class="text-sm text-on-surface-variant mb-4">
+                This console is restricted to app superadmins. To grant superadmin access to an account, run:
+            </p>
+            <code class="block text-xs bg-surface-container p-3 rounded-xl font-mono text-left mb-6 overflow-x-auto">node scripts/manage-superadmins.js add --email=you@example.com</code>
+            <a href="explore.html" class="inline-block px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm shadow-sm">Return to Explore</a>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast-banner" class="hidden fixed bottom-6 right-6 z-[200] max-w-sm px-4 py-3 rounded-xl shadow-2xl border text-sm font-bold flex items-center gap-2.5"></div>
+
+        <!-- Admin Shell -->
+        <div id="admin-shell" class="hidden space-y-7">
+            <section>
+                <p class="label-md text-purple-700 dark:text-purple-400 mb-1">App-Wide Governance</p>
+                <h1 class="text-3xl sm:text-4xl font-black text-on-surface tracking-tight">Superadmin Console</h1>
+                <p class="text-sm text-on-surface-variant mt-1">Manage all circles, users, moderation reports, feature flags, and superadmin roles.</p>
+            </section>
+
+            <!-- Stats -->
+            <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-4">
+                    <p class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Circles</p>
+                    <p id="stat-circles" class="text-2xl font-black text-primary mt-1">0</p>
+                </div>
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-4">
+                    <p class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Users</p>
+                    <p id="stat-users" class="text-2xl font-black text-on-surface mt-1">0</p>
+                </div>
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-4">
+                    <p class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Open Reports</p>
+                    <p id="stat-open-reports" class="text-2xl font-black text-error mt-1">0</p>
+                </div>
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-4">
+                    <p class="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Superadmins</p>
+                    <p id="stat-superadmins" class="text-2xl font-black text-purple-600 mt-1">0</p>
+                </div>
+            </section>
+
+            <!-- Tabs -->
+            <div role="tablist" class="flex items-center gap-2 border-b border-outline-variant/25 pb-3 overflow-x-auto hide-scrollbar">
+                <button type="button" data-tab="circles" onclick="setAdminTab('circles')" class="admin-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white shadow-sm cursor-pointer">
+                    <span class="material-symbols-outlined text-[18px]">workspaces</span>
+                    <span>Circles</span>
+                </button>
+                <button type="button" data-tab="users" onclick="setAdminTab('users')" class="admin-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer">
+                    <span class="material-symbols-outlined text-[18px]">people</span>
+                    <span>Users</span>
+                </button>
+                <button type="button" data-tab="reports" onclick="setAdminTab('reports')" class="admin-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer">
+                    <span class="material-symbols-outlined text-[18px]">flag</span>
+                    <span>Reports</span>
+                    <span id="admin-reports-badge" class="hidden text-[11px] font-extrabold bg-error text-white px-2 py-0.5 rounded-full">0</span>
+                </button>
+                <button type="button" data-tab="flags" onclick="setAdminTab('flags')" class="admin-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer">
+                    <span class="material-symbols-outlined text-[18px]">toggle_on</span>
+                    <span>Feature Flags</span>
+                </button>
+                <button type="button" data-tab="superadmins" onclick="setAdminTab('superadmins')" class="admin-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer">
+                    <span class="material-symbols-outlined text-[18px]">admin_panel_settings</span>
+                    <span>Superadmins</span>
+                </button>
+                <button type="button" data-tab="audit" onclick="setAdminTab('audit')" class="admin-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer">
+                    <span class="material-symbols-outlined text-[18px]">history</span>
+                    <span>Audit Log</span>
+                </button>
+            </div>
+
+            <!-- TAB: CIRCLES -->
+            <section id="panel-circles" class="admin-panel space-y-4">
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <h2 class="text-lg font-extrabold">All Circles</h2>
+                        <input type="search" id="circle-search-input" oninput="renderCirclesList()" placeholder="Search circles..." class="w-full sm:w-72 px-4 py-2 rounded-xl border border-outline-variant/30 bg-surface text-sm">
+                    </div>
+                    <div id="admin-circles-list" class="divide-y divide-outline-variant/15">
+                        <p class="text-sm text-stone-500 py-6 text-center">Loading circles...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: USERS -->
+            <section id="panel-users" class="admin-panel hidden space-y-4">
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <h2 class="text-lg font-extrabold">All Users</h2>
+                        <input type="search" id="user-search-input" oninput="renderUsersList()" placeholder="Search by name, email, or UID..." class="w-full sm:w-72 px-4 py-2 rounded-xl border border-outline-variant/30 bg-surface text-sm">
+                    </div>
+                    <div id="admin-users-list" class="divide-y divide-outline-variant/15">
+                        <p class="text-sm text-stone-500 py-6 text-center">Loading users...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: REPORTS -->
+            <section id="panel-reports" class="admin-panel hidden space-y-4">
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-4">
+                    <h2 class="text-lg font-extrabold">Global Report Queue</h2>
+                    <div id="admin-reports-list" class="space-y-3">
+                        <p class="text-sm text-stone-500 py-6 text-center">Loading reports...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: FEATURE FLAGS -->
+            <section id="panel-flags" class="admin-panel hidden space-y-4">
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-4">
+                    <h2 class="text-lg font-extrabold">Feature Flags</h2>
+                    <form id="add-flag-form" class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-surface p-4 rounded-xl border border-outline-variant/20">
+                        <input type="text" id="new-flag-key" required placeholder="flag_key (e.g. neighbor_help)" class="px-3.5 py-2 rounded-xl border border-outline-variant/30 text-sm">
+                        <input type="text" id="new-flag-desc" placeholder="Description (optional)" class="px-3.5 py-2 rounded-xl border border-outline-variant/30 text-sm">
+                        <button type="submit" class="px-4 py-2 rounded-xl bg-primary text-on-primary text-xs font-bold cursor-pointer">Add / Enable Flag</button>
+                    </form>
+                    <div id="admin-flags-list" class="divide-y divide-outline-variant/15">
+                        <p class="text-sm text-stone-500 py-6 text-center">No feature flags defined.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: SUPERADMINS -->
+            <section id="panel-superadmins" class="admin-panel hidden space-y-4">
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-4">
+                    <div>
+                        <h2 class="text-lg font-extrabold">Active Superadmins</h2>
+                        <p class="text-xs text-on-surface-variant mt-0.5">Superadmins can also be added from the CLI (which sets Firebase Auth custom claims as well): <code class="font-mono bg-surface-container px-1.5 py-0.5 rounded">npm run superadmin -- add --email=user@example.com</code></p>
+                    </div>
+                    <div id="admin-superadmins-list" class="divide-y divide-outline-variant/15">
+                        <p class="text-sm text-stone-500 py-6 text-center">Loading superadmins...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: AUDIT LOG -->
+            <section id="panel-audit" class="admin-panel hidden space-y-4">
+                <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-4">
+                    <h2 class="text-lg font-extrabold">Global Moderation Audit Log</h2>
+                    <div id="admin-audit-list" class="divide-y divide-outline-variant/15">
+                        <p class="text-sm text-stone-500 py-6 text-center">Loading audit events...</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        const escapeHtml = window.db.escapeHtml;
+        const escapeAttr = window.db.escapeAttr;
+        const sanitizeUrl = window.db.sanitizeUrl;
+
+        let currentUser = null;
+        let allCircles = [];
+        let allUsers = [];
+        let allReports = [];
+        let allFlags = [];
+        let allSuperAdmins = [];
+
+        function showToast(message, type = 'success') {
+            const el = document.getElementById('toast-banner');
+            const styles = type === 'error'
+                ? 'bg-error text-on-error border-error'
+                : 'bg-primary text-on-primary border-primary';
+            el.className = `fixed bottom-6 right-6 z-[200] max-w-sm px-4 py-3 rounded-xl shadow-2xl border text-sm font-bold flex items-center gap-2.5 ${styles}`;
+            el.innerHTML = `<span class="material-symbols-outlined text-[18px]">${type === 'error' ? 'error' : 'check_circle'}</span><span>${escapeHtml(message)}</span>`;
+            el.classList.remove('hidden');
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => el.classList.add('hidden'), 3500);
+        }
+
+        function setAdminTab(tabName) {
+            document.querySelectorAll('.admin-panel').forEach(p => p.classList.add('hidden'));
+            const panel = document.getElementById(`panel-${tabName}`);
+            if (panel) panel.classList.remove('hidden');
+
+            document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+                const active = btn.dataset.tab === tabName;
+                btn.className = active
+                    ? 'admin-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-white shadow-sm cursor-pointer'
+                    : 'admin-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer';
+            });
+        }
+        window.setAdminTab = setAdminTab;
+
+        async function initAdminConsole() {
+            const loadingEl = document.getElementById('loading-state');
+            const deniedEl = document.getElementById('access-denied-state');
+            const shellEl = document.getElementById('admin-shell');
+
+            if (!currentUser) {
+                loadingEl.classList.add('hidden');
+                deniedEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const prof = await window.db.getProfile(currentUser.uid);
+                if (prof?.avatar_url) document.getElementById('header-avatar').src = sanitizeUrl(prof.avatar_url);
+            } catch (_) {}
+
+            const isSuper = await window.db.isSuperAdmin(currentUser.uid);
+            if (!isSuper) {
+                loadingEl.classList.add('hidden');
+                deniedEl.classList.remove('hidden');
+                return;
+            }
+
+            loadingEl.classList.add('hidden');
+            shellEl.classList.remove('hidden');
+
+            await refreshAll();
+        }
+
+        async function refreshAll() {
+            const [circles, users, reports, flags, superadmins, events] = await Promise.all([
+                window.db.getCircles(),
+                window.db.getAllProfiles(300),
+                window.db.getReportQueue ? window.db.getReportQueue({}) : Promise.resolve([]),
+                window.db.getFeatureFlags(),
+                window.db.getSuperAdmins(),
+                window.db.getModerationEvents ? window.db.getModerationEvents({ limit: 50 }) : Promise.resolve([])
+            ]);
+
+            allCircles = circles || [];
+            allUsers = users || [];
+            allReports = reports || [];
+            allFlags = flags || [];
+            allSuperAdmins = superadmins || [];
+
+            const openReports = allReports.filter(r => !r.status || r.status === 'open');
+            document.getElementById('stat-circles').textContent = String(allCircles.length);
+            document.getElementById('stat-users').textContent = String(allUsers.length);
+            document.getElementById('stat-open-reports').textContent = String(openReports.length);
+            document.getElementById('stat-superadmins').textContent = String(allSuperAdmins.length);
+
+            const badge = document.getElementById('admin-reports-badge');
+            if (openReports.length > 0) {
+                badge.textContent = String(openReports.length);
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            renderCirclesList();
+            renderUsersList();
+            renderReportsList();
+            renderFlagsList();
+            renderSuperAdminsList();
+            renderAuditList(events || []);
+        }
+
+        function renderCirclesList() {
+            const q = (document.getElementById('circle-search-input')?.value || '').trim().toLowerCase();
+            const listEl = document.getElementById('admin-circles-list');
+            const filtered = allCircles.filter(c =>
+                !q || (c.name || '').toLowerCase().includes(q) || (c.id || '').toLowerCase().includes(q)
+            );
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = '<p class="text-sm text-stone-500 py-6 text-center">No circles found.</p>';
+                return;
+            }
+
+            listEl.innerHTML = filtered.map(c => `
+                <div class="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <p class="font-bold text-sm text-on-surface truncate">${escapeHtml(c.name || 'Untitled')}</p>
+                            ${c.is_private ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-200 text-stone-700">Private</span>' : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Public</span>'}
+                        </div>
+                        <p class="text-xs text-stone-500">${Number(c.member_count || 0)} members &middot; Creator: <span class="font-mono">${escapeHtml(c.created_by || '—')}</span></p>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <a href="${escapeAttr(window.db.urls.manageCircle(c))}" class="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-bold">Manage</a>
+                        <a href="${escapeAttr(window.db.urls.circle(c))}" class="px-3 py-1.5 rounded-lg border border-outline-variant/40 text-xs font-bold hover:bg-surface-container">View</a>
+                        <button type="button" onclick="handleAdminDeleteCircle('${escapeAttr(c.id)}', '${escapeAttr(c.name || c.id)}')" class="px-3 py-1.5 rounded-lg bg-error/10 text-error text-xs font-bold hover:bg-error/20 cursor-pointer">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        window.renderCirclesList = renderCirclesList;
+
+        async function handleAdminDeleteCircle(circleId, name) {
+            if (!confirm(`Permanently delete circle "${name}"?`)) return;
+            try {
+                await window.db.deleteCircle(circleId);
+                showToast(`Deleted circle "${name}".`);
+                await refreshAll();
+            } catch (err) {
+                showToast('Failed to delete circle: ' + err.message, 'error');
+            }
+        }
+        window.handleAdminDeleteCircle = handleAdminDeleteCircle;
+
+        function renderUsersList() {
+            const q = (document.getElementById('user-search-input')?.value || '').trim().toLowerCase();
+            const listEl = document.getElementById('admin-users-list');
+            const superIds = new Set(allSuperAdmins.map(a => a.id || a.uid));
+            const filtered = allUsers.filter(u =>
+                !q ||
+                (u.full_name || '').toLowerCase().includes(q) ||
+                (u.email || '').toLowerCase().includes(q) ||
+                (u.id || '').toLowerCase().includes(q)
+            );
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = '<p class="text-sm text-stone-500 py-6 text-center">No users found.</p>';
+                return;
+            }
+
+            listEl.innerHTML = filtered.map(u => {
+                const isMe = u.id === currentUser.uid;
+                const isSuper = superIds.has(u.id);
+                const isSuspended = !!u.is_suspended;
+                return `
+                    <div class="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <img class="w-10 h-10 rounded-full object-cover shrink-0" src="${sanitizeUrl(u.avatar_url) || 'https://i.pravatar.cc/150?u=' + escapeAttr(u.id)}">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <a href="${escapeAttr(window.db.urls.profile(u))}" class="font-bold text-sm hover:text-primary truncate">${escapeHtml(u.full_name || 'Unnamed User')}</a>
+                                    ${isSuper ? '<span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-purple-600 text-white uppercase">Superadmin</span>' : ''}
+                                    ${isSuspended ? '<span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-error/15 text-error uppercase">Suspended</span>' : ''}
+                                </div>
+                                <p class="text-xs text-stone-500 truncate font-mono">${escapeHtml(u.email || u.id)}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0 flex-wrap">
+                            ${!isMe && !isSuper ? `<button type="button" onclick="handleGrantSuperAdmin('${escapeAttr(u.id)}', '${escapeAttr(u.full_name || u.id)}')" class="px-2.5 py-1.5 rounded-lg border border-purple-500/40 text-purple-700 text-xs font-bold hover:bg-purple-50 cursor-pointer">Make Superadmin</button>` : ''}
+                            ${!isMe ? (
+                                isSuspended
+                                    ? `<button type="button" onclick="handleUnsuspendUser('${escapeAttr(u.id)}', '${escapeAttr(u.full_name || u.id)}')" class="px-2.5 py-1.5 rounded-lg border border-primary/40 text-primary text-xs font-bold hover:bg-primary/10 cursor-pointer">Unsuspend</button>`
+                                    : `<button type="button" onclick="handleSuspendUser('${escapeAttr(u.id)}', '${escapeAttr(u.full_name || u.id)}')" class="px-2.5 py-1.5 rounded-lg bg-error/10 text-error text-xs font-bold hover:bg-error/20 cursor-pointer">Suspend</button>`
+                            ) : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        window.renderUsersList = renderUsersList;
+
+        async function handleSuspendUser(uid, name) {
+            const reason = prompt(`Reason for suspending ${name}:`);
+            if (reason === null) return;
+            try {
+                await window.db.suspendUser(uid, reason);
+                showToast(`Suspended ${name}.`);
+                await refreshAll();
+            } catch (err) {
+                showToast('Failed to suspend user: ' + err.message, 'error');
+            }
+        }
+        window.handleSuspendUser = handleSuspendUser;
+
+        async function handleUnsuspendUser(uid, name) {
+            try {
+                await window.db.unsuspendUser(uid);
+                showToast(`Unsuspended ${name}.`);
+                await refreshAll();
+            } catch (err) {
+                showToast('Failed to unsuspend user: ' + err.message, 'error');
+            }
+        }
+        window.handleUnsuspendUser = handleUnsuspendUser;
+
+        async function handleGrantSuperAdmin(uid, name) {
+            if (!confirm(`Grant full app Superadmin privileges to ${name}?`)) return;
+            try {
+                await window.db.grantSuperAdmin(uid);
+                showToast(`${name} is now a Superadmin.`);
+                await refreshAll();
+            } catch (err) {
+                showToast('Failed to grant superadmin: ' + err.message, 'error');
+            }
+        }
+        window.handleGrantSuperAdmin = handleGrantSuperAdmin;
+
+        async function handleRevokeSuperAdmin(uid, name) {
+            if (!confirm(`Revoke Superadmin privileges from ${name}?`)) return;
+            try {
+                await window.db.revokeSuperAdmin(uid);
+                showToast(`Revoked Superadmin from ${name}.`);
+                await refreshAll();
+            } catch (err) {
+                showToast('Failed to revoke superadmin: ' + err.message, 'error');
+            }
+        }
+        window.handleRevokeSuperAdmin = handleRevokeSuperAdmin;
+
+        function renderReportsList() {
+            const listEl = document.getElementById('admin-reports-list');
+            if (allReports.length === 0) {
+                listEl.innerHTML = '<p class="text-sm text-stone-500 py-6 text-center">No reports filed.</p>';
+                return;
+            }
+            listEl.innerHTML = allReports.map(r => {
+                const isOpen = !r.status || r.status === 'open';
+                return `
+                    <div class="bg-surface border border-outline-variant/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${isOpen ? 'bg-error/15 text-error' : 'bg-emerald-500/15 text-emerald-700'}">${escapeHtml(r.status || 'open')}</span>
+                                <span class="text-xs font-bold">${escapeHtml(r.target_type || 'item')} &middot; ${escapeHtml(r.reason || 'Report')}</span>
+                            </div>
+                            <p class="text-xs text-on-surface-variant">${escapeHtml(r.details || r.comment || 'No details.')}</p>
+                        </div>
+                        ${isOpen ? `
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button type="button" onclick="handleAdminResolveReport('${escapeAttr(r.id)}', 'resolved')" class="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-bold cursor-pointer">Resolve</button>
+                                <button type="button" onclick="handleAdminResolveReport('${escapeAttr(r.id)}', 'dismissed')" class="px-3 py-1.5 rounded-lg border border-outline-variant/40 text-xs font-bold cursor-pointer">Dismiss</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function handleAdminResolveReport(reportId, status) {
+            try {
+                await window.db.resolveReport(reportId, status, currentUser.uid, status);
+                showToast(`Report marked as ${status}.`);
+                await refreshAll();
+            } catch (err) {
+                showToast('Failed to update report: ' + err.message, 'error');
+            }
+        }
+        window.handleAdminResolveReport = handleAdminResolveReport;
+
+        function renderFlagsList() {
+            const listEl = document.getElementById('admin-flags-list');
+            if (allFlags.length === 0) {
+                listEl.innerHTML = '<p class="text-sm text-stone-500 py-6 text-center">No feature flags configured yet.</p>';
+                return;
+            }
+            listEl.innerHTML = allFlags.map(f => `
+                <div class="py-3 flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <p class="font-mono text-sm font-bold text-on-surface">${escapeHtml(f.id)}</p>
+                        <p class="text-xs text-stone-500">${escapeHtml(f.description || '')}</p>
+                    </div>
+                    <button type="button" onclick="handleToggleFlag('${escapeAttr(f.id)}', ${!f.enabled}, '${escapeAttr(f.description || '')}')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${f.enabled ? 'bg-primary text-on-primary' : 'bg-stone-200 text-stone-700'}">
+                        ${f.enabled ? 'Enabled' : 'Disabled'}
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        async function handleToggleFlag(id, nextEnabled, desc) {
+            try {
+                await window.db.setFeatureFlag(id, nextEnabled, desc);
+                showToast(`Flag "${id}" ${nextEnabled ? 'enabled' : 'disabled'}.`);
+                await refreshAll();
+            } catch (err) {
+                showToast('Failed to update flag: ' + err.message, 'error');
+            }
+        }
+        window.handleToggleFlag = handleToggleFlag;
+
+        document.getElementById('add-flag-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const key = document.getElementById('new-flag-key').value.trim();
+            const desc = document.getElementById('new-flag-desc').value.trim();
+            if (!key) return;
+            try {
+                await window.db.setFeatureFlag(key, true, desc);
+                document.getElementById('new-flag-key').value = '';
+                document.getElementById('new-flag-desc').value = '';
+                showToast(`Feature flag "${key}" saved.`);
+                await refreshAll();
+            } catch (err) {
+                showToast('Failed to save flag: ' + err.message, 'error');
+            }
+        });
+
+        function renderSuperAdminsList() {
+            const listEl = document.getElementById('admin-superadmins-list');
+            if (allSuperAdmins.length === 0) {
+                listEl.innerHTML = '<p class="text-sm text-stone-500 py-6 text-center">No active superadmins in Firestore collection.</p>';
+                return;
+            }
+            listEl.innerHTML = allSuperAdmins.map(a => {
+                const uid = a.uid || a.id;
+                const isMe = uid === currentUser.uid;
+                return `
+                    <div class="py-3 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="font-bold text-sm text-on-surface">${escapeHtml(a.full_name || a.email || uid)} ${isMe ? '<span class="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded uppercase font-extrabold">You</span>' : ''}</p>
+                            <p class="text-xs text-stone-500 font-mono">${escapeHtml(a.email || '')} &middot; ${escapeHtml(uid)}</p>
+                        </div>
+                        ${!isMe ? `<button type="button" onclick="handleRevokeSuperAdmin('${escapeAttr(uid)}', '${escapeAttr(a.full_name || a.email || uid)}')" class="px-3 py-1.5 rounded-lg bg-error/10 text-error text-xs font-bold hover:bg-error/20 cursor-pointer">Revoke</button>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderAuditList(events) {
+            const listEl = document.getElementById('admin-audit-list');
+            if (!events || events.length === 0) {
+                listEl.innerHTML = '<p class="text-sm text-stone-500 py-6 text-center">No moderation events recorded.</p>';
+                return;
+            }
+            listEl.innerHTML = events.map(ev => {
+                const ts = ev.created_at?.toDate ? ev.created_at.toDate().toLocaleString() : '';
+                return `
+                    <div class="py-2.5 flex items-center justify-between gap-3 text-xs">
+                        <div class="min-w-0">
+                            <span class="font-bold text-on-surface">${escapeHtml(ev.action || 'event')}</span>
+                            <span class="text-on-surface-variant"> &middot; actor: <span class="font-mono">${escapeHtml(ev.actor_id || '—')}</span> &middot; target: <span class="font-mono">${escapeHtml(ev.target_id || '—')}</span></span>
+                            ${ev.reason ? `<span class="text-stone-500"> &middot; "${escapeHtml(ev.reason)}"</span>` : ''}
+                        </div>
+                        <span class="text-[11px] text-stone-400 shrink-0">${escapeHtml(ts)}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        document.addEventListener('pointerdown', (e) => {
+            const dropdown = document.getElementById('profile-dropdown');
+            if (dropdown && !dropdown.classList.contains('hidden') && !e.target.closest('#header-profile-btn')) {
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            firebase.auth().onAuthStateChanged((user) => {
+                currentUser = user || null;
+                initAdminConsole();
+            });
+        });
+    </script>
+</body>
+</html>

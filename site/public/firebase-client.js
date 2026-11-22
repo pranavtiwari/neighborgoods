@@ -132,7 +132,8 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         'explore.html', 'explore', 'index.html', 'index', 'circles.html', 'circles',
         'profile.html', 'profile', 'messages.html', 'messages', 'activity.html', 'activity',
         'edit-profile.html', 'edit-profile', 'add-item.html', 'add-item',
-        'circle-detail.html', 'circle-detail', 'item-details.html', 'item-details',
+        'circle-detail.html', 'circle-detail', 'circle-manage.html', 'circle-manage',
+        'admin.html', 'admin', 'item-details.html', 'item-details',
         'book-detail.html', 'book-detail', 'help.html', 'help',
         'help-detail.html', 'help-detail', 'request-borrow.html', 'request-borrow',
         'chat.html', 'chat'
@@ -5550,9 +5551,12 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                         isCallerAdmin = true;
                     }
                 }
+                if (!isCallerAdmin) {
+                    isCallerAdmin = await this.isSuperAdmin(currentUid);
+                }
 
                 if (!isCallerAdmin) {
-                    throw new Error('Only circle creator or circle admins can manage member roles in this circle');
+                    throw new Error('Only circle creator, circle admins, or superadmins can manage member roles in this circle');
                 }
 
                 if (targetUserId === circleData.created_by && newRole !== 'admin') {
@@ -8005,10 +8009,442 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             } catch (_) { /* ignore history errors */ }
         },
 
+        // ==========================================
+        // Superadmin & Circle Management APIs
+        // ==========================================
+
+        isSuperAdmin: async function(userId = null) {
+            const currentUser = firebase.auth().currentUser;
+            const uid = userId || currentUser?.uid;
+            if (!uid) return false;
+
+            try {
+                // 1. Check Firebase Auth custom claims when checking the signed-in user
+                if (currentUser && currentUser.uid === uid && typeof currentUser.getIdTokenResult === 'function') {
+                    try {
+                        const tokenResult = await currentUser.getIdTokenResult();
+                        if (tokenResult?.claims?.superadmin === true || tokenResult?.claims?.admin === true) {
+                            return true;
+                        }
+                    } catch (_) {
+                        // Fall through to Firestore check
+                    }
+                }
+
+                // 2. Check Firestore superadmins/{uid}
+                const doc = await firebase.firestore().collection('superadmins').doc(uid).get();
+                if (doc.exists && doc.data()?.is_active === true) {
+                    return true;
+                }
+                return false;
+            } catch (err) {
+                console.warn('Error checking superadmin status:', err);
+                return false;
+            }
+        },
+
+        getSuperAdmins: async function() {
+            try {
+                const snap = await firebase.firestore().collection('superadmins').get();
+                return snap.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() }))
+                    .filter(a => a.is_active !== false);
+            } catch (err) {
+                console.error('Error getting superadmins:', err);
+                return [];
+            }
+        },
+
+        grantSuperAdmin: async function(targetUid, meta = {}) {
+            const actorUid = firebase.auth().currentUser?.uid;
+            if (!actorUid) throw new Error('Authentication required');
+            if (!targetUid) throw new Error('Target user ID is required');
+            const db = firebase.firestore();
+
+            let fullName = meta.full_name || null;
+            let email = meta.email || null;
+            if (!fullName || !email) {
+                const prof = await this.getProfile(targetUid);
+                if (prof) {
+                    fullName = fullName || prof.full_name || null;
+                    email = email || prof.email || null;
+                }
+            }
+
+            await db.collection('superadmins').doc(targetUid).set({
+                uid: targetUid,
+                email: email,
+                full_name: fullName,
+                role: 'superadmin',
+                is_active: true,
+                granted_by: actorUid,
+                granted_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            try {
+                await db.collection('moderation_events').add({
+                    action: 'grant_superadmin',
+                    actor_id: actorUid,
+                    target_type: 'user',
+                    target_id: targetUid,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (_) { /* non-fatal */ }
+
+            return { uid: targetUid, email, full_name: fullName, is_active: true };
+        },
+
+        revokeSuperAdmin: async function(targetUid) {
+            const actorUid = firebase.auth().currentUser?.uid;
+            if (!actorUid) throw new Error('Authentication required');
+            if (!targetUid) throw new Error('Target user ID is required');
+            if (targetUid === actorUid) throw new Error('You cannot revoke your own superadmin role.');
+            const db = firebase.firestore();
+
+            await db.collection('superadmins').doc(targetUid).set({
+                uid: targetUid,
+                role: 'superadmin',
+                is_active: false,
+                revoked_by: actorUid,
+                revoked_at: firebase.firestore.FieldValue.serverTimestamp(),
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            try {
+                await db.collection('moderation_events').add({
+                    action: 'revoke_superadmin',
+                    actor_id: actorUid,
+                    target_type: 'user',
+                    target_id: targetUid,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (_) { /* non-fatal */ }
+
+            return { uid: targetUid, is_active: false };
+        },
+
+        canManageCircle: async function(circleId, userId = null) {
+            const uid = userId || firebase.auth().currentUser?.uid;
+            if (!circleId || !uid) return { canManage: false, role: null, isSuperAdmin: false, isCreator: false };
+
+            const [superAdmin, circle, membership] = await Promise.all([
+                this.isSuperAdmin(uid),
+                this.getCircle(circleId),
+                this.getCircleMembership(circleId, uid)
+            ]);
+
+            if (!circle) return { canManage: false, role: null, isSuperAdmin: superAdmin, isCreator: false };
+            const isCreator = circle.created_by === uid;
+            const isAdmin = membership && membership.role === 'admin';
+
+            if (isCreator) return { canManage: true, role: 'creator', isSuperAdmin: superAdmin, isCreator: true };
+            if (superAdmin) return { canManage: true, role: 'superadmin', isSuperAdmin: true, isCreator: false };
+            if (isAdmin) return { canManage: true, role: 'admin', isSuperAdmin: false, isCreator: false };
+            return { canManage: false, role: membership?.role || null, isSuperAdmin: false, isCreator: false };
+        },
+
+        addCircleMemberByAdmin: async function(circleId, profileId, role = 'member') {
+            const actorUid = firebase.auth().currentUser?.uid;
+            if (!actorUid) throw new Error('Authentication required');
+            if (!circleId || !profileId) throw new Error('Circle ID and profile ID are required');
+            const validRoles = ['member', 'librarian', 'admin'];
+            if (!validRoles.includes(role)) throw new Error('Invalid role');
+
+            const db = firebase.firestore();
+            // Clear any existing ban for this user if re-adding
+            try {
+                await db.collection('circle_bans').doc(`${circleId}_${profileId}`).delete();
+            } catch (_) { /* ignore if not banned */ }
+
+            await this.joinCircle(circleId, profileId, role);
+
+            // Clean up any pending join request
+            try {
+                await db.collection('circle_join_requests').doc(`${circleId}_${profileId}`).delete();
+            } catch (_) { /* ignore if none */ }
+
+            try {
+                await db.collection('moderation_events').add({
+                    action: `add_member_${role}`,
+                    actor_id: actorUid,
+                    target_type: 'user',
+                    target_id: profileId,
+                    circle_id: circleId,
+                    new_role: role,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (_) { /* non-fatal */ }
+
+            return { circleId, profileId, role };
+        },
+
+        banCircleMember: async function(circleId, targetUserId, reason = '') {
+            const actorUid = firebase.auth().currentUser?.uid;
+            if (!actorUid) throw new Error('Authentication required');
+            if (!circleId || !targetUserId) throw new Error('Circle ID and target user ID are required');
+            if (targetUserId === actorUid) throw new Error('You cannot ban yourself.');
+
+            const db = firebase.firestore();
+            const targetProfile = await this.getProfile(targetUserId);
+            const banId = `${circleId}_${targetUserId}`;
+
+            await db.collection('circle_bans').doc(banId).set({
+                circle_id: circleId,
+                profile_id: targetUserId,
+                profile_name: targetProfile?.full_name || null,
+                banned_by: actorUid,
+                reason: (reason || '').trim().slice(0, 500) || null,
+                banned_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            // Remove membership if currently a member
+            try {
+                await this.leaveCircle(circleId, targetUserId);
+            } catch (_) { /* ignore if not currently a member */ }
+
+            // Remove pending join request if any
+            try {
+                await db.collection('circle_join_requests').doc(banId).delete();
+            } catch (_) { /* ignore */ }
+
+            try {
+                await db.collection('moderation_events').add({
+                    action: 'ban_circle_member',
+                    actor_id: actorUid,
+                    target_type: 'user',
+                    target_id: targetUserId,
+                    circle_id: circleId,
+                    reason: (reason || '').trim().slice(0, 500) || null,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (_) { /* non-fatal */ }
+
+            return { success: true, banId };
+        },
+
+        unbanCircleMember: async function(circleId, targetUserId) {
+            const actorUid = firebase.auth().currentUser?.uid;
+            if (!actorUid) throw new Error('Authentication required');
+            const db = firebase.firestore();
+            const banId = `${circleId}_${targetUserId}`;
+
+            await db.collection('circle_bans').doc(banId).delete();
+
+            try {
+                await db.collection('moderation_events').add({
+                    action: 'unban_circle_member',
+                    actor_id: actorUid,
+                    target_type: 'user',
+                    target_id: targetUserId,
+                    circle_id: circleId,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (_) { /* non-fatal */ }
+
+            return { success: true };
+        },
+
+        getCircleBans: async function(circleId) {
+            if (!circleId) return [];
+            try {
+                const snap = await firebase.firestore().collection('circle_bans')
+                    .where('circle_id', '==', circleId)
+                    .get();
+                const bans = await Promise.all(snap.docs.map(async (doc) => {
+                    const data = doc.data();
+                    const profile = await this.getProfile(data.profile_id);
+                    return { id: doc.id, ...data, profile };
+                }));
+                return bans;
+            } catch (err) {
+                console.error('Error getting circle bans:', err);
+                return [];
+            }
+        },
+
+        isBannedFromCircle: async function(circleId, userId) {
+            if (!circleId || !userId) return false;
+            try {
+                const doc = await firebase.firestore().collection('circle_bans').doc(`${circleId}_${userId}`).get();
+                return doc.exists;
+            } catch (_) {
+                return false;
+            }
+        },
+
+        deleteCircle: async function(circleId) {
+            const actorUid = firebase.auth().currentUser?.uid;
+            if (!actorUid) throw new Error('Authentication required');
+            const db = firebase.firestore();
+            const circleDoc = await db.collection('circles').doc(circleId).get();
+            const circleName = circleDoc.exists ? circleDoc.data()?.name : circleId;
+            const slug = circleDoc.exists ? circleDoc.data()?.slug : null;
+
+            await db.collection('circles').doc(circleId).delete();
+
+            if (slug) {
+                try {
+                    await db.collection('slugs').doc(`circle_${slug}`).delete();
+                } catch (_) { /* ignore */ }
+            }
+
+            try {
+                await db.collection('moderation_events').add({
+                    action: 'delete_circle',
+                    actor_id: actorUid,
+                    target_type: 'circle',
+                    target_id: circleId,
+                    circle_name: circleName,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (_) { /* non-fatal */ }
+
+            return { success: true };
+        },
+
+        deleteCirclePost: async function(postId, circleId = null) {
+            const actorUid = firebase.auth().currentUser?.uid;
+            if (!actorUid) throw new Error('Authentication required');
+            const db = firebase.firestore();
+            await db.collection('circle_posts').doc(postId).delete();
+
+            try {
+                await db.collection('moderation_events').add({
+                    action: 'delete_circle_post',
+                    actor_id: actorUid,
+                    target_type: 'circle_post',
+                    target_id: postId,
+                    circle_id: circleId || null,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (_) { /* non-fatal */ }
+
+            return { success: true };
+        },
+
+        getAllProfiles: async function(limit = 200) {
+            try {
+                const snap = await firebase.firestore().collection('profiles').limit(limit).get();
+                return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (err) {
+                console.error('Error getting profiles:', err);
+                return [];
+            }
+        },
+
+        searchProfiles: async function(queryText = '', limit = 25) {
+            const q = (queryText || '').trim().toLowerCase();
+            const all = await this.getAllProfiles(300);
+            if (!q) return all.slice(0, limit);
+            return all.filter(p =>
+                (p.full_name && p.full_name.toLowerCase().includes(q)) ||
+                (p.email && p.email.toLowerCase().includes(q)) ||
+                (p.id && p.id.toLowerCase().includes(q))
+            ).slice(0, limit);
+        },
+
+        suspendUser: async function(targetUserId, reason = '') {
+            const actorUid = firebase.auth().currentUser?.uid;
+            if (!actorUid) throw new Error('Authentication required');
+            if (!targetUserId) throw new Error('Target user ID is required');
+            if (targetUserId === actorUid) throw new Error('You cannot suspend yourself.');
+
+            const db = firebase.firestore();
+            await db.collection('profiles').doc(targetUserId).update({
+                is_suspended: true,
+                suspension_reason: (reason || '').trim().slice(0, 500) || 'Suspended by app administrator',
+                suspended_at: firebase.firestore.FieldValue.serverTimestamp(),
+                suspended_by: actorUid,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            try {
+                await db.collection('moderation_events').add({
+                    action: 'suspend_user',
+                    actor_id: actorUid,
+                    target_type: 'user',
+                    target_id: targetUserId,
+                    reason: (reason || '').trim().slice(0, 500) || null,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (_) { /* non-fatal */ }
+
+            return { success: true };
+        },
+
+        unsuspendUser: async function(targetUserId) {
+            const actorUid = firebase.auth().currentUser?.uid;
+            if (!actorUid) throw new Error('Authentication required');
+            const db = firebase.firestore();
+
+            await db.collection('profiles').doc(targetUserId).update({
+                is_suspended: false,
+                suspension_reason: null,
+                suspended_at: null,
+                suspended_by: null,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            try {
+                await db.collection('moderation_events').add({
+                    action: 'unsuspend_user',
+                    actor_id: actorUid,
+                    target_type: 'user',
+                    target_id: targetUserId,
+                    created_at: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch (_) { /* non-fatal */ }
+
+            return { success: true };
+        },
+
+        getFeatureFlags: async function() {
+            try {
+                const snap = await firebase.firestore().collection('feature_flags').get();
+                return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (err) {
+                console.error('Error getting feature flags:', err);
+                return [];
+            }
+        },
+
+        setFeatureFlag: async function(flagId, enabled, description = '') {
+            const actorUid = firebase.auth().currentUser?.uid;
+            if (!actorUid) throw new Error('Authentication required');
+            if (!flagId || !flagId.trim()) throw new Error('Flag key is required');
+            const cleanId = flagId.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_');
+            const db = firebase.firestore();
+
+            await db.collection('feature_flags').doc(cleanId).set({
+                enabled: !!enabled,
+                description: (description || '').trim().slice(0, 300),
+                updated_by: actorUid,
+                updated_at: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            return { id: cleanId, enabled: !!enabled };
+        },
+
         urls: {
             _page: function(pageName) {
                 const usesHtml = typeof window !== 'undefined' && window.location && window.location.pathname.endsWith('.html');
                 return usesHtml ? `${pageName}.html` : pageName;
+            },
+            manageCircle: function(circleOrId, fallbackName) {
+                const page = this._page('circle-manage');
+                if (circleOrId && typeof circleOrId === 'object') {
+                    const slug = circleOrId.slug || (circleOrId.name ? slugifyName(circleOrId.name, 'circle') : '');
+                    if (slug) return `${page}?name=${encodeURIComponent(slug)}`;
+                    if (circleOrId.id) return `${page}?id=${encodeURIComponent(circleOrId.id)}`;
+                }
+                if (fallbackName) {
+                    return `${page}?name=${encodeURIComponent(slugifyName(fallbackName, 'circle'))}`;
+                }
+                return `${page}?id=${encodeURIComponent(circleOrId || '')}`;
+            },
+            admin: function() {
+                return this._page('admin');
             },
             circle: function(circleOrId, fallbackName) {
                 const page = this._page('circle-detail');

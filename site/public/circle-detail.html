@@ -92,9 +92,13 @@
                                 <span>Give Feedback</span>
                             </button>
                         </div>
-                        <button type="button" id="edit-circle-btn" class="hidden w-full items-center gap-3 px-4 py-2.5 hover:bg-surface-container-high text-on-surface text-sm font-medium text-left cursor-pointer border-t border-outline-variant/15 mt-1 pt-2.5">
+                        <a id="manage-circle-menu-link" href="#" class="hidden w-full items-center gap-3 px-4 py-2.5 hover:bg-surface-container-high text-primary text-sm font-bold text-left cursor-pointer border-t border-outline-variant/15 mt-1 pt-2.5">
+                            <span class="material-symbols-outlined text-[18px]">settings</span>
+                            <span>Manage Circle</span>
+                        </a>
+                        <button type="button" id="edit-circle-btn" class="hidden w-full items-center gap-3 px-4 py-2.5 hover:bg-surface-container-high text-on-surface text-sm font-medium text-left cursor-pointer">
                             <span class="material-symbols-outlined text-[18px] text-on-surface-variant">edit</span>
-                            <span>Edit Circle</span>
+                            <span>Quick Edit Circle</span>
                         </button>
                         <button type="button" id="leave-circle-btn" class="hidden w-full items-center gap-3 px-4 py-2.5 hover:bg-error-container text-error text-sm font-semibold text-left cursor-pointer">
                             <span class="material-symbols-outlined text-[18px]">logout</span>
@@ -111,6 +115,10 @@
                         <a href="profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
                             <span class="material-symbols-outlined text-[20px]">person</span>
                             <span class="text-sm font-medium">My Profile</span>
+                        </a>
+                        <a id="dropdown-superadmin-link" href="admin.html" class="hidden items-center gap-3 px-4 py-2 hover:bg-surface-container-high text-purple-700 dark:text-purple-300 transition-colors">
+                            <span class="material-symbols-outlined text-[20px]">admin_panel_settings</span>
+                            <span class="text-sm font-semibold">Superadmin</span>
                         </a>
                         <button onclick="event.stopPropagation(); firebase.auth().signOut().then(function(){window.location.href='index.html'});" class="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-error-container text-error transition-colors cursor-pointer" style="touch-action: manipulation;">
                             <span class="material-symbols-outlined text-[20px]">logout</span>
@@ -147,6 +155,12 @@
                         <span id="member-count-text" class="text-xs font-bold text-on-surface">Neighbors</span>
                         <span class="material-symbols-outlined text-sm text-on-surface-variant">chevron_right</span>
                     </button>
+
+                    <!-- Creator / Manager / Superadmin: Manage Circle button -->
+                    <a id="manage-circle-header-btn" href="#" class="hidden items-center gap-1.5 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs border border-primary/25 transition-colors">
+                        <span class="material-symbols-outlined text-[16px]">settings</span>
+                        <span>Manage Circle</span>
+                    </a>
 
                     <!-- Non-member: public join -->
                     <button id="join-btn" class="hidden px-6 py-2.5 rounded-xl bg-forest-gradient text-white font-bold text-sm shadow-md shadow-primary/20 hover:opacity-95 transition-all active:scale-95 cursor-pointer" onclick="handleJoin()">
@@ -1280,6 +1294,37 @@
             const tabsWrapper = document.getElementById('circle-tabs-wrapper');
             const tabPostBtn = document.getElementById('tab-post-update-btn');
 
+            // Superadmin / Creator / Manager links (even if superadmin is not a member of this circle)
+            let isSuperAdminUser = false;
+            if (currentUser && window.db.isSuperAdmin) {
+                isSuperAdminUser = await window.db.isSuperAdmin(currentUser.uid);
+                const superLink = document.getElementById('dropdown-superadmin-link');
+                if (superLink && isSuperAdminUser) {
+                    superLink.classList.remove('hidden');
+                    superLink.classList.add('flex');
+                }
+            }
+            const isCircleManagerUser = currentUserRole === 'admin'
+                || (currentUser && currentCircle && currentCircle.created_by === currentUser.uid)
+                || isSuperAdminUser;
+            if (isCircleManagerUser) {
+                const manageUrl = window.db.urls.manageCircle(currentCircle || currentCircleId);
+                const manageHeaderBtn = document.getElementById('manage-circle-header-btn');
+                if (manageHeaderBtn) {
+                    manageHeaderBtn.href = manageUrl;
+                    manageHeaderBtn.classList.remove('hidden');
+                    manageHeaderBtn.classList.add('inline-flex');
+                }
+                const manageMenuLink = document.getElementById('manage-circle-menu-link');
+                if (manageMenuLink) {
+                    manageMenuLink.href = manageUrl;
+                    manageMenuLink.classList.remove('hidden');
+                    manageMenuLink.classList.add('flex');
+                }
+                const editBtn = document.getElementById('edit-circle-btn');
+                if (editBtn) { editBtn.classList.remove('hidden'); editBtn.classList.add('flex'); }
+            }
+
             if (currentUserIsMember) {
                 // Show member actions inside overflow menu & subtle inline buttons
                 const memberActions = document.getElementById('member-actions');
@@ -1290,12 +1335,6 @@
                 // Show Leave button in overflow menu
                 const leaveBtn = document.getElementById('leave-circle-btn');
                 if (leaveBtn) { leaveBtn.classList.remove('hidden'); leaveBtn.classList.add('flex'); }
-
-                // Admin: show Edit button in overflow menu
-                if (currentUserRole === 'admin') {
-                    const editBtn = document.getElementById('edit-circle-btn');
-                    if (editBtn) { editBtn.classList.remove('hidden'); editBtn.classList.add('flex'); }
-                }
 
                 // Show action hub & tabs (respecting Circle feature toggles)
                 document.getElementById('private-gate').classList.add('hidden');
