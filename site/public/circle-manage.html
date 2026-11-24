@@ -9,7 +9,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="firebase-client.js?v=20261124"></script>
+    <script src="firebase-client.js?v=20261124b"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
@@ -634,6 +634,7 @@
                 }
             } catch (_) {}
 
+            try {
             const params = new URLSearchParams(window.location.search);
             const rawId = params.get('id');
             const rawName = params.get('name');
@@ -642,12 +643,22 @@
             if (window.db.resolveEntityId) {
                 resolvedCircleId = await window.db.resolveEntityId('circle', { name: rawName, id: rawId });
             }
-            const circle = resolvedCircleId ? await window.db.getCircle(resolvedCircleId) : null;
+            let circle = resolvedCircleId ? await window.db.getCircle(resolvedCircleId) : null;
+
+            // Extra fallback: scan circles directly if slug lookup missed
+            if (!circle && rawName) {
+                const targetSlug = rawName.trim().toLowerCase();
+                const allCircles = await window.db.getCircles();
+                circle = (allCircles || []).find(c =>
+                    (c.slug && c.slug.toLowerCase() === targetSlug) ||
+                    (window.slugify && window.slugify(c.name, 'circle') === targetSlug)
+                ) || null;
+            }
 
             if (!circle) {
                 loadingEl.classList.add('hidden');
                 deniedEl.classList.remove('hidden');
-                document.getElementById('access-denied-msg').textContent = 'Circle not found.';
+                document.getElementById('access-denied-msg').textContent = `Circle not found (name="${rawName || ''}", id="${rawId || ''}").`;
                 return;
             }
 
@@ -670,6 +681,7 @@
             if (!viewerAccess.canManage) {
                 loadingEl.classList.add('hidden');
                 deniedEl.classList.remove('hidden');
+                document.getElementById('access-denied-msg').textContent = 'Only the circle creator, circle managers, or app superadmins can access this page.';
                 return;
             }
 
@@ -705,6 +717,12 @@
                 loadModerationData(),
                 loadCircleLedger()
             ]);
+            } catch (err) {
+                console.error('Error initializing circle management:', err);
+                loadingEl.classList.add('hidden');
+                deniedEl.classList.remove('hidden');
+                document.getElementById('access-denied-msg').textContent = 'Failed to load circle management: ' + (err && err.message ? err.message : String(err));
+            }
         }
 
         function populateSettingsForm(circle) {

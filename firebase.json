@@ -37,26 +37,21 @@
     ],
     "headers": [
       {
-        "source": "/@(firebase-client|config).js",
+        "source": "/assets/**",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "no-cache, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "**/*.html",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, must-revalidate"
+            "value": "public, max-age=31536000, immutable"
           }
         ]
       },
       {
         "source": "**",
         "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, must-revalidate"
+          },
           {
             "key": "X-Frame-Options",
             "value": "SAMEORIGIN"
