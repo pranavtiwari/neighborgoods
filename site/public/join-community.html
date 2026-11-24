@@ -44,7 +44,6 @@
         console.warn('Real Google OAuth is not yet configured. Please check site/public/config.js.');
         return;
       }
-      if (sessionStorage.getItem('pg_login_in_progress') === '1') return;
       await window.loginWithGoogle(getRedirectTarget());
     }
 

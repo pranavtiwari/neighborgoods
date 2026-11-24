@@ -4,11 +4,19 @@
 if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     console.error('Firebase credentials not found. Please ensure config.js is loaded with correct Firebase configuration.');
 } else {
+    // Use same-origin authDomain when hosted on Firebase Hosting (*.web.app / *.firebaseapp.com)
+    // so redirect fallback is immune to browser third-party storage partitioning.
+    const currentHost = (typeof window !== 'undefined' && window.location && window.location.hostname) || '';
+    const projectId = window.ENV.FIREBASE_PROJECT_ID;
+    const resolvedAuthDomain = (
+        projectId && (currentHost === `${projectId}.web.app` || currentHost === `${projectId}.firebaseapp.com`)
+    ) ? currentHost : window.ENV.FIREBASE_AUTH_DOMAIN;
+
     // Initialize Firebase Compat SDK
     const firebaseConfig = {
         apiKey: window.ENV.FIREBASE_API_KEY,
-        authDomain: window.ENV.FIREBASE_AUTH_DOMAIN,
-        projectId: window.ENV.FIREBASE_PROJECT_ID,
+        authDomain: resolvedAuthDomain,
+        projectId: projectId,
         storageBucket: window.ENV.FIREBASE_STORAGE_BUCKET,
         messagingSenderId: window.ENV.FIREBASE_MESSAGING_SENDER_ID,
         appId: window.ENV.FIREBASE_APP_ID
@@ -84,39 +92,70 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     }
 
     // Helper function to handle Google Login
-    // Uses the redirect flow instead of popup: Google's OAuth responses now send
-    // a Cross-Origin-Opener-Policy header that severs the popup handle, which
-    // makes firebase.auth().signInWithPopup() unreliable (auth/cancelled-popup-request).
+    // Uses signInWithPopup as the primary flow (immune to third-party storage
+    // partitioning that breaks signInWithRedirect across web.app / firebaseapp.com
+    // and custom domains), with automatic fallback to signInWithRedirect when
+    // popups are blocked or unsupported.
     const REDIRECT_LOGIN_FLAG = 'pg_login_in_progress';
     const REDIRECT_TARGET_KEY = 'post_auth_redirect';
+    let googleLoginInFlight = false;
     function safeSessionStorage() {
         if (typeof window !== 'undefined' && window.sessionStorage) return window.sessionStorage;
         if (typeof sessionStorage !== 'undefined') return sessionStorage;
         return { getItem: () => null, setItem: () => {}, removeItem: () => {} };
     }
     window.loginWithGoogle = async function(redirectTo = 'explore.html') {
+        if (googleLoginInFlight) return;
+        googleLoginInFlight = true;
+        const target = redirectTo || 'explore.html';
         safeSessionStorage().setItem(REDIRECT_LOGIN_FLAG, '1');
-        safeSessionStorage().setItem(REDIRECT_TARGET_KEY, redirectTo || 'explore.html');
+        safeSessionStorage().setItem(REDIRECT_TARGET_KEY, target);
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         try {
-            await firebase.auth().signInWithRedirect(provider);
-        } catch (error) {
+            const result = await firebase.auth().signInWithPopup(provider);
             safeSessionStorage().removeItem(REDIRECT_LOGIN_FLAG);
             safeSessionStorage().removeItem(REDIRECT_TARGET_KEY);
-            console.error('Login error:', error);
-            alert('Login failed: ' + error.message);
+            if (result && result.user) {
+                await ensureProfile(result.user);
+                window.location.href = safeRedirect(target);
+            }
+        } catch (error) {
+            const code = error && error.code;
+            if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+                // Fall back to redirect flow (same-origin authDomain on *.web.app)
+                try {
+                    await firebase.auth().signInWithRedirect(provider);
+                    return;
+                } catch (redirectError) {
+                    safeSessionStorage().removeItem(REDIRECT_LOGIN_FLAG);
+                    safeSessionStorage().removeItem(REDIRECT_TARGET_KEY);
+                    console.error('Redirect login fallback error:', redirectError);
+                    alert('Login failed: ' + redirectError.message);
+                }
+            } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+                // User dismissed the popup; reset cleanly without an error alert
+                safeSessionStorage().removeItem(REDIRECT_LOGIN_FLAG);
+                safeSessionStorage().removeItem(REDIRECT_TARGET_KEY);
+            } else {
+                safeSessionStorage().removeItem(REDIRECT_LOGIN_FLAG);
+                safeSessionStorage().removeItem(REDIRECT_TARGET_KEY);
+                console.error('Login error:', error);
+                alert('Login failed: ' + error.message);
+            }
+        } finally {
+            googleLoginInFlight = false;
         }
     };
 
     // Complete a Google redirect sign-in on the way back from accounts.google.com
     firebase.auth().getRedirectResult().then(async (result) => {
-        // Always clear the flag — whether the redirect succeeded, was cancelled, or there was no pending redirect
+        const wasInProgress = safeSessionStorage().getItem(REDIRECT_LOGIN_FLAG) === '1';
         const target = safeSessionStorage().getItem(REDIRECT_TARGET_KEY) || 'explore.html';
         safeSessionStorage().removeItem(REDIRECT_LOGIN_FLAG);
         safeSessionStorage().removeItem(REDIRECT_TARGET_KEY);
-        if (!result || !result.user) return;
-        const user = result.user;
+        const user = (result && result.user) || (wasInProgress ? firebase.auth().currentUser : null);
+        if (!user) return;
         await ensureProfile(user);
         window.location.href = safeRedirect(target);
     }).catch((error) => {
