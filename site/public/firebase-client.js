@@ -92,10 +92,11 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
     }
 
     // Helper function to handle Google Login
-    // Uses signInWithPopup as the primary flow (immune to third-party storage
-    // partitioning that breaks signInWithRedirect across web.app / firebaseapp.com
-    // and custom domains), with automatic fallback to signInWithRedirect when
-    // popups are blocked or unsupported.
+    // - On mobile with a same-origin authDomain (e.g. shareinstead.web.app),
+    //   use signInWithRedirect directly (avoids mobile popup blockers/stalls,
+    //   and same-origin authDomain avoids third-party storage partitioning).
+    // - On desktop (or cross-origin dev/custom domains), use signInWithPopup
+    //   first with automatic fallback to signInWithRedirect if popups are blocked.
     const REDIRECT_LOGIN_FLAG = 'pg_login_in_progress';
     const REDIRECT_TARGET_KEY = 'post_auth_redirect';
     let googleLoginInFlight = false;
@@ -103,6 +104,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         if (typeof window !== 'undefined' && window.sessionStorage) return window.sessionStorage;
         if (typeof sessionStorage !== 'undefined') return sessionStorage;
         return { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+    }
+    function isMobileBrowser() {
+        if (typeof navigator === 'undefined') return false;
+        const ua = navigator.userAgent || '';
+        if (/Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(ua)) return true;
+        if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+            return true;
+        }
+        return false;
     }
     window.loginWithGoogle = async function(redirectTo = 'explore.html') {
         if (googleLoginInFlight) return;
@@ -112,7 +122,15 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         safeSessionStorage().setItem(REDIRECT_TARGET_KEY, target);
         const provider = new firebase.auth.GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
+
+        const isSameOriginAuth = !!currentHost && resolvedAuthDomain === currentHost;
+        const preferRedirect = isMobileBrowser() && isSameOriginAuth;
+
         try {
+            if (preferRedirect) {
+                await firebase.auth().signInWithRedirect(provider);
+                return;
+            }
             const result = await firebase.auth().signInWithPopup(provider);
             safeSessionStorage().removeItem(REDIRECT_LOGIN_FLAG);
             safeSessionStorage().removeItem(REDIRECT_TARGET_KEY);
@@ -123,7 +141,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         } catch (error) {
             const code = error && error.code;
             if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
-                // Fall back to redirect flow (same-origin authDomain on *.web.app)
+                // Fall back to redirect flow
                 try {
                     await firebase.auth().signInWithRedirect(provider);
                     return;
@@ -131,7 +149,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                     safeSessionStorage().removeItem(REDIRECT_LOGIN_FLAG);
                     safeSessionStorage().removeItem(REDIRECT_TARGET_KEY);
                     console.error('Redirect login fallback error:', redirectError);
-                    alert('Login failed: ' + redirectError.message);
+                    throw redirectError;
                 }
             } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
                 // User dismissed the popup; reset cleanly without an error alert
@@ -141,7 +159,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 safeSessionStorage().removeItem(REDIRECT_LOGIN_FLAG);
                 safeSessionStorage().removeItem(REDIRECT_TARGET_KEY);
                 console.error('Login error:', error);
-                alert('Login failed: ' + error.message);
+                throw error;
             }
         } finally {
             googleLoginInFlight = false;

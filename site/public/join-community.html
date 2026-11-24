@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-
-<html lang="en"><head>
+<html lang="en">
+<head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sign In - Share, Instead.</title>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <script src="config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-<script src="firebase-client.js"></script>
+<script src="firebase-client.js?v=20261124"></script>
 <style>
     .material-symbols-outlined {
       font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
@@ -18,12 +18,12 @@
     .editorial-gradient {
       background: linear-gradient(135deg, #0d631b 0%, #2e7d32 100%);
     }
-      body {
+    body {
       background-color: #fbf9f6;
       font-family: 'Lexend', sans-serif;
     }
-  </style>
-  <script>
+</style>
+<script>
     function getRedirectTarget() {
         const params = new URLSearchParams(window.location.search);
         const rawTarget = params.get('redirect') || 'explore.html';
@@ -40,11 +40,24 @@
 
     async function handleGoogleLogin() {
       if (!window.ENV || window.ENV.FIREBASE_API_KEY === 'YOUR_FIREBASE_API_KEY') {
-        alert('Action Required: Please configure your Firebase API Key and Project Credentials in site/public/config.js to enable Google Login.');
-        console.warn('Real Google OAuth is not yet configured. Please check site/public/config.js.');
+        showError('Action Required: Please configure your Firebase credentials in site/public/config.js.');
         return;
       }
-      await window.loginWithGoogle(getRedirectTarget());
+      const btn = document.getElementById('btn-google-login');
+      const label = document.getElementById('btn-google-label');
+      const errorDiv = document.getElementById('auth-error');
+      if (errorDiv) errorDiv.classList.add('hidden');
+      if (btn) btn.disabled = true;
+      if (label) label.textContent = 'Connecting to Google...';
+
+      try {
+        await window.loginWithGoogle(getRedirectTarget());
+      } catch (err) {
+        showError((err && err.message) || 'Google sign-in failed. Please try again.');
+      } finally {
+        if (btn) btn.disabled = false;
+        if (label) label.textContent = 'Continue with Google';
+      }
     }
 
     function switchAuthTab(tab) {
@@ -88,7 +101,7 @@
 
       submitBtn.disabled = true;
       submitBtn.textContent = 'Signing in...';
-      
+
       try {
         await window.loginWithEmail(email, password, getRedirectTarget());
       } catch (err) {
@@ -136,164 +149,164 @@
         btn.textContent = 'Forgot Password?';
       }
     }
-  </script>
-<style>
-    body {
-      min-height: max(884px, 100dvh);
-    }
-  </style>
-    <link rel="stylesheet" href="/style.css">
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+</script>
+<link rel="stylesheet" href="/style.css">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 </head>
-<body class="bg-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
+<body class="bg-surface selection:bg-primary-fixed selection:text-on-primary-fixed min-h-screen flex flex-col">
+
 <!-- TopAppBar -->
-<header class="bg-[#fbf9f6]/80 dark:bg-stone-900/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_12px_40px_rgba(51,51,51,0.06)]">
-<div class="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-<div class="flex items-center gap-4">
-<button onclick="window.location.href='index.html'" class="hover:bg-[#efeeeb]/50 p-2 rounded-full transition-all active:scale-95 duration-200 ease-in-out">
-<span class="material-symbols-outlined text-primary" data-icon="arrow_back">arrow_back</span>
-</button>
-<span class="font-['Lexend'] font-extrabold text-2xl tracking-tighter text-primary">Share, Instead.</span>
-</div>
-<div class="hidden md:flex items-center gap-8">
-<span class="font-['Lexend'] font-medium text-lg tracking-tight text-[#333333]">Our Story</span>
-<span class="font-['Lexend'] font-medium text-lg tracking-tight text-[#333333]">Guidelines</span>
-</div>
-</div>
+<header class="bg-[#fbf9f6]/90 dark:bg-stone-900/90 backdrop-blur-xl top-0 sticky z-50 border-b border-outline-variant/15">
+  <div class="flex items-center justify-between px-4 sm:px-6 py-3 max-w-6xl mx-auto">
+    <div class="flex items-center gap-3">
+      <button type="button" onclick="window.location.href='index.html'" class="hover:bg-[#efeeeb]/60 p-2 rounded-full transition-all active:scale-95 cursor-pointer" aria-label="Back to home">
+        <span class="material-symbols-outlined text-primary">arrow_back</span>
+      </button>
+      <span class="font-['Lexend'] font-extrabold text-xl sm:text-2xl tracking-tighter text-primary">Share, Instead.</span>
+    </div>
+    <div class="hidden md:flex items-center gap-6 text-sm font-medium text-on-surface-variant">
+      <a href="index.html" class="hover:text-primary transition-colors">Our Story</a>
+      <a href="circles.html" class="hover:text-primary transition-colors">Browse Circles</a>
+    </div>
+  </div>
 </header>
-<main class="pt-24 pb-12 px-6 max-w-7xl mx-auto min-h-screen flex flex-col md:flex-row gap-12 md:items-center">
-<!-- Hero Image Section - Asymmetric 60/40 Split -->
-<div class="w-full md:w-3/5 lg:w-[55%] space-y-8 order-1 md:order-1">
-<div class="relative overflow-hidden rounded-3xl bg-surface-container-low p-2">
-<img alt="Neighbors in a garden" class="w-full h-[400px] md:h-[600px] object-cover rounded-2xl shadow-sm" data-alt="warm sunlit illustration of diverse neighbors chatting over a wooden garden fence, one handing a large gardening tool to the other in a lush green backyard" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6R7xK2XGz_vcNadS7JiuLdBrM7LkrTpfxX6CYAhe-0NeZGMyr5bm6sJC0pSZB4ogKPL17gGmPb2NTvMJQ3m8e3s2vs8jACZ8B-njdKHdvkohKL73hIS0XwD9EekQWh2X7Zyvmg4MQVmqruKeeoG-aX-GqPAxYslmcsOM6sum4zB1RpA6kH_brjr0jbOb0i6F49ODMQU5TZ3wBFYGm_Kzsz1I4w-Jt3ic5PbDVTl5Nx7zK-u7yiSYi_RzsLY0kDIIAm3OZHl-A472s"/>
-<!-- Floating Community Badge -->
-<div class="absolute bottom-8 right-8 bg-surface-container-lowest/90 backdrop-blur-lg px-6 py-4 rounded-2xl shadow-lg border border-outline-variant/15">
-<div class="flex items-center gap-3">
-<div class="flex -space-x-2">
-<div class="w-8 h-8 rounded-full border-2 border-surface bg-surface-container-high" data-alt="avatar of neighbor"></div>
-<div class="w-8 h-8 rounded-full border-2 border-surface bg-surface-container-high" data-alt="avatar of neighbor"></div>
-<div class="w-8 h-8 rounded-full border-2 border-surface bg-surface-container-high" data-alt="avatar of neighbor"></div>
-</div>
-<p class="text-on-surface font-semibold text-sm">Join 12,000+ local neighbors</p>
-</div>
-</div>
-</div>
-</div>
-<!-- Content & Form Section -->
-<div class="w-full md:w-2/5 lg:w-[45%] flex flex-col justify-center space-y-10 order-2">
-<section>
-<h1 class="text-on-surface font-display font-extrabold text-5xl md:text-6xl tracking-tight leading-tight mb-4">
-          Share More. <br/><span class="text-primary">Spend Less.</span>
-</h1>
-<p class="text-on-surface-variant font-body text-xl leading-relaxed max-w-md">
-          Join 12,000+ neighbors building a modern commons through tool sharing, skill swapping, and surplus harvests.
+
+<!-- Main: Auth Card first on mobile, side-by-side above the fold on desktop -->
+<main class="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-8 md:py-10 flex flex-col md:flex-row gap-8 lg:gap-12 md:items-center">
+
+  <!-- Auth Card (FIRST on mobile, right column on desktop — immediately visible above the fold) -->
+  <div class="w-full md:w-[440px] lg:w-[460px] shrink-0 order-1 md:order-2">
+    <div class="bg-surface-container-low p-5 sm:p-6 rounded-3xl border border-outline-variant/20 shadow-md space-y-4">
+      <div class="text-center md:text-left">
+        <h1 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight text-on-surface">
+          Welcome back
+        </h1>
+        <p class="text-xs sm:text-sm text-on-surface-variant mt-1">
+          Sign in to borrow, lend, and connect with your neighborhood circle.
         </p>
-</section>
-<!-- Benefits Bento-like list -->
-<div class="space-y-6">
-<div class="flex items-start gap-4 p-4 rounded-2xl hover:bg-surface-container-low transition-colors duration-300">
-<div class="flex-shrink-0 w-12 h-12 rounded-xl bg-secondary-fixed flex items-center justify-center">
-<span class="material-symbols-outlined text-on-secondary-fixed text-2xl" data-icon="handyman">handyman</span>
-</div>
-<div>
-<h3 class="font-headline font-semibold text-on-surface text-lg leading-tight">Access Anything</h3>
-<p class="text-on-surface-variant text-sm mt-1">Borrow anything from power drills to pizza ovens without the storage hassle.</p>
-</div>
-</div>
-<div class="flex items-start gap-4 p-4 rounded-2xl hover:bg-surface-container-low transition-colors duration-300">
-<div class="flex-shrink-0 w-12 h-12 rounded-xl bg-primary-fixed flex items-center justify-center">
-<span class="material-symbols-outlined text-on-primary-fixed text-2xl" data-icon="eco">eco</span>
-</div>
-<div>
-<h3 class="font-headline font-semibold text-on-surface text-lg leading-tight">Reduce Waste</h3>
-<p class="text-on-surface-variant text-sm mt-1">Lessen your carbon footprint by sharing resources instead of buying new.</p>
-</div>
-</div>
-<div class="flex items-start gap-4 p-4 rounded-2xl hover:bg-surface-container-low transition-colors duration-300">
-<div class="flex-shrink-0 w-12 h-12 rounded-xl bg-tertiary-fixed flex items-center justify-center">
-<span class="material-symbols-outlined text-on-tertiary-fixed text-2xl" data-icon="groups">groups</span>
-</div>
-<div>
-<h3 class="font-headline font-semibold text-on-surface text-lg leading-tight">Stronger Community</h3>
-<p class="text-on-surface-variant text-sm mt-1">Build a more resilient, connected neighborhood through mutual trust.</p>
-</div>
-</div>
-</div>
-<!-- Action Area -->
-<div class="bg-surface-container-low p-6 rounded-3xl border border-outline-variant/20 shadow-md space-y-6">
-  <!-- Tabs -->
-  <div class="flex border-b border-outline-variant/30">
-    <button id="tab-login" onclick="switchAuthTab('login')" class="flex-1 pb-3 text-center font-headline font-bold text-base text-primary border-b-2 border-primary transition-all cursor-pointer">Sign In</button>
-    <button id="tab-register" onclick="switchAuthTab('register')" class="flex-1 pb-3 text-center font-headline font-semibold text-base text-on-surface-variant border-b-2 border-transparent transition-all cursor-pointer">Register</button>
+      </div>
+
+      <!-- Error Message Container -->
+      <div id="auth-error" class="hidden bg-error-container/30 border border-error/20 text-error text-xs sm:text-sm p-3 rounded-xl flex items-center gap-2.5">
+        <span class="material-symbols-outlined text-lg shrink-0">error</span>
+        <span id="auth-error-text">An error occurred.</span>
+      </div>
+
+      <!-- Primary Google Login Button (Above the fold!) -->
+      <button type="button" id="btn-google-login" onclick="handleGoogleLogin()" class="w-full flex items-center justify-center gap-3 bg-surface border border-outline-variant/40 hover:bg-surface-container text-on-surface font-headline font-bold py-3.5 px-6 rounded-xl shadow-sm transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60" style="touch-action: manipulation;">
+        <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path>
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
+        </svg>
+        <span id="btn-google-label">Continue with Google</span>
+      </button>
+
+      <div class="relative flex items-center justify-center">
+        <div class="absolute inset-0 flex items-center">
+          <div class="w-full border-t border-outline-variant/30"></div>
+        </div>
+        <span class="relative bg-surface-container-low px-3 text-[11px] font-semibold text-on-surface-variant/70 uppercase tracking-wider">Or with email</span>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex border-b border-outline-variant/30">
+        <button type="button" id="tab-login" onclick="switchAuthTab('login')" class="flex-1 pb-2.5 text-center font-headline font-bold text-sm text-primary border-b-2 border-primary transition-all cursor-pointer">Sign In</button>
+        <button type="button" id="tab-register" onclick="switchAuthTab('register')" class="flex-1 pb-2.5 text-center font-headline font-semibold text-sm text-on-surface-variant border-b-2 border-transparent transition-all cursor-pointer">Register</button>
+      </div>
+
+      <!-- Sign In Form -->
+      <form id="form-login" onsubmit="handleEmailLogin(event)" class="space-y-3">
+        <div class="space-y-1">
+          <label for="login-email" class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider">Email Address</label>
+          <input id="login-email" type="email" autocomplete="email" required class="w-full bg-surface border border-outline-variant/30 rounded-xl py-2.5 px-3.5 focus:ring-2 focus:ring-primary focus:outline-none text-on-surface text-sm" placeholder="you@example.com">
+        </div>
+        <div class="space-y-1">
+          <div class="flex items-center justify-between">
+            <label for="login-password" class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider">Password</label>
+            <button type="button" id="btn-forgot-password" onclick="handleForgotPassword()" class="text-xs text-primary hover:underline font-semibold cursor-pointer">Forgot Password?</button>
+          </div>
+          <input id="login-password" type="password" autocomplete="current-password" required minlength="8" class="w-full bg-surface border border-outline-variant/30 rounded-xl py-2.5 px-3.5 focus:ring-2 focus:ring-primary focus:outline-none text-on-surface text-sm" placeholder="••••••••">
+        </div>
+        <button type="submit" id="btn-login-submit" class="w-full py-3 bg-primary hover:bg-primary/95 text-on-primary font-headline font-bold text-sm rounded-xl shadow-sm transition-all active:scale-[0.98] cursor-pointer">
+          Sign In
+        </button>
+      </form>
+
+      <!-- Register Form -->
+      <form id="form-register" onsubmit="handleEmailRegister(event)" class="space-y-3 hidden">
+        <div class="space-y-1">
+          <label for="register-name" class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider">Full Name</label>
+          <input id="register-name" type="text" autocomplete="name" required class="w-full bg-surface border border-outline-variant/30 rounded-xl py-2.5 px-3.5 focus:ring-2 focus:ring-primary focus:outline-none text-on-surface text-sm" placeholder="Alex Neighbor">
+        </div>
+        <div class="space-y-1">
+          <label for="register-email" class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider">Email Address</label>
+          <input id="register-email" type="email" autocomplete="email" required class="w-full bg-surface border border-outline-variant/30 rounded-xl py-2.5 px-3.5 focus:ring-2 focus:ring-primary focus:outline-none text-on-surface text-sm" placeholder="you@example.com">
+        </div>
+        <div class="space-y-1">
+          <label for="register-password" class="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider">Password (8+ chars, 1 uppercase, 1 number)</label>
+          <input id="register-password" type="password" autocomplete="new-password" required minlength="8" class="w-full bg-surface border border-outline-variant/30 rounded-xl py-2.5 px-3.5 focus:ring-2 focus:ring-primary focus:outline-none text-on-surface text-sm" placeholder="••••••••">
+        </div>
+        <button type="submit" id="btn-register-submit" class="w-full py-3 bg-primary hover:bg-primary/95 text-on-primary font-headline font-bold text-sm rounded-xl shadow-sm transition-all active:scale-[0.98] cursor-pointer">
+          Create Account
+        </button>
+      </form>
+
+      <p class="text-on-surface-variant text-center text-xs font-body pt-1">
+        By joining, you agree to our <a class="text-primary font-semibold underline underline-offset-2" href="index.html">Community Safety Guidelines</a>.
+      </p>
+    </div>
   </div>
 
-  <!-- Error Message Container -->
-  <div id="auth-error" class="hidden bg-error-container/30 border border-error/20 text-error text-sm p-4 rounded-xl flex items-center gap-3">
-    <span class="material-symbols-outlined text-lg">error</span>
-    <span id="auth-error-text">An error occurred.</span>
+  <!-- Hero & Value Prop (SECOND on mobile below auth card, left column on desktop) -->
+  <div class="flex-1 space-y-5 order-2 md:order-1">
+    <div>
+      <h2 class="text-on-surface font-display font-extrabold text-3xl sm:text-4xl lg:text-5xl tracking-tight leading-tight">
+        Share More. <span class="text-primary">Spend Less.</span>
+      </h2>
+      <p class="text-on-surface-variant font-body text-sm sm:text-base lg:text-lg leading-relaxed mt-2 max-w-xl">
+        Join neighbors building a modern commons through tool sharing, books, skill swapping, and free neighborhood help.
+      </p>
+    </div>
+
+    <div class="relative overflow-hidden rounded-3xl bg-surface-container-low p-2">
+      <img alt="Neighbors in a garden" class="w-full h-52 sm:h-64 md:h-[320px] object-cover rounded-2xl shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6R7xK2XGz_vcNadS7JiuLdBrM7LkrTpfxX6CYAhe-0NeZGMyr5bm6sJC0pSZB4ogKPL17gGmPb2NTvMJQ3m8e3s2vs8jACZ8B-njdKHdvkohKL73hIS0XwD9EekQWh2X7Zyvmg4MQVmqruKeeoG-aX-GqPAxYslmcsOM6sum4zB1RpA6kH_brjr0jbOb0i6F49ODMQU5TZ3wBFYGm_Kzsz1I4w-Jt3ic5PbDVTl5Nx7zK-u7yiSYi_RzsLY0kDIIAm3OZHl-A472s"/>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="flex items-start gap-3 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/15">
+        <div class="shrink-0 w-9 h-9 rounded-xl bg-secondary-fixed flex items-center justify-center">
+          <span class="material-symbols-outlined text-on-secondary-fixed text-lg">handyman</span>
+        </div>
+        <div>
+          <h3 class="font-headline font-semibold text-on-surface text-xs sm:text-sm">Access Anything</h3>
+          <p class="text-on-surface-variant text-xs mt-0.5">Borrow tools, books, and gear nearby.</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/15">
+        <div class="shrink-0 w-9 h-9 rounded-xl bg-primary-fixed flex items-center justify-center">
+          <span class="material-symbols-outlined text-on-primary-fixed text-lg">eco</span>
+        </div>
+        <div>
+          <h3 class="font-headline font-semibold text-on-surface text-xs sm:text-sm">Reduce Waste</h3>
+          <p class="text-on-surface-variant text-xs mt-0.5">Share resources instead of buying new.</p>
+        </div>
+      </div>
+      <div class="flex items-start gap-3 p-3 rounded-2xl bg-surface-container-low border border-outline-variant/15">
+        <div class="shrink-0 w-9 h-9 rounded-xl bg-tertiary-fixed flex items-center justify-center">
+          <span class="material-symbols-outlined text-on-tertiary-fixed text-lg">groups</span>
+        </div>
+        <div>
+          <h3 class="font-headline font-semibold text-on-surface text-xs sm:text-sm">Stronger Circles</h3>
+          <p class="text-on-surface-variant text-xs mt-0.5">Connect with trusted neighbors.</p>
+        </div>
+      </div>
+    </div>
   </div>
-
-  <!-- Sign In Form -->
-  <form id="form-login" onsubmit="handleEmailLogin(event)" class="space-y-4">
-    <div class="space-y-1.5">
-      <label for="login-email" class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Email Address</label>
-      <input id="login-email" type="email" required class="w-full bg-surface border border-outline-variant/30 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:outline-none text-on-surface transition-all text-sm" placeholder="you@example.com">
-    </div>
-    <div class="space-y-1.5">
-      <label for="login-password" class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Password</label>
-      <input id="login-password" type="password" required minlength="8" class="w-full bg-surface border border-outline-variant/30 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:outline-none text-on-surface transition-all text-sm" placeholder="••••••••">
-    </div>
-    <div class="flex justify-end">
-      <button type="button" id="btn-forgot-password" onclick="handleForgotPassword()" class="text-xs text-primary hover:underline font-semibold">Forgot Password?</button>
-    </div>
-    <button type="submit" id="btn-login-submit" class="w-full py-4 bg-primary hover:bg-primary/95 text-on-primary font-headline font-semibold rounded-xl shadow-sm transition-all active:scale-[0.98] duration-200 cursor-pointer">
-      Sign In
-    </button>
-  </form>
-
-  <!-- Register Form -->
-  <form id="form-register" onsubmit="handleEmailRegister(event)" class="space-y-4 hidden">
-    <div class="space-y-1.5">
-      <label for="register-name" class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Full Name</label>
-      <input id="register-name" type="text" required class="w-full bg-surface border border-outline-variant/30 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:outline-none text-on-surface transition-all text-sm" placeholder="Alex Neighbor">
-    </div>
-    <div class="space-y-1.5">
-      <label for="register-email" class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Email Address</label>
-      <input id="register-email" type="email" required class="w-full bg-surface border border-outline-variant/30 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:outline-none text-on-surface transition-all text-sm" placeholder="you@example.com">
-    </div>
-    <div class="space-y-1.5">
-      <label for="register-password" class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Password (8+ chars, 1 uppercase, 1 number)</label>
-      <input id="register-password" type="password" required minlength="8" class="w-full bg-surface border border-outline-variant/30 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:outline-none text-on-surface transition-all text-sm" placeholder="••••••••">
-    </div>
-    <button type="submit" id="btn-register-submit" class="w-full py-4 bg-primary hover:bg-primary/95 text-on-primary font-headline font-semibold rounded-xl shadow-sm transition-all active:scale-[0.98] duration-200 cursor-pointer">
-      Create Account
-    </button>
-  </form>
-
-  <div class="relative flex items-center justify-center">
-    <div class="absolute inset-0 flex items-center">
-      <div class="w-full border-t border-outline-variant/30"></div>
-    </div>
-    <span class="relative bg-surface-container-low px-4 text-xs font-semibold text-on-surface-variant/60 uppercase tracking-wider">Or continue with</span>
-  </div>
-
-  <button onclick="handleGoogleLogin()" class="w-full flex items-center justify-center gap-4 bg-surface border border-outline-variant/30 hover:bg-surface-container-low text-on-surface font-headline font-semibold py-4 px-8 rounded-xl shadow-sm transition-all active:scale-95 duration-200 group cursor-pointer">
-    <svg class="w-6 h-6" viewbox="0 0 24 24">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
-      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path>
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
-    </svg>
-    Google
-  </button>
-
-  <p class="text-on-surface-variant text-center text-sm font-body px-8 mt-4">
-    By joining, you agree to our <a class="text-primary font-semibold underline decoration-2 underline-offset-4 hover:text-primary-container transition-colors" href="#">Community Safety Guidelines</a>.
-  </p>
-</div>
-</div>
 </main>
-<!-- Ambient background detail -->
+
 <div class="fixed bottom-0 left-0 w-64 h-64 bg-primary/5 rounded-full blur-[100px] -z-10 pointer-events-none"></div>
 <div class="fixed top-20 right-0 w-96 h-96 bg-secondary-fixed/10 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
-</body></html>
+</body>
+</html>
