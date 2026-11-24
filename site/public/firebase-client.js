@@ -445,7 +445,7 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 // Relative URLs are fine; only reject if URL() throws AND it looks dangerous
                 if (/^javascript:/i.test(url.trim()) || /^vbscript:/i.test(url.trim())) return '';
             }
-            return this.escapeAttr(url);
+            return (this && typeof this.escapeAttr === 'function' ? this.escapeAttr(url) : window.db.escapeAttr(url));
         },
         // --- Category Taxonomy and Fuzzy Matching ---
         CATEGORY_TAXONOMY: {

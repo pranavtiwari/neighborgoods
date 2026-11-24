@@ -227,9 +227,9 @@
     </main>
 
     <script>
-        const escapeHtml = window.db.escapeHtml;
-        const escapeAttr = window.db.escapeAttr;
-        const sanitizeUrl = window.db.sanitizeUrl;
+        const escapeHtml = (s) => window.db.escapeHtml(s);
+        const escapeAttr = (s) => window.db.escapeAttr(s);
+        const sanitizeUrl = (u) => window.db.sanitizeUrl(u);
 
         let currentUser = null;
         let allCircles = [];
