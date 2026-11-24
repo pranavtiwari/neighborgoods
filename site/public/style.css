@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+}
 
 @theme {
   --color-on-secondary-container: #653900;
