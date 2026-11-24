@@ -1,0 +1,50 @@
+# Deploy: manually dispatched, guarded by the same tests that CI runs.
+# Create a repo secret SHAREINSTEAD_SERVICE_ACCOUNT_KEY with the JSON key of
+# the service account allowed to deploy (already covered by .gitignore via
+# shareinstead-service-account-key.json).
+name: Deploy to Firebase
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'firebase use alias (e.g. staging, production) or "default"'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the full test suite before deploying
+        run: npm test
+
+      - name: Write the Firebase service account key (already git-ignored)
+        run: echo '${{ secrets.SHAREINSTEAD_SERVICE_ACCOUNT_KEY }}' > shareinstead-service-account-key.json
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy Firestore rules, indexes and storage
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$PWD/shareinstead-service-account-key.json"
+          firebase deploy --only firestore:rules,firestore:indexes,storage
+
+      - name: Deploy Cloud Functions
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$PWD/shareinstead-service-account-key.json"
+          firebase deploy --only functions
+
+      - name: Build and deploy hosting
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$PWD/shareinstead-service-account-key.json"
+          npm run build
+          firebase deploy --only hosting
