@@ -3623,7 +3623,7 @@ await test('Flow 21: Make circles shareable: invite links, view-only landing, an
 
     // 2. Share URL generation and sharing helpers
     const shareUrl = window.getCircleShareUrl('sf-gardeners');
-    assert.ok(shareUrl.endsWith('/circle-detail.html?id=sf-gardeners'), 'Canonical share link generated');
+    assert.ok(shareUrl.endsWith('/circle-detail?id=sf-gardeners'), 'Canonical share link generated');
     assert.strictEqual(window.getCircleShareUrl(''), '', 'Empty circleId returns empty string');
 
     // Test shareCircle with clipboard fallback in Node/jsdom mock
@@ -3654,7 +3654,7 @@ await test('Flow 21: Make circles shareable: invite links, view-only landing, an
     });
     assert.strictEqual(shareRes.shared, true);
     assert.strictEqual(shareRes.method, 'clipboard');
-    assert.ok(clipboardContent.includes('circle-detail.html?id=sf-gardeners'), 'Copied canonical circle link to clipboard');
+    assert.ok(clipboardContent.endsWith('/sf-gardeners'), 'Copied canonical vanity circle link to clipboard');
 
     // 3. View-Only Spectator Landing & Privacy Enforcement
     const publicCircleId = 'pub-circle-' + Math.random().toString(36).substring(2, 7);
@@ -4228,7 +4228,7 @@ await test('Flow 26: General circle role management (Make Admin, Remove Admin, L
     firebase.auth().currentUser = { uid: strangerUid };
     await assert.rejects(async () => {
         await window.db.setCircleMemberRole(circle.id, memberUid, 'admin', strangerUid);
-    }, /Only circle creator or circle admins/);
+    }, /Only circle creator, circle admins, or superadmins/);
 
     // 4. Circle creator promotes member to Admin ("Make Admin")
     firebase.auth().currentUser = { uid: creatorUid };

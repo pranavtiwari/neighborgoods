@@ -301,7 +301,7 @@
                 window.db.getCircles(),
                 window.db.getAllProfiles(300),
                 window.db.getReportQueue ? window.db.getReportQueue({}) : Promise.resolve([]),
-                window.db.getFeatureFlags(),
+                window.db.listFeatureFlags(),
                 window.db.getSuperAdmins(),
                 window.db.getModerationEvents ? window.db.getModerationEvents({ limit: 50 }) : Promise.resolve([])
             ]);
@@ -532,7 +532,7 @@
 
         async function handleToggleFlag(id, nextEnabled, desc) {
             try {
-                await window.db.setFeatureFlag(id, nextEnabled, desc);
+                await window.db.saveFeatureFlag(id, nextEnabled, desc);
                 showToast(`Flag "${id}" ${nextEnabled ? 'enabled' : 'disabled'}.`);
                 await refreshAll();
             } catch (err) {
@@ -547,7 +547,7 @@
             const desc = document.getElementById('new-flag-desc').value.trim();
             if (!key) return;
             try {
-                await window.db.setFeatureFlag(key, true, desc);
+                await window.db.saveFeatureFlag(key, true, desc);
                 document.getElementById('new-flag-key').value = '';
                 document.getElementById('new-flag-desc').value = '';
                 showToast(`Feature flag "${key}" saved.`);

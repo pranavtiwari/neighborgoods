@@ -8492,17 +8492,17 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             return { success: true };
         },
 
-        getFeatureFlags: async function() {
+        listFeatureFlags: async function() {
             try {
                 const snap = await firebase.firestore().collection('feature_flags').get();
                 return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             } catch (err) {
-                console.error('Error getting feature flags:', err);
+                console.error('Error listing feature flags:', err);
                 return [];
             }
         },
 
-        setFeatureFlag: async function(flagId, enabled, description = '') {
+        saveFeatureFlag: async function(flagId, enabled, description = '') {
             const actorUid = firebase.auth().currentUser?.uid;
             if (!actorUid) throw new Error('Authentication required');
             if (!flagId || !flagId.trim()) throw new Error('Flag key is required');
