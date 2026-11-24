@@ -9,7 +9,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="firebase-client.js?v=20261122"></script>
+    <script src="firebase-client.js?v=20261124"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
@@ -271,9 +271,12 @@
 
             if (!currentUser) {
                 loadingEl.classList.add('hidden');
+                shellEl.classList.add('hidden');
                 deniedEl.classList.remove('hidden');
                 return;
             }
+            deniedEl.classList.add('hidden');
+            loadingEl.classList.remove('hidden');
 
             try {
                 const prof = await window.db.getProfile(currentUser.uid);

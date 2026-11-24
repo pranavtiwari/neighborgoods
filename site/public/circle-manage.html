@@ -9,7 +9,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="firebase-client.js?v=20261122"></script>
+    <script src="firebase-client.js?v=20261124"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
@@ -618,10 +618,13 @@
 
             if (!currentUser) {
                 loadingEl.classList.add('hidden');
+                shellEl.classList.add('hidden');
                 deniedEl.classList.remove('hidden');
                 document.getElementById('access-denied-msg').textContent = 'Please sign in to manage this circle.';
                 return;
             }
+            deniedEl.classList.add('hidden');
+            loadingEl.classList.remove('hidden');
 
             // Update header profile avatar
             try {
@@ -635,13 +638,11 @@
             const rawId = params.get('id');
             const rawName = params.get('name');
 
-            let circle = null;
-            if (rawName && window.db.resolveEntityBySlug) {
-                circle = await window.db.resolveEntityBySlug('circle', rawName);
+            let resolvedCircleId = rawId;
+            if (window.db.resolveEntityId) {
+                resolvedCircleId = await window.db.resolveEntityId('circle', { name: rawName, id: rawId });
             }
-            if (!circle && rawId) {
-                circle = await window.db.getCircle(rawId);
-            }
+            const circle = resolvedCircleId ? await window.db.getCircle(resolvedCircleId) : null;
 
             if (!circle) {
                 loadingEl.classList.add('hidden');
