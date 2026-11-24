@@ -6,11 +6,11 @@
 <title>Sign In - Share, Instead.</title>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<script src="config.js"></script>
+<script src="/config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-<script src="firebase-client.js?v=20261124"></script>
+<script src="/firebase-client.js?v=20261124c"></script>
 <style>
     .material-symbols-outlined {
       font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
@@ -26,9 +26,84 @@
 <script>
     function getRedirectTarget() {
         const params = new URLSearchParams(window.location.search);
-        const rawTarget = params.get('redirect') || 'explore.html';
-        return window.safeRedirect ? window.safeRedirect(rawTarget) : rawTarget;
+        const rawTarget = params.get('redirect');
+        const circleSlug = params.get('circle');
+        if (rawTarget) {
+            return window.safeRedirect ? window.safeRedirect(rawTarget) : rawTarget;
+        }
+        if (circleSlug && /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(circleSlug.trim())) {
+            const cleanSlug = circleSlug.trim().toLowerCase();
+            const target = `/${cleanSlug}?autoJoin=1`;
+            return window.safeRedirect ? window.safeRedirect(target) : target;
+        }
+        return 'explore.html';
     }
+
+    // Extract circle slug from ?circle= or from ?redirect=/palm-meadows
+    function getInvitedCircleSlug() {
+        const params = new URLSearchParams(window.location.search);
+        const direct = params.get('circle');
+        if (direct && /^[a-z0-9]+(?:-[a-z0-9]+)*$/i.test(direct.trim())) {
+            return direct.trim().toLowerCase();
+        }
+        const redirect = params.get('redirect') || '';
+        const vanityMatch = redirect.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\?|$)/i);
+        if (vanityMatch && !(window.RESERVED_CIRCLE_SLUGS && window.RESERVED_CIRCLE_SLUGS.has(vanityMatch[1].toLowerCase()))) {
+            return vanityMatch[1].toLowerCase();
+        }
+        const legacyMatch = redirect.match(/[?&]name=([a-z0-9]+(?:-[a-z0-9]+)*)/i);
+        if (legacyMatch) return legacyMatch[1].toLowerCase();
+        return null;
+    }
+
+    async function hydrateCircleBranding() {
+        const slug = getInvitedCircleSlug();
+        if (!slug || !window.db || !window.db.resolveEntityId) return;
+        try {
+            const circleId = await window.db.resolveEntityId('circle', { name: slug });
+            if (!circleId) return;
+            const circle = await window.db.getCircle(circleId);
+            if (!circle || !circle.name) return;
+
+            document.title = `Join ${circle.name} - Share, Instead.`;
+            const headingEl = document.getElementById('auth-heading');
+            const subEl = document.getElementById('auth-subtitle');
+            const badgeEl = document.getElementById('circle-invite-badge');
+            const heroTitleEl = document.getElementById('hero-title');
+            const heroDescEl = document.getElementById('hero-desc');
+            const heroImgEl = document.getElementById('hero-image');
+            const backBtn = document.getElementById('header-back-btn');
+
+            if (headingEl) headingEl.textContent = `Join ${circle.name}`;
+            if (subEl) {
+                subEl.textContent = circle.is_private
+                    ? `Sign in or create an account to request to join ${circle.name}.`
+                    : `Sign in or create an account — you'll be added to ${circle.name} automatically.`;
+            }
+            if (badgeEl) {
+                badgeEl.innerHTML = `<span class="material-symbols-outlined text-[15px]">${circle.is_private ? 'lock' : 'groups'}</span><span>${window.db.escapeHtml(circle.is_private ? 'Private Circle Invite' : 'Circle Invite')}</span>`;
+                badgeEl.classList.remove('hidden');
+                badgeEl.classList.add('inline-flex');
+            }
+            if (heroTitleEl) {
+                heroTitleEl.innerHTML = `${window.db.escapeHtml(circle.name)} <span class="text-primary">Circle</span>`;
+            }
+            if (heroDescEl && circle.description) {
+                heroDescEl.textContent = circle.description;
+            }
+            if (heroImgEl && circle.image_url) {
+                const safeImg = window.db.sanitizeUrl(circle.image_url);
+                if (safeImg) heroImgEl.src = safeImg;
+            }
+            if (backBtn) {
+                const circleUrl = window.db.urls.circle(circle);
+                backBtn.onclick = () => { window.location.href = circleUrl; };
+            }
+        } catch (err) {
+            console.warn('Could not load circle invite branding:', err);
+        }
+    }
+    document.addEventListener('DOMContentLoaded', hydrateCircleBranding);
 
     // Redirect if already logged in (skip while a Google redirect sign-in is in
     // progress, otherwise this redirect races the redirect-completion handler)
@@ -159,7 +234,7 @@
 <header class="bg-[#fbf9f6]/90 dark:bg-stone-900/90 backdrop-blur-xl top-0 sticky z-50 border-b border-outline-variant/15">
   <div class="flex items-center justify-between px-4 sm:px-6 py-3 max-w-6xl mx-auto">
     <div class="flex items-center gap-3">
-      <button type="button" onclick="window.location.href='index.html'" class="hover:bg-[#efeeeb]/60 p-2 rounded-full transition-all active:scale-95 cursor-pointer" aria-label="Back to home">
+      <button type="button" id="header-back-btn" onclick="window.location.href='index.html'" class="hover:bg-[#efeeeb]/60 p-2 rounded-full transition-all active:scale-95 cursor-pointer" aria-label="Back to home">
         <span class="material-symbols-outlined text-primary">arrow_back</span>
       </button>
       <span class="font-['Lexend'] font-extrabold text-xl sm:text-2xl tracking-tighter text-primary">Share, Instead.</span>
@@ -178,10 +253,11 @@
   <div class="w-full md:w-[440px] lg:w-[460px] shrink-0 order-1 md:order-2">
     <div class="bg-surface-container-low p-5 sm:p-6 rounded-3xl border border-outline-variant/20 shadow-md space-y-4">
       <div class="text-center md:text-left">
-        <h1 class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight text-on-surface">
+        <span id="circle-invite-badge" class="hidden items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary/10 text-primary mb-2"></span>
+        <h1 id="auth-heading" class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight text-on-surface">
           Welcome back
         </h1>
-        <p class="text-xs sm:text-sm text-on-surface-variant mt-1">
+        <p id="auth-subtitle" class="text-xs sm:text-sm text-on-surface-variant mt-1">
           Sign in to borrow, lend, and connect with your neighborhood circle.
         </p>
       </div>
@@ -262,16 +338,16 @@
   <!-- Hero & Value Prop (SECOND on mobile below auth card, left column on desktop) -->
   <div class="flex-1 space-y-5 order-2 md:order-1">
     <div>
-      <h2 class="text-on-surface font-display font-extrabold text-3xl sm:text-4xl lg:text-5xl tracking-tight leading-tight">
+      <h2 id="hero-title" class="text-on-surface font-display font-extrabold text-3xl sm:text-4xl lg:text-5xl tracking-tight leading-tight">
         Share More. <span class="text-primary">Spend Less.</span>
       </h2>
-      <p class="text-on-surface-variant font-body text-sm sm:text-base lg:text-lg leading-relaxed mt-2 max-w-xl">
+      <p id="hero-desc" class="text-on-surface-variant font-body text-sm sm:text-base lg:text-lg leading-relaxed mt-2 max-w-xl">
         Join neighbors building a modern commons through tool sharing, books, skill swapping, and free neighborhood help.
       </p>
     </div>
 
     <div class="relative overflow-hidden rounded-3xl bg-surface-container-low p-2">
-      <img alt="Neighbors in a garden" class="w-full h-52 sm:h-64 md:h-[320px] object-cover rounded-2xl shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6R7xK2XGz_vcNadS7JiuLdBrM7LkrTpfxX6CYAhe-0NeZGMyr5bm6sJC0pSZB4ogKPL17gGmPb2NTvMJQ3m8e3s2vs8jACZ8B-njdKHdvkohKL73hIS0XwD9EekQWh2X7Zyvmg4MQVmqruKeeoG-aX-GqPAxYslmcsOM6sum4zB1RpA6kH_brjr0jbOb0i6F49ODMQU5TZ3wBFYGm_Kzsz1I4w-Jt3ic5PbDVTl5Nx7zK-u7yiSYi_RzsLY0kDIIAm3OZHl-A472s"/>
+      <img id="hero-image" alt="Neighbors in a garden" class="w-full h-52 sm:h-64 md:h-[320px] object-cover rounded-2xl shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6R7xK2XGz_vcNadS7JiuLdBrM7LkrTpfxX6CYAhe-0NeZGMyr5bm6sJC0pSZB4ogKPL17gGmPb2NTvMJQ3m8e3s2vs8jACZ8B-njdKHdvkohKL73hIS0XwD9EekQWh2X7Zyvmg4MQVmqruKeeoG-aX-GqPAxYslmcsOM6sum4zB1RpA6kH_brjr0jbOb0i6F49ODMQU5TZ3wBFYGm_Kzsz1I4w-Jt3ic5PbDVTl5Nx7zK-u7yiSYi_RzsLY0kDIIAm3OZHl-A472s"/>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">

@@ -44,6 +44,16 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         console.warn('Firestore persistence settings failed:', err);
     }
 
+    // Reserved top-level app route names that cannot be claimed as circle vanity slugs
+    const RESERVED_CIRCLE_SLUGS = new Set([
+        'index', 'explore', 'circles', 'admin', 'profile', 'messages', 'chat',
+        'help', 'activity', 'login', 'signup', 'join-community', 'circle-detail',
+        'circle-manage', 'create-circle', 'add-item', 'edit-profile', 'item-details',
+        'book-detail', 'help-detail', 'request-borrow', 'request-sent', 'assets',
+        'api', 'sw', 'manifest'
+    ]);
+    window.RESERVED_CIRCLE_SLUGS = RESERVED_CIRCLE_SLUGS;
+
     // Shared kebab-case slug generator (e.g. "Palm Meadows Shares" -> "palm-meadows-shares")
     function slugifyName(text, fallback = 'entity') {
         if (!text || typeof text !== 'string') return fallback;
@@ -203,17 +213,24 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             return fallback;
         }
         // Strip leading slash if any
+        const hadLeadingSlash = trimmed.startsWith('/');
         const clean = trimmed.replace(/^\/+/, '');
         const [pagePart, queryPart] = clean.split('?');
         const basePage = pagePart.split('#')[0];
-        if (!ALLOWED_REDIRECTS.has(basePage)) return fallback;
+        const isVanityCirclePath = hadLeadingSlash
+            && !basePage.includes('/')
+            && !basePage.includes('.')
+            && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(basePage);
+        if (!ALLOWED_REDIRECTS.has(basePage) && !isVanityCirclePath) return fallback;
 
-        // Preserve safe query string parameters (e.g. circle-detail?name=palm-meadows-shares)
+        const resolvedBase = isVanityCirclePath ? `/${basePage}` : basePage;
+
+        // Preserve safe query string parameters (e.g. /palm-meadows?autoJoin=1)
         if (queryPart) {
             const rawQuery = queryPart.split('#')[0];
             const params = new URLSearchParams(rawQuery);
             const safeValPattern = /^[A-Za-z0-9_-]{1,128}$/;
-            const allowedKeys = ['name', 'id', 'circle', 'circleId', 'book', 'book_id', 'user', 'userId', 'item', 'itemId', 'requestId', 'ask', 'shelf', 'view'];
+            const allowedKeys = ['name', 'id', 'circle', 'circleId', 'book', 'book_id', 'user', 'userId', 'item', 'itemId', 'requestId', 'ask', 'shelf', 'view', 'autoJoin'];
             const safeParams = new URLSearchParams();
             for (const key of allowedKeys) {
                 const val = params.get(key);
@@ -222,10 +239,10 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 }
             }
             const qs = safeParams.toString();
-            return qs ? `${basePage}?${qs}` : basePage;
+            return qs ? `${resolvedBase}?${qs}` : resolvedBase;
         }
 
-        return basePage;
+        return resolvedBase;
     }
     window.safeRedirect = safeRedirect;
 
@@ -347,6 +364,9 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             ? (circleOrId.slug || (circleOrId.name ? slugifyName(circleOrId.name, 'circle') : ''))
             : (circleName ? slugifyName(circleName, 'circle') : '');
         const id = isObj ? circleOrId.id : circleOrId;
+        if (slug && !RESERVED_CIRCLE_SLUGS.has(slug)) {
+            return `${origin}/${encodeURIComponent(slug)}`;
+        }
         if (slug) {
             return `${origin}/circle-detail?name=${encodeURIComponent(slug)}`;
         }
@@ -7866,7 +7886,10 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
             if (!validTypes.includes(entityType)) {
                 throw new Error(`Unsupported slug entity type: ${entityType}`);
             }
-            const base = slugifyName(rawName, entityType);
+            let base = slugifyName(rawName, entityType);
+            if (entityType === 'circle' && RESERVED_CIRCLE_SLUGS.has(base)) {
+                base = `${base}-circle`;
+            }
             const firestore = firebase.firestore();
             const user = firebase.auth().currentUser;
             const uid = user ? user.uid : null;
@@ -8052,8 +8075,21 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
         replaceUrlWithSlug: function(pageName, slug, extraParams = {}) {
             if (!slug || typeof window === 'undefined' || !window.history || !window.history.replaceState) return;
             try {
-                const base = this.urls._page(pageName);
+                const usesHtml = window.location.pathname.endsWith('.html');
                 const params = new URLSearchParams();
+                if (pageName === 'circle-detail' && !usesHtml && !RESERVED_CIRCLE_SLUGS.has(slug)) {
+                    for (const [k, v] of Object.entries(extraParams || {})) {
+                        if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
+                    }
+                    const qs = params.toString();
+                    const target = `/${encodeURIComponent(slug)}${qs ? '?' + qs : ''}${window.location.hash || ''}`;
+                    if (window.location.pathname === `/${slug}` && window.location.search === (qs ? `?${qs}` : '')) {
+                        return;
+                    }
+                    window.history.replaceState(null, '', target);
+                    return;
+                }
+                const base = this.urls._page(pageName);
                 params.set('name', slug);
                 for (const [k, v] of Object.entries(extraParams || {})) {
                     if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
@@ -8504,16 +8540,23 @@ if (!window.ENV || !window.ENV.FIREBASE_API_KEY) {
                 return this._page('admin');
             },
             circle: function(circleOrId, fallbackName) {
+                const usesHtml = typeof window !== 'undefined' && window.location && window.location.pathname.endsWith('.html');
                 const page = this._page('circle-detail');
+                let slug = '';
+                let id = '';
                 if (circleOrId && typeof circleOrId === 'object') {
-                    const slug = circleOrId.slug || (circleOrId.name ? slugifyName(circleOrId.name, 'circle') : '');
-                    if (slug) return `${page}?name=${encodeURIComponent(slug)}`;
-                    if (circleOrId.id) return `${page}?id=${encodeURIComponent(circleOrId.id)}`;
+                    slug = circleOrId.slug || (circleOrId.name ? slugifyName(circleOrId.name, 'circle') : '');
+                    id = circleOrId.id || '';
+                } else if (fallbackName) {
+                    slug = slugifyName(fallbackName, 'circle');
+                } else {
+                    id = circleOrId || '';
                 }
-                if (fallbackName) {
-                    return `${page}?name=${encodeURIComponent(slugifyName(fallbackName, 'circle'))}`;
+                if (slug && !usesHtml && !RESERVED_CIRCLE_SLUGS.has(slug)) {
+                    return `/${encodeURIComponent(slug)}`;
                 }
-                return `${page}?id=${encodeURIComponent(circleOrId || '')}`;
+                if (slug) return `${page}?name=${encodeURIComponent(slug)}`;
+                return `${page}?id=${encodeURIComponent(id)}`;
             },
             item: function(itemOrId, fallbackName) {
                 const page = this._page('item-details');

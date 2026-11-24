@@ -1110,6 +1110,12 @@ service cloud.firestore {
         && data.entity_id is string && data.entity_id.size() >= 1 && data.entity_id.size() <= 128
         && data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 120
         && data.slug.matches('^[a-z0-9]+(-[a-z0-9]+)*$')
+        && (data.entity_type != 'circle' || !(data.slug in [
+          'index', 'explore', 'circles', 'admin', 'profile', 'messages', 'chat', 'help',
+          'activity', 'login', 'signup', 'join-community', 'circle-detail', 'circle-manage',
+          'create-circle', 'add-item', 'edit-profile', 'item-details', 'book-detail',
+          'help-detail', 'request-borrow', 'request-sent', 'assets', 'api', 'sw', 'manifest'
+        ]))
         && slugKey == data.entity_type + '_' + data.slug
         && data.created_by is string && data.created_by.size() >= 1 && data.created_by.size() <= 128
         && (!('created_at' in data) || data.created_at is timestamp);

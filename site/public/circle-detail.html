@@ -4,12 +4,18 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Circle Details - Share, Instead.</title>
+    <meta name="theme-color" content="#0d631b">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta id="apple-app-title" name="apple-mobile-web-app-title" content="Share, Instead.">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     
-    <script src="config.js"></script>
+    <script src="/config.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="firebase-client.js?v=20261124b"></script>
+    <script src="/firebase-client.js?v=20261124c"></script>
     
     <!-- Fuzzy Search -->
     <script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.js"></script>
@@ -61,11 +67,13 @@
     <!-- Premium Glass Header -->
     <header class="bg-[#fbf9f6]/90 dark:bg-stone-900/90 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0_6px_24px_rgba(51,51,51,0.06)] border-b border-outline-variant/15">
         <div class="flex justify-between items-center w-full px-4 sm:px-6 py-3.5 max-w-6xl mx-auto">
-            <div class="flex items-center gap-4">
-                <a href="circles.html" class="group flex items-center gap-2 text-primary dark:text-primary-fixed-dim font-bold transition-all active:scale-95">
-                    <span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
-                    <span class="label-md">All Circles</span>
+            <div class="flex items-center gap-3 min-w-0">
+                <a href="/circles.html" class="group flex items-center gap-1 text-on-surface-variant hover:text-primary font-semibold text-xs transition-all active:scale-95 shrink-0 px-2.5 py-1.5 rounded-lg hover:bg-surface-container-low" title="Browse all circles">
+                    <span class="material-symbols-outlined text-[16px] transition-transform group-hover:-translate-x-0.5">arrow_back</span>
+                    <span>All Circles</span>
                 </a>
+                <span class="text-outline-variant/40 select-none hidden sm:inline">/</span>
+                <span id="header-circle-brand" class="hidden sm:inline font-extrabold text-sm text-primary truncate max-w-[240px]">Share, Instead.</span>
             </div>
             <div class="flex items-center gap-2.5">
                 <!-- Single Overflow Menu for Secondary & Admin Actions -->
@@ -77,6 +85,10 @@
                         <button type="button" id="share-circle-btn" onclick="handleShareCircle(); document.getElementById('circle-more-dropdown').classList.add('hidden');" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-container-high text-on-surface text-sm font-medium text-left cursor-pointer">
                             <span class="material-symbols-outlined text-[18px] text-primary">share</span>
                             <span id="share-btn-text">Share Circle Link</span>
+                        </button>
+                        <button type="button" id="menu-install-pwa-btn" onclick="triggerPwaInstall(); document.getElementById('circle-more-dropdown').classList.add('hidden');" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-container-high text-on-surface text-sm font-medium text-left cursor-pointer">
+                            <span class="material-symbols-outlined text-[18px] text-primary">add_to_home_screen</span>
+                            <span>Add to Home Screen</span>
                         </button>
                         <div id="member-actions" class="hidden flex-col">
                             <button type="button" id="menu-share-item-btn" class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-container-high text-on-surface text-sm font-medium text-left cursor-pointer">
@@ -112,15 +124,15 @@
                         <img id="header-avatar" src="https://i.pravatar.cc/150?u=me" class="w-full h-full object-cover">
                     </div>
                     <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-surface rounded-xl shadow-xl border border-outline-variant z-50 py-2">
-                        <a href="profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
+                        <a href="/profile.html" class="flex items-center gap-3 px-4 py-2 hover:bg-surface-container-high transition-colors">
                             <span class="material-symbols-outlined text-[20px]">person</span>
                             <span class="text-sm font-medium">My Profile</span>
                         </a>
-                        <a id="dropdown-superadmin-link" href="admin.html" class="hidden items-center gap-3 px-4 py-2 hover:bg-surface-container-high text-purple-700 dark:text-purple-300 transition-colors">
+                        <a id="dropdown-superadmin-link" href="/admin.html" class="hidden items-center gap-3 px-4 py-2 hover:bg-surface-container-high text-purple-700 dark:text-purple-300 transition-colors">
                             <span class="material-symbols-outlined text-[20px]">admin_panel_settings</span>
                             <span class="text-sm font-semibold">Superadmin</span>
                         </a>
-                        <button onclick="event.stopPropagation(); firebase.auth().signOut().then(function(){window.location.href='index.html'});" class="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-error-container text-error transition-colors cursor-pointer" style="touch-action: manipulation;">
+                        <button onclick="event.stopPropagation(); firebase.auth().signOut().then(function(){window.location.href='/index.html'});" class="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-error-container text-error transition-colors cursor-pointer" style="touch-action: manipulation;">
                             <span class="material-symbols-outlined text-[20px]">logout</span>
                             <span class="text-sm font-bold text-left">Logout</span>
                         </button>
@@ -133,8 +145,55 @@
     <!-- Main Content Layout -->
     <main class="pt-7 sm:pt-10 px-4 sm:px-8 max-w-6xl mx-auto">
 
+        <!-- Circle Not Found State (for unknown vanity URLs) -->
+        <section id="circle-not-found-panel" class="hidden bg-surface-container-low border border-outline-variant/20 rounded-2xl p-10 text-center max-w-lg mx-auto my-10 shadow-sm">
+            <span class="material-symbols-outlined text-5xl text-on-surface-variant/40 mb-3 block">explore_off</span>
+            <h2 class="text-2xl font-black text-on-surface mb-2">Circle Not Found</h2>
+            <p class="text-sm text-on-surface-variant mb-6">We couldn't find a neighborhood circle at this link. It may have been renamed or removed.</p>
+            <div class="flex justify-center gap-3">
+                <a href="/circles.html" class="px-6 py-2.5 rounded-xl bg-forest-gradient text-white font-bold text-sm shadow-sm">Browse All Circles</a>
+                <a href="/index.html" class="px-6 py-2.5 rounded-xl border border-outline-variant/40 text-on-surface font-bold text-sm hover:bg-surface-container">Go Home</a>
+            </div>
+        </section>
+
+        <!-- Welcome / Status Toast Banner -->
+        <div id="circle-toast-banner" class="hidden mb-5 px-4 py-3 rounded-2xl bg-primary text-white text-sm font-bold flex items-center justify-between gap-3 shadow-md">
+            <div class="flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-[20px]">celebration</span>
+                <span id="circle-toast-text">Welcome!</span>
+            </div>
+            <button type="button" onclick="document.getElementById('circle-toast-banner').classList.add('hidden')" class="p-1 rounded-full hover:bg-white/15 cursor-pointer" aria-label="Dismiss">
+                <span class="material-symbols-outlined text-[18px]">close</span>
+            </button>
+        </div>
+
+        <!-- Easy Per-Circle Add to Home Screen Banner -->
+        <div id="pwa-install-banner" class="hidden mb-5 px-4 py-3 rounded-2xl bg-surface-container-low border border-primary/25 flex items-center justify-between gap-3 shadow-sm">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-9 h-9 rounded-xl bg-forest-gradient text-white flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined text-[20px]">add_to_home_screen</span>
+                </div>
+                <div class="min-w-0">
+                    <p id="pwa-banner-title" class="text-xs sm:text-sm font-extrabold text-on-surface truncate">Add this Circle to your Home Screen</p>
+                    <p class="text-[11px] sm:text-xs text-on-surface-variant truncate">Open directly like a standalone app — 1 tap away.</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button type="button" onclick="triggerPwaInstall()" class="px-3.5 py-2 rounded-xl bg-primary text-on-primary text-xs font-bold shadow-sm hover:opacity-95 active:scale-95 transition-all cursor-pointer">Install</button>
+                <button type="button" onclick="dismissPwaBanner()" class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container cursor-pointer" aria-label="Dismiss install prompt">
+                    <span class="material-symbols-outlined text-[18px]">close</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Banned User Notice -->
+        <div id="banned-notice" class="hidden mb-6 bg-error/10 border border-error/25 text-error rounded-2xl p-5 flex items-center gap-3 text-sm font-semibold">
+            <span class="material-symbols-outlined text-2xl shrink-0">block</span>
+            <span>You are currently unable to join this circle. Contact a circle manager if you think this is a mistake.</span>
+        </div>
+
         <!-- Compact Circle Header -->
-        <section class="mb-7">
+        <section id="circle-main-header" class="mb-7">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="min-w-0">
                     <div class="flex items-center gap-2.5 mb-1.5">
@@ -629,6 +688,35 @@
         </div>
     </div>
 
+    <!-- Per-Circle Add to Home Screen Guide Modal (iOS Safari / Manual fallback) -->
+    <div id="pwa-ios-modal" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-5 bg-on-surface/30 backdrop-blur-sm">
+        <div class="modal-content bg-surface w-full max-w-sm rounded-2xl shadow-2xl border border-outline-variant/20 p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 id="pwa-modal-title" class="text-lg font-extrabold text-on-surface flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">add_to_home_screen</span>
+                    <span>Add to Home Screen</span>
+                </h3>
+                <button type="button" onclick="document.getElementById('pwa-ios-modal').classList.add('hidden')" class="w-8 h-8 rounded-full hover:bg-surface-container flex items-center justify-center cursor-pointer">
+                    <span class="material-symbols-outlined text-[20px]">close</span>
+                </button>
+            </div>
+            <p id="pwa-modal-desc" class="text-xs text-on-surface-variant leading-relaxed">
+                Install this circle on your phone's home screen to open it directly like a standalone app:
+            </p>
+            <ol id="pwa-modal-steps" class="space-y-3 text-sm text-on-surface">
+                <li class="flex items-start gap-3 bg-surface-container-low p-3 rounded-xl">
+                    <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                    <span>Tap the <strong>Share</strong> button <span class="material-symbols-outlined text-[16px] align-middle text-primary">ios_share</span> in your browser's toolbar.</span>
+                </li>
+                <li class="flex items-start gap-3 bg-surface-container-low p-3 rounded-xl">
+                    <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                    <span>Scroll down and tap <strong>Add to Home Screen</strong>, then tap <strong>Add</strong>.</span>
+                </li>
+            </ol>
+            <button type="button" onclick="document.getElementById('pwa-ios-modal').classList.add('hidden')" class="w-full py-2.5 rounded-xl bg-primary text-on-primary text-sm font-bold cursor-pointer">Got it</button>
+        </div>
+    </div>
+
     <script>
         const escapeHtml = window.db.escapeHtml;
         let currentCircleId = null;
@@ -1090,14 +1178,178 @@
         }
 
 
+        // --- Per-Circle PWA (Dynamic Manifest + Easy Add to Home Screen) ---
+        let deferredPwaPrompt = null;
+        let autoJoinHandled = false;
+
+        function isRunningStandalone() {
+            return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+                || window.navigator.standalone === true;
+        }
+
+        function isIosDevice() {
+            return /iPhone|iPad|iPod/i.test(navigator.userAgent || '')
+                || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPwaPrompt = e;
+            maybeShowPwaBanner();
+        });
+
+        window.addEventListener('appinstalled', () => {
+            deferredPwaPrompt = null;
+            const banner = document.getElementById('pwa-install-banner');
+            if (banner) banner.classList.add('hidden');
+            showCircleToast('Added to your Home Screen!');
+        });
+
+        function applyPerCirclePwaManifest(circle) {
+            if (!circle || !circle.name) return;
+            const slug = circle.slug || (window.slugify ? window.slugify(circle.name, 'circle') : '');
+            const origin = window.location.origin;
+            const startUrl = slug && !(window.RESERVED_CIRCLE_SLUGS && window.RESERVED_CIRCLE_SLUGS.has(slug))
+                ? `${origin}/${encodeURIComponent(slug)}`
+                : `${origin}/circle-detail?id=${encodeURIComponent(circle.id)}`;
+            const shortName = circle.name.length > 14 ? circle.name.slice(0, 14).trim() : circle.name;
+
+            const manifest = {
+                name: `${circle.name} — Share, Instead.`,
+                short_name: shortName,
+                description: circle.description || `Neighborhood sharing circle for ${circle.name}.`,
+                start_url: startUrl,
+                scope: '/',
+                display: 'standalone',
+                background_color: '#fbf9f6',
+                theme_color: '#0d631b',
+                icons: [
+                    { src: `${origin}/icon-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+                    { src: `${origin}/icon-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+                ]
+            };
+
+            let linkEl = document.querySelector('link[rel="manifest"]');
+            if (!linkEl) {
+                linkEl = document.createElement('link');
+                linkEl.rel = 'manifest';
+                document.head.appendChild(linkEl);
+            }
+            linkEl.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));
+
+            const appleTitle = document.getElementById('apple-app-title');
+            if (appleTitle) appleTitle.setAttribute('content', shortName);
+
+            const bannerTitle = document.getElementById('pwa-banner-title');
+            if (bannerTitle) bannerTitle.textContent = `Add "${circle.name}" to your Home Screen`;
+
+            maybeShowPwaBanner();
+        }
+
+        function maybeShowPwaBanner() {
+            const banner = document.getElementById('pwa-install-banner');
+            const menuBtn = document.getElementById('menu-install-pwa-btn');
+            if (isRunningStandalone()) {
+                if (banner) banner.classList.add('hidden');
+                if (menuBtn) menuBtn.classList.add('hidden');
+                return;
+            }
+            if (!currentCircle) return;
+            const dismissKey = `pwa_banner_dismissed_${currentCircle.id}`;
+            if (localStorage.getItem(dismissKey) === '1') return;
+            // Show banner when browser supports 1-tap install OR on iOS mobile Safari
+            if (deferredPwaPrompt || isIosDevice()) {
+                if (banner) banner.classList.remove('hidden');
+            }
+        }
+
+        function dismissPwaBanner() {
+            const banner = document.getElementById('pwa-install-banner');
+            if (banner) banner.classList.add('hidden');
+            if (currentCircle) {
+                try { localStorage.setItem(`pwa_banner_dismissed_${currentCircle.id}`, '1'); } catch (_) {}
+            }
+        }
+        window.dismissPwaBanner = dismissPwaBanner;
+
+        async function triggerPwaInstall() {
+            if (deferredPwaPrompt) {
+                deferredPwaPrompt.prompt();
+                try {
+                    const choice = await deferredPwaPrompt.userChoice;
+                    if (choice && choice.outcome === 'accepted') {
+                        const banner = document.getElementById('pwa-install-banner');
+                        if (banner) banner.classList.add('hidden');
+                    }
+                } catch (_) {}
+                deferredPwaPrompt = null;
+                return;
+            }
+            // Show easy visual guide for iOS Safari or browsers without native prompt
+            const modal = document.getElementById('pwa-ios-modal');
+            const titleEl = document.getElementById('pwa-modal-title');
+            const stepsEl = document.getElementById('pwa-modal-steps');
+            const circleName = currentCircle?.name || 'this Circle';
+            if (titleEl) {
+                titleEl.innerHTML = `<span class="material-symbols-outlined text-primary">add_to_home_screen</span><span>Install ${escapeHtml(circleName)}</span>`;
+            }
+            if (!isIosDevice() && stepsEl) {
+                stepsEl.innerHTML = `
+                    <li class="flex items-start gap-3 bg-surface-container-low p-3 rounded-xl">
+                        <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                        <span>Open your browser menu (<strong>⋮</strong> or <strong>⋯</strong>) in the address bar.</span>
+                    </li>
+                    <li class="flex items-start gap-3 bg-surface-container-low p-3 rounded-xl">
+                        <span class="w-6 h-6 rounded-full bg-primary text-white text-xs font-extrabold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                        <span>Tap <strong>Add to Home screen</strong> or <strong>Install app</strong> to pin <strong>${escapeHtml(circleName)}</strong>.</span>
+                    </li>`;
+            }
+            if (modal) modal.classList.remove('hidden');
+        }
+        window.triggerPwaInstall = triggerPwaInstall;
+
+        function showCircleToast(message) {
+            const banner = document.getElementById('circle-toast-banner');
+            const text = document.getElementById('circle-toast-text');
+            if (!banner || !text) return;
+            text.textContent = message;
+            banner.classList.remove('hidden');
+        }
+
+        function showCircleNotFound() {
+            ['circle-main-header', 'view-only-banner', 'private-gate', 'circle-action-hub', 'circle-tabs-wrapper', 'pwa-install-banner', 'join-requests-panel', 'circle-admin-ledger-panel'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+            const nf = document.getElementById('circle-not-found-panel');
+            if (nf) nf.classList.remove('hidden');
+            document.title = 'Circle Not Found - Share, Instead.';
+        }
+
+        function extractVanitySlugFromPath() {
+            const path = (window.location.pathname || '').replace(/^\/+|\/+$/g, '');
+            if (!path || path.includes('/') || path.includes('.')) return null;
+            const lower = path.toLowerCase();
+            if (window.RESERVED_CIRCLE_SLUGS && window.RESERVED_CIRCLE_SLUGS.has(lower)) return null;
+            if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(lower)) return lower;
+            return null;
+        }
+
         async function loadCircleDetails() {
             const urlParams = new URLSearchParams(window.location.search);
-            const rawName = urlParams.get('name');
+            const rawName = urlParams.get('name') || extractVanitySlugFromPath();
             const rawId = urlParams.get('id');
+            const wantsAutoJoin = urlParams.get('autoJoin') === '1';
             currentCircleId = await window.db.resolveEntityId('circle', { name: rawName, id: rawId });
             
             if (!currentCircleId) {
-                window.location.href = 'circles.html';
+                showCircleNotFound();
                 return;
             }
 
@@ -1110,18 +1362,23 @@
 
                 // 1. Fetch Circle Metadata
                 currentCircle = await window.db.getCircle(currentCircleId);
-                if (!currentCircle) { window.location.href = 'circles.html'; return; }
+                if (!currentCircle) { showCircleNotFound(); return; }
 
-                // Ensure kebab-case slug & canonicalize address bar to ?name=<slug>
+                // Ensure kebab-case slug & canonicalize address bar to /<slug>
                 const resolvedSlug = await window.db.ensureEntitySlug('circle', currentCircle);
                 if (resolvedSlug) {
                     currentCircle.slug = currentCircle.slug || resolvedSlug;
-                    window.db.replaceUrlWithSlug('circle-detail', currentCircle.slug);
+                    window.db.replaceUrlWithSlug('circle-detail', currentCircle.slug, wantsAutoJoin ? { autoJoin: '1' } : {});
                 }
 
                 document.title = `${currentCircle.name} - Share, Instead.`;
                 document.getElementById('circle-name').textContent = currentCircle.name;
                 document.getElementById('circle-description').textContent = currentCircle.description || 'A neighborhood community circle.';
+                const headerBrand = document.getElementById('header-circle-brand');
+                if (headerBrand) headerBrand.textContent = currentCircle.name;
+
+                // Configure Per-Circle PWA manifest & Add to Home Screen
+                applyPerCirclePwaManifest(currentCircle);
 
                 // Update Meta / OG tags for link unfurls
                 try {
@@ -1192,11 +1449,50 @@
                 document.getElementById('member-count-text').textContent = `${totalMemberCount} Neighbors Active`;
 
                 // Determine membership in O(1) without reading every member
+                let currentUserIsBanned = false;
                 if (user) {
-                    const myMembership = await window.db.getCircleMembership(currentCircleId, user.uid);
+                    const [myMembership, isBanned] = await Promise.all([
+                        window.db.getCircleMembership(currentCircleId, user.uid),
+                        window.db.isBannedFromCircle ? window.db.isBannedFromCircle(currentCircleId, user.uid) : Promise.resolve(false)
+                    ]);
+                    currentUserIsBanned = !!isBanned;
                     if (myMembership) {
                         currentUserIsMember = true;
                         currentUserRole = myMembership.role;
+                    } else {
+                        currentUserIsMember = false;
+                        currentUserRole = null;
+                    }
+
+                    // Show banned notice if banned
+                    const bannedNotice = document.getElementById('banned-notice');
+                    if (bannedNotice) bannedNotice.classList.toggle('hidden', !currentUserIsBanned);
+
+                    // Post-signup/login auto-join (public) or auto-open request-join (private)
+                    if (wantsAutoJoin && !autoJoinHandled) {
+                        autoJoinHandled = true;
+                        if (currentCircle.slug) {
+                            window.db.replaceUrlWithSlug('circle-detail', currentCircle.slug);
+                        }
+                        if (!currentUserIsMember && !currentUserIsBanned) {
+                            if (!currentCircle.is_private) {
+                                try {
+                                    await window.db.joinCircle(currentCircleId, user.uid);
+                                    currentUserIsMember = true;
+                                    currentUserRole = 'member';
+                                    totalMemberCount = Math.max(1, totalMemberCount + 1);
+                                    document.getElementById('member-count-text').textContent = `${totalMemberCount} Neighbors Active`;
+                                    showCircleToast(`Welcome to ${currentCircle.name}! You're now a member.`);
+                                } catch (autoJoinErr) {
+                                    console.warn('Auto-join failed:', autoJoinErr);
+                                }
+                            } else {
+                                const existingReq = await window.db.getMyJoinRequest(currentCircleId, user.uid);
+                                if (!existingReq) {
+                                    setTimeout(() => openJoinRequestModal(), 250);
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -1576,10 +1872,20 @@
         window.openJoinRequestModal = openJoinRequestModal;
         window.handleRequestJoin = handleRequestJoin;
 
+        function buildCircleAuthUrl() {
+            const slug = currentCircle?.slug || (currentCircle?.name && window.slugify ? window.slugify(currentCircle.name, 'circle') : '');
+            const baseCircleUrl = window.db.urls.circle(currentCircle || currentCircleId);
+            const sep = baseCircleUrl.includes('?') ? '&' : '?';
+            const returnUrl = `${baseCircleUrl}${sep}autoJoin=1`;
+            const params = new URLSearchParams();
+            if (slug) params.set('circle', slug);
+            params.set('redirect', returnUrl);
+            return `/join-community?${params.toString()}`;
+        }
+
         async function handleJoin() {
             if (!currentUser) {
-                const returnUrl = window.db.urls.circle(currentCircle || currentCircleId);
-                window.location.href = `join-community.html?redirect=${encodeURIComponent(returnUrl)}`;
+                window.location.href = buildCircleAuthUrl();
                 return;
             }
             const btn = document.getElementById('join-btn');
@@ -1602,8 +1908,7 @@
 
         function handleRequestJoin() {
             if (!currentUser) {
-                const returnUrl = window.db.urls.circle(currentCircle || currentCircleId);
-                window.location.href = `join-community.html?redirect=${encodeURIComponent(returnUrl)}`;
+                window.location.href = buildCircleAuthUrl();
                 return;
             }
             openJoinRequestModal();
