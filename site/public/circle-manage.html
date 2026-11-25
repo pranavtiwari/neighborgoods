@@ -163,7 +163,7 @@
                     <span>Moderation</span>
                     <span id="tab-badge-reports" class="hidden text-[11px] font-extrabold bg-error text-white px-2 py-0.5 rounded-full">0</span>
                 </button>
-                <button type="button" role="tab" data-tab="ledger" onclick="setManageTab('ledger')" class="manage-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer transition-colors">
+                <button type="button" role="tab" id="manage-tab-ledger" data-tab="ledger" onclick="setManageTab('ledger')" class="manage-tab-btn shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer transition-colors">
                     <span class="material-symbols-outlined text-[18px]">receipt_long</span>
                     <span>Ledger</span>
                 </button>
@@ -312,7 +312,7 @@
                     </div>
 
                     <!-- Allowed Categories -->
-                    <div class="relative">
+                    <div id="settings-allowed-categories-wrapper" class="relative">
                         <label class="block text-sm font-bold mb-2">Allowed Categories (Empty = Allow all)</label>
                         <div class="flex flex-wrap gap-2 mb-2 min-h-[42px] p-2 bg-surface rounded-xl border border-outline-variant/25" id="settings-categories-chips">
                             <span class="text-stone-400 self-center text-sm px-2 select-none" id="settings-no-categories-placeholder">Allows all categories</span>
@@ -374,8 +374,8 @@
                 </div>
 
                 <!-- Content Moderation: Bulletin Posts & Help Requests -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                    <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-3">
+                <div id="mod-content-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div id="mod-posts-card" class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-3">
                         <h3 class="text-base font-extrabold text-on-surface flex items-center gap-2">
                             <span class="material-symbols-outlined text-primary text-[20px]">campaign</span>
                             <span>Recent Bulletin Posts</span>
@@ -384,7 +384,7 @@
                             <p class="text-sm text-stone-500 py-4 text-center">Loading posts...</p>
                         </div>
                     </div>
-                    <div class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-3">
+                    <div id="mod-help-card" class="bg-surface-container-low border border-outline-variant/20 rounded-2xl p-5 space-y-3">
                         <h3 class="text-base font-extrabold text-on-surface flex items-center gap-2">
                             <span class="material-symbols-outlined text-primary text-[20px]">volunteer_activism</span>
                             <span>Recent Help Requests</span>
@@ -742,15 +742,53 @@
             }
 
             const features = circle.features || {};
-            document.getElementById('settings-feature-listings').checked = features.listings !== false;
-            document.getElementById('settings-feature-help').checked = features.neighbor_help !== false;
-            document.getElementById('settings-feature-bulletin').checked = features.bulletin !== false;
+            const listingsEnabled = features.listings !== false;
+            const helpEnabled = features.neighbor_help !== false;
+            const bulletinEnabled = features.bulletin !== false;
+
+            const listingsToggle = document.getElementById('settings-feature-listings');
+            listingsToggle.checked = listingsEnabled;
+            document.getElementById('settings-feature-help').checked = helpEnabled;
+            document.getElementById('settings-feature-bulletin').checked = bulletinEnabled;
+
+            const catWrapper = document.getElementById('settings-allowed-categories-wrapper');
+            if (catWrapper) catWrapper.classList.toggle('hidden', !listingsEnabled);
+            listingsToggle.onchange = () => {
+                if (catWrapper) catWrapper.classList.toggle('hidden', !listingsToggle.checked);
+            };
+
+            applyManageFeaturesUI(circle);
 
             const preview = document.getElementById('settings-image-preview');
             preview.src = sanitizeUrl(circle.image_url) || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1000&q=80';
 
             selectedCategories = Array.isArray(circle.allowed_categories) ? [...circle.allowed_categories] : [];
             renderCategoryChips();
+        }
+
+        function applyManageFeaturesUI(circle) {
+            const f = (circle && circle.features) || {};
+            const listingsEnabled = f.listings !== false;
+            const helpEnabled = f.neighbor_help !== false;
+            const bulletinEnabled = f.bulletin !== false;
+
+            const ledgerTab = document.getElementById('manage-tab-ledger');
+            const ledgerPanel = document.getElementById('panel-ledger');
+            if (ledgerTab) ledgerTab.classList.toggle('hidden', !listingsEnabled);
+            if (!listingsEnabled && ledgerPanel && !ledgerPanel.classList.contains('hidden')) {
+                setManageTab('settings');
+            }
+
+            const postsCard = document.getElementById('mod-posts-card');
+            const helpCard = document.getElementById('mod-help-card');
+            const modGrid = document.getElementById('mod-content-grid');
+            if (postsCard) postsCard.classList.toggle('hidden', !bulletinEnabled);
+            if (helpCard) helpCard.classList.toggle('hidden', !helpEnabled);
+            if (modGrid) {
+                const visibleCards = (bulletinEnabled ? 1 : 0) + (helpEnabled ? 1 : 0);
+                modGrid.classList.toggle('hidden', visibleCards === 0);
+                modGrid.classList.toggle('lg:grid-cols-2', visibleCards === 2);
+            }
         }
 
         document.getElementById('settings-image-upload').addEventListener('change', (e) => {

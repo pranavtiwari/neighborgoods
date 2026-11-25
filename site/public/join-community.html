@@ -88,8 +88,19 @@
             if (heroTitleEl) {
                 heroTitleEl.innerHTML = `${window.db.escapeHtml(circle.name)} <span class="text-primary">Circle</span>`;
             }
-            if (heroDescEl && circle.description) {
-                heroDescEl.textContent = circle.description;
+            if (heroDescEl) {
+                if (circle.description) {
+                    heroDescEl.textContent = circle.description;
+                } else {
+                    const f = circle.features || {};
+                    const caps = [];
+                    if (f.listings !== false) caps.push('shared items & books');
+                    if (f.neighbor_help !== false) caps.push('free neighborhood help');
+                    if (f.bulletin !== false) caps.push('community updates');
+                    heroDescEl.textContent = caps.length > 0
+                        ? `Connect with your neighbors in ${circle.name} for ${caps.join(', ')}.`
+                        : `Connect with your neighbors in ${circle.name}.`;
+                }
             }
             if (heroImgEl && circle.image_url) {
                 const safeImg = window.db.sanitizeUrl(circle.image_url);

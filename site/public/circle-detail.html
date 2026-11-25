@@ -250,7 +250,7 @@
                 </div>
                 <div>
                     <h4 class="font-bold text-sm text-on-surface">Previewing this circle in view-only mode</h4>
-                    <p class="text-xs text-on-surface-variant">Sign in to borrow items, ask neighbors for help, and post updates.</p>
+                    <p id="view-only-desc" class="text-xs text-on-surface-variant">Sign in to participate in this circle.</p>
                 </div>
             </div>
             <button onclick="handleJoin()" class="px-5 py-2.5 rounded-xl bg-forest-gradient text-white font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all whitespace-nowrap cursor-pointer">
@@ -262,7 +262,7 @@
         <div id="private-gate" class="hidden bg-surface-container-low border border-outline-variant/15 rounded-2xl p-10 text-center shadow-sm mb-8">
             <span class="material-symbols-outlined text-5xl text-on-surface-variant/40 mb-3 block">lock</span>
             <h3 class="text-xl font-bold mb-2 text-on-surface">Private Circle</h3>
-            <p class="text-sm text-on-surface-variant mb-6 max-w-md mx-auto">Join this circle to browse shared items, ask neighbors for help, and see updates.</p>
+            <p id="private-gate-desc" class="text-sm text-on-surface-variant mb-6 max-w-md mx-auto">Join this circle to participate with your neighbors.</p>
             <button id="gate-request-btn" onclick="handleRequestJoin()" class="px-8 py-3 rounded-xl bg-primary text-on-primary font-bold active:scale-95 transition-transform shadow-md cursor-pointer">Request to Join</button>
             <div id="gate-pending" class="hidden mt-4 text-on-surface-variant text-sm">
                 Your request is pending admin approval.
@@ -388,26 +388,30 @@
         </section>
 
         <!-- Quiet Footer: About & Commons Stats -->
-        <section class="mt-12 bg-surface-container-low border border-outline-variant/15 rounded-2xl p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <section id="circle-about-footer" class="mt-12 bg-surface-container-low border border-outline-variant/15 rounded-2xl p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div class="space-y-1.5 max-w-xl">
                 <h3 class="text-xs font-bold text-on-surface-variant uppercase tracking-wider flex items-center gap-1.5">
                     <span class="material-symbols-outlined text-primary text-base">info</span>
                     About this Commons
                 </h3>
-                <p class="text-sm text-on-surface-variant leading-relaxed">
-                    A shared space for neighbors to lend, borrow, and help each other. <strong>Rules:</strong> Be kind, return items in original condition, and communicate clearly.
+                <p id="circle-about-text" class="text-sm text-on-surface-variant leading-relaxed">
+                    A shared space for neighbors to connect and support each other.
                 </p>
             </div>
-            <div class="grid grid-cols-3 gap-2.5 shrink-0 min-w-[240px] text-center">
-                <div class="bg-surface-container rounded-xl px-3 py-2.5 border border-outline-variant/10">
+            <div id="circle-stats-grid" class="grid grid-cols-3 gap-2.5 shrink-0 min-w-[160px] text-center">
+                <div id="stat-card-listings" class="bg-surface-container rounded-xl px-3 py-2.5 border border-outline-variant/10">
                     <p id="circle-stats-listings" class="text-lg font-black text-primary">0</p>
                     <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-tight">Listings</p>
                 </div>
-                <div class="bg-surface-container rounded-xl px-3 py-2.5 border border-outline-variant/10">
+                <div id="stat-card-transactions" class="bg-surface-container rounded-xl px-3 py-2.5 border border-outline-variant/10">
                     <p id="circle-stats-transactions" class="text-lg font-black text-primary">0</p>
                     <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-tight">Completed</p>
                 </div>
-                <div class="bg-surface-container rounded-xl px-3 py-2.5 border border-outline-variant/10">
+                <div id="stat-card-help" class="hidden bg-surface-container rounded-xl px-3 py-2.5 border border-outline-variant/10">
+                    <p id="circle-stats-help" class="text-lg font-black text-primary">0</p>
+                    <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-tight">Open Help</p>
+                </div>
+                <div id="stat-card-chats" class="bg-surface-container rounded-xl px-3 py-2.5 border border-outline-variant/10">
                     <p id="circle-stats-chats" class="text-lg font-black text-primary">0</p>
                     <p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-tight">Chats</p>
                 </div>
@@ -550,7 +554,7 @@
                     </div>
                 </div>
                 <!-- Category Restrictions -->
-                <div class="relative">
+                <div id="edit-allowed-categories-wrapper" class="relative">
                     <label class="block text-sm font-bold mb-2">Allowed Categories (Empty = Allow all)</label>
                     <div class="flex flex-wrap gap-2 mb-2 min-h-[40px] p-2 bg-surface-container rounded-xl border border-outline-variant/10 shadow-inner" id="edit-selected-categories-chips">
                         <span class="text-on-surface-variant self-center text-sm px-2 select-none" id="edit-no-categories-placeholder">Allows all categories</span>
@@ -1063,6 +1067,17 @@
             };
         }
 
+        function formatFeatureCapabilitiesList(features, mode = 'action') {
+            const parts = [];
+            if (features.listings) parts.push(mode === 'browse' ? 'browse shared items' : 'borrow items');
+            if (features.neighbor_help) parts.push('ask neighbors for help');
+            if (features.bulletin) parts.push(mode === 'browse' ? 'see updates' : 'post updates');
+            if (parts.length === 0) return 'connect with your neighbors';
+            if (parts.length === 1) return parts[0];
+            if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+            return `${parts[0]}, ${parts[1]}, and ${parts[2]}`;
+        }
+
         function applyCircleFeaturesUI() {
             const features = getCircleFeatures(currentCircle);
             const cardListings = document.getElementById('action-card-listings');
@@ -1095,6 +1110,55 @@
             if (menuPostUpdate) menuPostUpdate.classList.toggle('hidden', !features.bulletin);
             if (shareItemBtn && currentUserIsMember) shareItemBtn.classList.toggle('hidden', !features.listings);
             if (tabPostBtn && currentUserIsMember) tabPostBtn.classList.toggle('hidden', !features.bulletin);
+
+            // Dynamic copy for view-only banner, private gate, and About/Rules footer
+            const viewOnlyDesc = document.getElementById('view-only-desc');
+            if (viewOnlyDesc) {
+                viewOnlyDesc.textContent = `Sign in to ${formatFeatureCapabilitiesList(features, 'action')}.`;
+            }
+            const privateGateDesc = document.getElementById('private-gate-desc');
+            if (privateGateDesc) {
+                privateGateDesc.textContent = `Join this circle to ${formatFeatureCapabilitiesList(features, 'browse')}.`;
+            }
+            const aboutText = document.getElementById('circle-about-text');
+            if (aboutText) {
+                const intro = features.listings && features.neighbor_help
+                    ? 'A shared space for neighbors to lend, borrow, and help each other.'
+                    : features.listings
+                        ? 'A shared space for neighbors to lend and borrow items.'
+                        : features.neighbor_help
+                            ? 'A shared space for neighbors to ask for and offer free help.'
+                            : 'A shared space for neighbors to connect and share updates.';
+                const customRules = currentCircle && typeof currentCircle.rules === 'string' ? currentCircle.rules.trim() : '';
+                const rulesText = customRules || (features.listings
+                    ? 'Be kind, return items in original condition, and communicate clearly.'
+                    : 'Be kind, respectful, and communicate clearly.');
+                aboutText.innerHTML = `${escapeHtml(intro)} <strong>Rules:</strong> ${escapeHtml(rulesText)}`;
+            }
+
+            // Commons Stats cards: only show stats relevant to enabled features
+            const statListings = document.getElementById('stat-card-listings');
+            const statTransactions = document.getElementById('stat-card-transactions');
+            const statHelp = document.getElementById('stat-card-help');
+            const statChats = document.getElementById('stat-card-chats');
+            const statsGrid = document.getElementById('circle-stats-grid');
+
+            if (statListings) statListings.classList.toggle('hidden', !features.listings);
+            if (statTransactions) statTransactions.classList.toggle('hidden', !features.listings);
+            if (statHelp) statHelp.classList.toggle('hidden', !features.neighbor_help || features.listings);
+
+            if (statsGrid) {
+                const visibleStatCount = [statListings, statTransactions, statHelp, statChats]
+                    .filter(el => el && !el.classList.contains('hidden')).length;
+                statsGrid.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3');
+                statsGrid.classList.add(visibleStatCount >= 3 ? 'grid-cols-3' : (visibleStatCount === 2 ? 'grid-cols-2' : 'grid-cols-1'));
+            }
+
+            // Hide Admin Transaction Ledger when listings are disabled
+            const ledgerPanel = document.getElementById('circle-admin-ledger-panel');
+            if (ledgerPanel && !features.listings) {
+                ledgerPanel.classList.add('hidden');
+            }
 
             // Pick first enabled tab if the currently active tab was disabled
             const enabledTabs = [];
@@ -1499,31 +1563,36 @@
                 // 3. Render role-appropriate UI
                 await renderRoleUI();
 
-                // 4. Fetch Circle Inventory (sidebar) - only if member or public circle
+                // 4. Fetch Circle Inventory (only if listings enabled AND member/public)
+                const circleFeatures = getCircleFeatures(currentCircle);
                 if (currentUserIsMember || !currentCircle.is_private) {
-                    allInventoryItems = await window.db.getCircleItems(currentCircleId);
-                    
-                    // Initialize Fuse
-                    if (window.Fuse) {
-                        const mappedItems = allInventoryItems.map(item => ({
-                            ...item,
-                            semantic_tags: window.db.getSemanticTerms(item)
-                        }));
-                        fuseIndex = new Fuse(mappedItems, {
-                            keys: ['name', 'description', 'semantic_tags'],
-                            threshold: 0.4,
-                            includeScore: true
+                    if (circleFeatures.listings) {
+                        allInventoryItems = await window.db.getCircleItems(currentCircleId);
+                        
+                        // Initialize Fuse
+                        if (window.Fuse) {
+                            const mappedItems = allInventoryItems.map(item => ({
+                                ...item,
+                                semantic_tags: window.db.getSemanticTerms(item)
+                            }));
+                            fuseIndex = new Fuse(mappedItems, {
+                                keys: ['name', 'description', 'semantic_tags'],
+                                threshold: 0.4,
+                                includeScore: true
+                            });
+                        }
+                        
+                        // Bind search listener (auto-switches to Listings tab on input)
+                        document.getElementById('inventory-search').addEventListener('input', () => {
+                            if (activeCircleTab !== 'inventory') setActiveCircleTab('inventory');
+                            handleInventorySearch();
                         });
-                    }
-                    
-                    // Bind search listener (auto-switches to Listings tab on input)
-                    document.getElementById('inventory-search').addEventListener('input', () => {
-                        if (activeCircleTab !== 'inventory') setActiveCircleTab('inventory');
-                        handleInventorySearch();
-                    });
 
-                    renderInventory(allInventoryItems);
-                    renderCategoryChips();
+                        renderInventory(allInventoryItems);
+                        renderCategoryChips();
+                    } else {
+                        allInventoryItems = [];
+                    }
                     loadCircleStats(currentCircleId);
                 } else {
                     allInventoryItems = [];
@@ -1535,26 +1604,33 @@
                     if (profile?.avatar_url) document.getElementById('header-avatar').src = profile.avatar_url;
                 }
 
-                // 6. Load feed if member (or public circle)
-                if (currentUserIsMember || !currentCircle.is_private) {
-                    loadFeed(currentCircleId);
-                } else {
-                    const feedContainer = document.getElementById('circle-feed');
-                    if (feedContainer) {
-                        feedContainer.innerHTML = `
-                            <div class="bg-surface-container-low rounded-xl p-8 text-center border border-outline-variant/10">
-                                <span class="material-symbols-outlined text-4xl text-on-surface-variant/30 mb-3">lock</span>
-                                <p class="text-on-surface-variant font-medium text-sm">This circle is private. Request to join to see recent discussions.</p>
-                            </div>`;
+                // 6. Load feed if bulletin enabled & member (or public circle)
+                if (circleFeatures.bulletin) {
+                    if (currentUserIsMember || !currentCircle.is_private) {
+                        loadFeed(currentCircleId);
+                    } else {
+                        const feedContainer = document.getElementById('circle-feed');
+                        if (feedContainer) {
+                            feedContainer.innerHTML = `
+                                <div class="bg-surface-container-low rounded-xl p-8 text-center border border-outline-variant/10">
+                                    <span class="material-symbols-outlined text-4xl text-on-surface-variant/30 mb-3">lock</span>
+                                    <p class="text-on-surface-variant font-medium text-sm">This circle is private. Request to join to see recent discussions.</p>
+                                </div>`;
+                        }
+                        const loadMoreContainer = document.getElementById('feed-load-more');
+                        if (loadMoreContainer) loadMoreContainer.classList.add('hidden');
                     }
-                    const loadMoreContainer = document.getElementById('feed-load-more');
-                    if (loadMoreContainer) loadMoreContainer.classList.add('hidden');
                 }
 
-                // 7. Admin: load join requests and circle transaction ledger
+                // 7. Admin: load join requests and circle transaction ledger (only if listings enabled)
                 if (currentUserRole === 'admin') {
                     loadJoinRequests();
-                    loadCircleAdminLedger();
+                    if (circleFeatures.listings) {
+                        loadCircleAdminLedger();
+                    } else {
+                        const ledgerPanel = document.getElementById('circle-admin-ledger-panel');
+                        if (ledgerPanel) ledgerPanel.classList.add('hidden');
+                    }
                 } else {
                     const ledgerPanel = document.getElementById('circle-admin-ledger-panel');
                     if (ledgerPanel) ledgerPanel.classList.add('hidden');
@@ -1656,6 +1732,7 @@
                     if (actionHub) actionHub.classList.add('hidden');
                     if (tabsWrapper) tabsWrapper.classList.add('hidden');
                     document.getElementById('private-gate').classList.remove('hidden');
+                    applyCircleFeaturesUI();
 
                     if (currentUser) {
                         const req = await window.db.getMyJoinRequest(currentCircleId, currentUser.uid);
@@ -2028,9 +2105,15 @@
             document.getElementById('edit-circle-description').value = currentCircle.description || '';
             document.getElementById('edit-circle-private').checked = currentCircle.is_private || false;
             const features = getCircleFeatures(currentCircle);
-            document.getElementById('edit-feature-listings').checked = features.listings;
+            const editListingsToggle = document.getElementById('edit-feature-listings');
+            editListingsToggle.checked = features.listings;
             document.getElementById('edit-feature-help').checked = features.neighbor_help;
             document.getElementById('edit-feature-bulletin').checked = features.bulletin;
+            const editCatWrapper = document.getElementById('edit-allowed-categories-wrapper');
+            if (editCatWrapper) editCatWrapper.classList.toggle('hidden', !features.listings);
+            editListingsToggle.onchange = () => {
+                if (editCatWrapper) editCatWrapper.classList.toggle('hidden', !editListingsToggle.checked);
+            };
             document.getElementById('edit-image-preview').src = currentCircle.image_url || '';
             editSelectedCategories = currentCircle.allowed_categories ? [...currentCircle.allowed_categories] : [];
             renderEditCategoryChips();
@@ -2554,6 +2637,8 @@
             try {
                 const reqs = await window.db.getHelpRequestsForCircles([circleId]);
                 const openReqs = reqs.filter(r => r.status === 'open');
+                const statHelpVal = document.getElementById('circle-stats-help');
+                if (statHelpVal) statHelpVal.textContent = String(openReqs.length);
 
                 if (tabBadge) {
                     tabBadge.textContent = String(openReqs.length);
